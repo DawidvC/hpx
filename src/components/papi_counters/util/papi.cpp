@@ -3,6 +3,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <map>
 
 #include <boost/format.hpp>
@@ -12,6 +13,7 @@
 
 #include <hpx/exception.hpp>
 #include <hpx/util/parse_command_line.hpp>
+#include <hpx/util/thread_mapper.hpp>
 #include <hpx/components/papi/util/papi.hpp>
 
 #define NS_STR "hpx::performance_counters::papi::util::"

@@ -11,8 +11,6 @@
 #include <hpx/include/lcos.hpp>
 #include <hpx/util/lightweight_test.hpp>
 
-#include <boost/bind.hpp>
-
 ///////////////////////////////////////////////////////////////////////////////
 int test()
 {
@@ -39,7 +37,8 @@ int hpx_main()
         test_action do_test;
 
         future<int> f = async(do_test, hpx::find_here());
-        future<int> p = f.then(boost::bind(future_callback, _1));
+        future<int> p = f.then(hpx::util::bind(future_callback, 
+            hpx::util::placeholders::_1));
 
         HPX_TEST_EQ(p.get(), 42);
     }

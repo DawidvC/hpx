@@ -4,8 +4,6 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <sstream>
-
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/components.hpp>
 #include <hpx/runtime/agas/interface.hpp>
@@ -15,6 +13,8 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/format.hpp>
+
+#include <sstream>
 
 using boost::program_options::variables_map;
 
@@ -34,8 +34,7 @@ int hpx_main(variables_map& vm)
         // Try to connect to existing throttle instance, create a new one if
         // this fails.
         char const* throttle_component_name = "/throttle/0";
-        hpx::naming::id_type gid;
-        hpx::agas::resolve_name(throttle_component_name, gid);
+        hpx::naming::id_type gid = hpx::agas::resolve_name(throttle_component_name).get();
         throttle::throttle t;
         if (!t.get_gid()) {
             std::vector<hpx::naming::id_type> localities =
@@ -93,8 +92,9 @@ int main(int argc, char* argv[])
     // Disable loading of all external components
     std::vector<std::string> cfg;
     cfg.push_back("hpx.components.load_external=0");
-    HPX_STD_FUNCTION<void()> empty;
+    cfg.push_back("hpx.run_hpx_main!=1");
 
+    HPX_STD_FUNCTION<void()> const empty;
     return hpx::init(cmdline, argc, argv, cfg, empty, empty, hpx::runtime_mode_connect);
 }
 

@@ -16,6 +16,8 @@
 
 #include <boost/cstdint.hpp>
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx { namespace util
 {
     ///////////////////////////////////////////////////////////////////////////
@@ -29,13 +31,14 @@ namespace hpx { namespace util
             boost::int64_t interval, std::string const& dest);
 
         void start();
+        void stop_evaluating_counters();
         bool evaluate();
         void terminate();
 
         void start_counters(error_code& ec = throws);
         void stop_counters(error_code& ec = throws);
         void reset_counters(error_code& ec = throws);
-        bool evaluate_counters(bool reset = false, 
+        bool evaluate_counters(bool reset = false,
             char const* description = 0, error_code& ec = throws);
 
     protected:
@@ -62,5 +65,7 @@ namespace hpx { namespace util
         interval_timer timer_;
     };
 }}
+
+#include <hpx/config/warnings_suffix.hpp>
 
 #endif

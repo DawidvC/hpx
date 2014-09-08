@@ -8,16 +8,18 @@
 #include <hpx/state.hpp>
 #include <hpx/runtime.hpp>
 #include <hpx/exception.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/tuple.hpp>
 #include <hpx/util/serialize_sequence.hpp>
 #include <hpx/runtime/components/console_logging.hpp>
 #include <hpx/runtime/components/server/console_logging.hpp>
 #include <hpx/runtime/components/plain_component_factory.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
+#include <hpx/runtime/applier/apply.hpp>
 #include <hpx/util/reinitializable_static.hpp>
 
 #include <boost/fusion/include/at_c.hpp>
-#include <boost/assert.hpp>
+#include <boost/serialization/vector.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace components
@@ -49,6 +51,10 @@ namespace hpx { namespace components
 
             case destination_app:
                 LAPP_CONSOLE_(at_c<1>(msg)) << fail_msg << at_c<2>(msg);
+                break;
+
+            case destination_debuglog:
+                LDEB_CONSOLE_ << fail_msg << at_c<2>(msg);
                 break;
             }
         }
@@ -137,11 +143,13 @@ namespace hpx { namespace components
                 queue_mutex_type::scoped_lock l(queue_mtx_);
                 queue_.push_back(msg);
             }
-
-            // and log it locally
-            messages_type msgs;
-            msgs.push_back(msg);
-            fallback_console_logging_locked(msgs);
+            else
+            {
+                // log it locally on the console
+                messages_type msgs;
+                msgs.push_back(msg);
+                fallback_console_logging_locked(msgs);
+            }
         }
     }
 
@@ -176,16 +184,16 @@ namespace hpx { namespace components
             {
                 naming::gid_type raw_prefix;
                 {
-                    util::unlock_the_lock<prefix_mutex_type::scoped_try_lock> ul(l);
+                    util::scoped_unlock<prefix_mutex_type::scoped_try_lock> ul(l);
                     naming::get_agas_client().get_console_locality(raw_prefix);
                 }
 
-                BOOST_ASSERT(naming::invalid_gid != raw_prefix);
+                HPX_ASSERT(naming::invalid_gid != raw_prefix);
                 if (!prefix_) {
                     prefix_ = naming::id_type(raw_prefix, naming::id_type::unmanaged);
                 }
                 else {
-                    BOOST_ASSERT(prefix_.get_gid() == raw_prefix);
+                    HPX_ASSERT(prefix_.get_gid() == raw_prefix);
                 }
             }
 
@@ -200,20 +208,38 @@ namespace hpx { namespace components
     void pending_logs::send()
     {
         // WARNING: Never, ever call this outside of a HPX-thread.
-        BOOST_ASSERT(threads::get_self_ptr());
+        HPX_ASSERT(threads::get_self_ptr());
 
-        if (!ensure_prefix())
-            return;             // some other thread tries to do logging
+        bool expected = false;
+        if (!is_sending_.compare_exchange_strong(expected, true))
+            return;
 
-        messages_type msgs;
-        {
-            queue_mutex_type::scoped_lock l(queue_mtx_);
-            if (queue_.empty())
-                return;         // some other thread did the deed
-            queue_.swap(msgs);
+        try {
+            {
+                queue_mutex_type::scoped_lock l(queue_mtx_);
+                if (queue_.empty())
+                    return;         // some other thread did the deed
+            }
+
+            if (!ensure_prefix())
+                return;             // some other thread tries to do logging
+
+            messages_type msgs;
+            {
+                queue_mutex_type::scoped_lock l(queue_mtx_);
+                if (queue_.empty())
+                    return;         // some other thread did the deed
+                queue_.swap(msgs);
+            }
+
+            console_logging_locked(prefix_, msgs);
+        }
+        catch(...) {
+            is_sending_ = false;
+            throw;
         }
 
-        console_logging_locked(prefix_, msgs);
+        is_sending_ = false;
     }
 
     ///////////////////////////////////////////////////////////////////////////

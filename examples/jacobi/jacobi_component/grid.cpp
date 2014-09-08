@@ -8,7 +8,7 @@
 #include <hpx/components/remote_object/object.hpp>
 #include <hpx/components/distributing_factory/distributing_factory.hpp>
 #include <hpx/components/remote_object/distributed_new.hpp>
-#include <hpx/lcos/future_wait.hpp>
+#include <hpx/lcos/wait_all.hpp>
 #include <hpx/include/iostreams.hpp>
 
 #include "grid.hpp"
@@ -19,8 +19,8 @@ namespace jacobi
     grid::grid(std::size_t nx, std::size_t ny, double value)
         //: rows(ny)
     {
-        hpx::components::distributing_factory factory;
-        factory.create(hpx::find_here());
+        hpx::components::distributing_factory factory =
+            hpx::components::distributing_factory::create(hpx::find_here());
 
         // make get the type of the solver component
         hpx::components::component_type
@@ -41,6 +41,6 @@ namespace jacobi
             rows.push_back(r);
         }
 
-        hpx::lcos::wait(init_futures);
+        hpx::wait_all(init_futures);
     }
 }

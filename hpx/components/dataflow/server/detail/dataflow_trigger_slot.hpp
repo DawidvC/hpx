@@ -49,7 +49,7 @@ namespace hpx { namespace lcos { namespace server { namespace detail
         {
         }
 
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             dataflow_sink->set_slot(
                     traits::get_remote_result<result_type, remote_result>
@@ -60,7 +60,7 @@ namespace hpx { namespace lcos { namespace server { namespace detail
 
         void connect_()
         {
-            BOOST_ASSERT(get_gid());
+            HPX_ASSERT(get_gid());
 
             dataflow_source.connect(get_gid());
         }
@@ -70,10 +70,11 @@ namespace hpx { namespace lcos { namespace server { namespace detail
             this->set_value_nonvirt(remote_result());
         }
 
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
 
         naming::id_type get_gid() const
@@ -87,18 +88,18 @@ namespace hpx { namespace lcos { namespace server { namespace detail
 
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
 
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
 
         void set_back_ptr(components::managed_component<dataflow_trigger_slot>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
 

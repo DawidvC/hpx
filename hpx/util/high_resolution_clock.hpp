@@ -6,9 +6,13 @@
 #if !defined(HPX_HIGH_RESOLUTION_CLOCK_FEB_24_2012_1125AM)
 #define HPX_HIGH_RESOLUTION_CLOCK_FEB_24_2012_1125AM
 
+#include <boost/cstdint.hpp>
+
+#if defined(__bgq__)
+#include <hwi/include/bqc/A2_inlines.h>
+#endif
 #include <boost/chrono/chrono.hpp>
 #include <boost/chrono/process_cpu_clocks.hpp>
-#include <boost/assert.hpp>
 
 namespace hpx { namespace util
 {
@@ -18,13 +22,16 @@ namespace hpx { namespace util
         // precision!) of 1 ns.
         static boost::uint64_t now()
         {
+#if defined(__bgq__)
+            return GetTimeBase();
+#else
             boost::chrono::nanoseconds ns =
                 boost::chrono::steady_clock::now().time_since_epoch();
-            BOOST_ASSERT(ns.count() >= 0);
             return static_cast<boost::uint64_t>(ns.count());
+#endif
         }
 
-        // This function returns the smallest representable time unit as 
+        // This function returns the smallest representable time unit as
         // returned by this clock.
         static boost::uint64_t (min)()
         {
@@ -33,7 +40,7 @@ namespace hpx { namespace util
             return (duration_values::min)().count();
         }
 
-        // This function returns the largest representable time unit as 
+        // This function returns the largest representable time unit as
         // returned by this clock.
         static boost::uint64_t (max)()
         {

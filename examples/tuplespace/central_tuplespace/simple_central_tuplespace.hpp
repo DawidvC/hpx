@@ -38,13 +38,56 @@ namespace examples
 
         /// Create a client side representation for the existing
         /// \a server::simple_central_tuplespace instance with the given GID.
-        simple_central_tuplespace(hpx::future<hpx::naming::id_type> const& gid)
+        simple_central_tuplespace(hpx::shared_future<hpx::naming::id_type> const& gid)
           : base_type(gid)
         {}
 
         simple_central_tuplespace(hpx::naming::id_type const& gid)
           : base_type(gid)
         {}
+
+        bool create(std::string const& symbol_name, hpx::id_type const& locality)
+        {
+            if(!symbol_name_.empty())
+            {
+                hpx::cerr<<"simple_central_tuplespace::create() : ERROR! current instance not empty!\n";
+                return false;
+            }
+            if(symbol_name_ == symbol_name) // itself
+            {
+                hpx::cerr<<"simple_central_tuplespace::create() : ERROR! current instance already attached to "<< symbol_name <<"\n";
+                return false;
+            }
+
+            // request gid;
+            *this = simple_central_tuplespace(hpx::components::new_<examples::server::simple_central_tuplespace>(locality));
+            bool rc = hpx::agas::register_name(symbol_name, this->get_gid()).get();
+
+            if(rc)
+            {
+                symbol_name_ = symbol_name;
+            }
+
+            return rc;
+        }
+
+        bool connect(std::string const& symbol_name)
+        {
+            if(symbol_name_ == symbol_name)
+            {
+                hpx::cerr<<"simple_central_tuplespace::connect() : ERROR! current instance already attached to "<< symbol_name <<"\n";
+                return false;
+            }
+
+            *this = hpx::agas::resolve_name(symbol_name).get();
+
+            symbol_name_ = symbol_name;
+
+            return true;
+        }
+
+
+
         ///////////////////////////////////////////////////////////////////////
         /// put \p tuple into tuplespace.
         ///
@@ -54,7 +97,7 @@ namespace examples
         //[simple_central_tuplespace_client_write_async
         hpx::lcos::future<int> write_async(const tuple_type& tuple)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::write_async(this->get_gid(), tuple);
         }
         //]
@@ -64,7 +107,7 @@ namespace examples
         /// \note This function is fully synchronous.
         int write_sync(const tuple_type& tuple)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::write_sync(this->get_gid(), tuple);
         }
 
@@ -76,7 +119,7 @@ namespace examples
         ///       immediately after the action has has been dispatched.
         hpx::lcos::future<tuple_type> read_async(const tuple_type& tp, long const timeout)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::read_async(this->get_gid(), tp, timeout);
         }
 
@@ -86,7 +129,7 @@ namespace examples
         //[simple_central_tuplespace_client_read_sync
         tuple_type read_sync(const tuple_type& tp, long const timeout)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::read_sync(this->get_gid(), tp, timeout);
         }
         //]
@@ -102,7 +145,7 @@ namespace examples
         //[simple_central_tuplespace_client_take_async
         hpx::lcos::future<tuple_type> take_async(const tuple_type& tp, long const timeout)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::take_async(this->get_gid(), tp, timeout);
         }
         //]
@@ -112,9 +155,12 @@ namespace examples
         /// \note This function is fully synchronous.
         tuple_type take_sync(const tuple_type& tp, long const timeout)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::take_sync(this->get_gid(), tp, timeout);
         }
+
+    private:
+        std::string symbol_name_;
     };
 } // examples
 

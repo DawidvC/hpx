@@ -21,6 +21,7 @@
 #include <boost/foreach.hpp>
 
 #include <vector>
+#include <algorithm>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -58,11 +59,10 @@ namespace hpx { namespace util
         // serialization support
         friend class boost::serialization::access;
 
-        template<class Archive>
-        void serialize(Archive& ar, const unsigned int)
-        {
-            ar & prefix_ & gids_ & type_;
-        }
+        HPX_EXPORT void serialize(hpx::util::portable_binary_oarchive& ar,
+            const unsigned int);
+        HPX_EXPORT void serialize(hpx::util::portable_binary_iarchive& ar,
+            const unsigned int);
     };
 
     // same as remote_locality_result, except it stores id_type's
@@ -185,7 +185,7 @@ namespace hpx { namespace traits
             {
                 result.push_back(result_type::value_type(r));
             }
-            return result;
+            return result; //-V614
         }
     };
 

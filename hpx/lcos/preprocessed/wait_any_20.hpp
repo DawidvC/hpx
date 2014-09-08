@@ -8,663 +8,210 @@
 // Do not edit manually.
 
 
-namespace hpx
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0)
+    template <typename T0>
+    void wait_any(T0 && f0, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1)
+    template <typename T0 , typename T1>
+    void wait_any(T0 && f0 , T1 && f1, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2)
+    template <typename T0 , typename T1 , typename T2>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3)
+    template <typename T0 , typename T1 , typename T2 , typename T3>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17 , lcos::future<T> f18)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17 , typename T18>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17 , T18 && f18, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17 , f18))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ) , std::forward<T18>( f18 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17 , lcos::future<T> f18,
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17 , f18);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
-    }
-}
-namespace hpx
+}}
+namespace hpx { namespace lcos
 {
     
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17 , lcos::future<T> f18 , lcos::future<T> f19)
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17 , typename T18 , typename T19>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17 , T18 && f18 , T19 && f19, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T> , lcos::future<T>
-        > argument_type;
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17 , f18 , f19))));
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ) , std::forward<T18>( f18 ) , std::forward<T19>( f19 ), ec);
     }
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (lcos::future<T> f0 , lcos::future<T> f1 , lcos::future<T> f2 , lcos::future<T> f3 , lcos::future<T> f4 , lcos::future<T> f5 , lcos::future<T> f6 , lcos::future<T> f7 , lcos::future<T> f8 , lcos::future<T> f9 , lcos::future<T> f10 , lcos::future<T> f11 , lcos::future<T> f12 , lcos::future<T> f13 , lcos::future<T> f14 , lcos::future<T> f15 , lcos::future<T> f16 , lcos::future<T> f17 , lcos::future<T> f18 , lcos::future<T> f19,
-        error_code& ec = throws)
+}}
+namespace hpx { namespace lcos
+{
+    
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17 , typename T18 , typename T19 , typename T20>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17 , T18 && f18 , T19 && f19 , T20 && f20, error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-        lcos::future<result_type> f = when_any(
-            f0 , f1 , f2 , f3 , f4 , f5 , f6 , f7 , f8 , f9 , f10 , f11 , f12 , f13 , f14 , f15 , f16 , f17 , f18 , f19);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-        return f.get(ec);
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ) , std::forward<T18>( f18 ) , std::forward<T19>( f19 ) , std::forward<T20>( f20 ), ec);
     }
-}
+}}
+namespace hpx { namespace lcos
+{
+    
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17 , typename T18 , typename T19 , typename T20 , typename T21>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17 , T18 && f18 , T19 && f19 , T20 && f20 , T21 && f21, error_code& ec = throws)
+    {
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ) , std::forward<T18>( f18 ) , std::forward<T19>( f19 ) , std::forward<T20>( f20 ) , std::forward<T21>( f21 ), ec);
+    }
+}}
+namespace hpx { namespace lcos
+{
+    
+    template <typename T0 , typename T1 , typename T2 , typename T3 , typename T4 , typename T5 , typename T6 , typename T7 , typename T8 , typename T9 , typename T10 , typename T11 , typename T12 , typename T13 , typename T14 , typename T15 , typename T16 , typename T17 , typename T18 , typename T19 , typename T20 , typename T21 , typename T22>
+    void wait_any(T0 && f0 , T1 && f1 , T2 && f2 , T3 && f3 , T4 && f4 , T5 && f5 , T6 && f6 , T7 && f7 , T8 && f8 , T9 && f9 , T10 && f10 , T11 && f11 , T12 && f12 , T13 && f13 , T14 && f14 , T15 && f15 , T16 && f16 , T17 && f17 , T18 && f18 , T19 && f19 , T20 && f20 , T21 && f21 , T22 && f22, error_code& ec = throws)
+    {
+        return lcos::wait_some(1, std::forward<T0>( f0 ) , std::forward<T1>( f1 ) , std::forward<T2>( f2 ) , std::forward<T3>( f3 ) , std::forward<T4>( f4 ) , std::forward<T5>( f5 ) , std::forward<T6>( f6 ) , std::forward<T7>( f7 ) , std::forward<T8>( f8 ) , std::forward<T9>( f9 ) , std::forward<T10>( f10 ) , std::forward<T11>( f11 ) , std::forward<T12>( f12 ) , std::forward<T13>( f13 ) , std::forward<T14>( f14 ) , std::forward<T15>( f15 ) , std::forward<T16>( f16 ) , std::forward<T17>( f17 ) , std::forward<T18>( f18 ) , std::forward<T19>( f19 ) , std::forward<T20>( f20 ) , std::forward<T21>( f21 ) , std::forward<T22>( f22 ), ec);
+    }
+}}

@@ -28,6 +28,8 @@
 #include <boost/fusion/include/std_pair.hpp>
 
 #include <hpx/runtime/threads/detail/partlit.hpp>
+#include <hpx/runtime.hpp>
+#include <hpx/util/stringstream.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 BOOST_FUSION_ADAPT_STRUCT(
@@ -53,7 +55,13 @@ namespace hpx { namespace threads { namespace detail
     ///////////////////////////////////////////////////////////////////////////
     //
     //    mappings:
+    //        distribution
     //        mapping(;mapping)*
+    //
+    //    distribution:
+    //        compact
+    //        scatter
+    //        balanced
     //
     //    mapping:
     //        thread-spec=pu-specs
@@ -95,9 +103,15 @@ namespace hpx { namespace threads { namespace detail
             using detail::partlit;
             using detail::spec_type;
 
-            start = mapping % ';';
+            start = distribution | (mapping % ';');
 
             mapping =  thread_spec >> '=' >> pu_spec;
+
+            distribution =
+                    partlit("compact") >> qi::attr(compact)
+                |   partlit("scatter") >> qi::attr(scatter)
+                |   partlit("balanced") >> qi::attr(balanced)
+                ;
 
             thread_spec =
                     partlit("thread") >> ':'
@@ -118,13 +132,13 @@ namespace hpx { namespace threads { namespace detail
                 ;
 
             core_spec =
-                    -qi::lit('.') >> partlit("core") >> ':'
+                   -qi::lit('.') >> partlit("core") >> ':'
                     >> specs >> qi::attr(spec_type::core)
                 |   qi::attr(spec_type::unknown)
                 ;
 
             processing_unit_spec =
-                    -qi::lit('.') >> partlit("pu") >> ':'
+                   -qi::lit('.') >> partlit("pu") >> ':'
                     >> specs >> qi::attr(spec_type::pu)
                 |   qi::attr(spec_type::unknown)
                 ;
@@ -137,12 +151,13 @@ namespace hpx { namespace threads { namespace detail
                 ;
 
             BOOST_SPIRIT_DEBUG_NODES(
-                (start)(mapping)(thread_spec)(pu_spec)(specs)(spec)
-                (socket_spec)(core_spec)(processing_unit_spec)
+                (start)(mapping)(distribution)(thread_spec)(pu_spec)(specs)
+                (spec)(socket_spec)(core_spec)(processing_unit_spec)
             );
         }
 
         qi::rule<Iterator, mappings_type()> start;
+        qi::rule<Iterator, distribution_type()> distribution;
         qi::rule<Iterator, full_mapping_type()> mapping;
         qi::rule<Iterator, spec_type()> thread_spec;
         qi::rule<Iterator, mapping_type()> pu_spec;
@@ -249,6 +264,8 @@ namespace hpx { namespace threads { namespace detail
             index = thread_index;
 
         mask_type pu_mask = mask_type();
+        resize(pu_mask, size);
+
         std::size_t pu_index = 0;
         for (bounds_type::const_iterator it = b.begin(); it != b.end(); ++it, ++pu_index)
         {
@@ -276,7 +293,7 @@ namespace hpx { namespace threads { namespace detail
         default:
             HPX_THROWS_IF(ec, bad_parameter, "decode_mapping1_unknown",
                 boost::str(boost::format("unexpected specification type at "
-                    "index two: %x (%s)") % 
+                    "index two: %x (%s)") %
                         static_cast<unsigned>(m[1].type_) %
                         spec_type::type_name(m[1].type_)));
             break;
@@ -297,7 +314,9 @@ namespace hpx { namespace threads { namespace detail
         if (m[2].type_ == spec_type::unknown && b.size() > 1)
             index = thread_index;
 
-        mask_type core_mask= mask_type();
+        mask_type core_mask = mask_type();
+        resize(core_mask, size);
+
         std::size_t core_index = 0;
         for (bounds_type::const_iterator it = b.begin(); it != b.end(); ++it, ++core_index)
         {
@@ -345,7 +364,7 @@ namespace hpx { namespace threads { namespace detail
         default:
             HPX_THROWS_IF(ec, bad_parameter, "decode_mapping0_unknown",
                 boost::str(boost::format("unexpected specification type at "
-                    "index one: %x (%s)") % 
+                    "index one: %x (%s)") %
                         static_cast<unsigned>(m[1].type_) %
                         spec_type::type_name(m[1].type_)));
             break;
@@ -369,6 +388,8 @@ namespace hpx { namespace threads { namespace detail
         }
 
         mask_type mask = mask_type();
+        resize(mask, size);
+
         std::size_t socket_index = 0;
         for (bounds_type::const_iterator it = b.begin(); it != b.end(); ++it, ++socket_index)
         {
@@ -404,6 +425,8 @@ namespace hpx { namespace threads { namespace detail
         }
 
         mask_type mask = mask_type();
+        resize(mask, size);
+
         std::size_t node_index = 0;
         for (bounds_type::const_iterator it = b.begin(); it != b.end(); ++it, ++node_index)
         {
@@ -450,7 +473,7 @@ namespace hpx { namespace threads { namespace detail
         default:
             HPX_THROWS_IF(ec, bad_parameter, "decode_mapping",
                 boost::str(boost::format("unexpected specification type at "
-                    "index zero: %x (%s)") % 
+                    "index zero: %x (%s)") %
                         static_cast<unsigned>(m[0].type_) %
                         spec_type::type_name(m[0].type_)));
             return mask_type();
@@ -503,13 +526,9 @@ namespace hpx { namespace threads { namespace detail
             ec = make_success_code();
     }
 
-    void decode_mappings(full_mapping_type& m,
+    void decode_mappings(hwloc_topology const& t, full_mapping_type& m,
         std::vector<mask_type>& affinities, error_code& ec)
     {
-        // We need to instantiate a new topology object as the runtime has not
-        // been initialized yet
-        hwloc_topology t;
-
         // repeat for each of the threads in the affinity specification
         std::size_t size = affinities.size();
         bounds_type b = extract_bounds(m.first, size, ec);
@@ -527,7 +546,7 @@ namespace hpx { namespace threads { namespace detail
             if (ec) return;
 
             // set each thread affinity only once
-            BOOST_ASSERT(*it < static_cast<boost::int64_t>(affinities.size()));
+            HPX_ASSERT(*it < static_cast<boost::int64_t>(affinities.size()));
             if (any(affinities[*it]))
             {
                 HPX_THROWS_IF(ec, bad_parameter, "decode_mapping",
@@ -543,65 +562,212 @@ namespace hpx { namespace threads { namespace detail
                 ++index;
         }
     }
+
+    void decode_compact_distribution(hwloc_topology& t,
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores, std::size_t max_cores,
+        std::vector<std::size_t>& num_pus, error_code& ec)
+    {
+        std::size_t num_threads = affinities.size();
+        std::size_t num_cores = max_cores % (t.get_number_of_cores()+1);
+        num_pus.resize(num_threads);
+
+        for (std::size_t num_thread = 0; num_thread != num_threads; /**/)
+        {
+            for(std::size_t num_core = 0; num_core != num_cores; ++num_core)
+            {
+                std::size_t num_core_pus
+                    = t.get_number_of_core_pus(num_core + used_cores);
+                for(std::size_t num_pu = 0; num_pu != num_core_pus; ++num_pu)
+                {
+                    if (any(affinities[num_thread]))
+                    {
+                        HPX_THROWS_IF(ec, bad_parameter, "decode_compact_distribution",
+                            boost::str(boost::format("affinity mask for thread %1% has "
+                                "already been set") % num_thread));
+                        return;
+                    }
+                    affinities[num_thread]
+                        = t.init_thread_affinity_mask(num_core + used_cores, num_pu);
+                    num_pus[num_thread] = num_thread;
+
+                    if(++num_thread == num_threads)
+                        return;
+                }
+            }
+        }
+    }
+
+    void decode_scatter_distribution(hwloc_topology& t,
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores, std::size_t max_cores,
+        std::vector<std::size_t>& num_pus, error_code& ec)
+    {
+        std::size_t num_threads = affinities.size();
+        std::size_t num_cores = max_cores % (t.get_number_of_cores()+1);
+
+        std::vector<std::size_t> num_pus_cores(num_cores, 0);
+        num_pus.resize(num_threads);
+
+        for (std::size_t num_thread = 0; num_thread != num_threads; /**/)
+        {
+            for(std::size_t num_core = 0; num_core != num_cores; ++num_core)
+            {
+                if (any(affinities[num_thread]))
+                {
+                    HPX_THROWS_IF(ec, bad_parameter, "decode_scatter_distribution",
+                        boost::str(boost::format("affinity mask for thread %1% has "
+                            "already been set") % num_thread));
+                    return;
+                }
+
+                num_pus[num_thread] = t.get_pu_number(num_core + used_cores, num_pus_cores[num_core]);
+                affinities[num_thread] = t.init_thread_affinity_mask(
+                    num_core + used_cores, num_pus_cores[num_core]++);
+
+                if(++num_thread == num_threads)
+                    return;
+            }
+        }
+    }
+
+    void decode_balanced_distribution(hwloc_topology& t,
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores, std::size_t max_cores,
+        std::vector<std::size_t>& num_pus, error_code& ec)
+    {
+        std::size_t num_threads = affinities.size();
+        std::size_t num_cores = max_cores % (t.get_number_of_cores()+1);
+
+        std::vector<std::size_t> num_pus_cores(num_cores, 0);
+        num_pus.resize(num_threads);
+        // At first, calculate the number of used pus per core.
+        // This needs to be done to make sure that we occupy all the available cores
+        for (std::size_t num_thread = 0; num_thread != num_threads; /**/)
+        {
+            for(std::size_t num_core = 0; num_core != num_cores; ++num_core)
+            {
+                num_pus_cores[num_core]++;
+                if(++num_thread == num_threads)
+                    break;
+            }
+        }
+
+        // Iterate over the cores and assigned pus per core. this additional loop
+        // is needed so that we have consecutive worker thread numbers
+        std::size_t num_thread = 0;
+        for(std::size_t num_core = 0; num_core != num_cores; ++num_core)
+        {
+            for(std::size_t num_pu = 0; num_pu != num_pus_cores[num_core]; ++num_pu)
+            {
+                if (any(affinities[num_thread]))
+                {
+                    HPX_THROWS_IF(ec, bad_parameter, "decode_balanced_distribution",
+                        boost::str(boost::format("affinity mask for thread %1% has "
+                            "already been set") % num_thread));
+                    return;
+                }
+                num_pus[num_thread] = t.get_pu_number(num_core + used_cores, num_pu);
+                affinities[num_thread] = t.init_thread_affinity_mask(
+                    num_core + used_cores, num_pu);
+                ++num_thread;
+            }
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    void decode_distribution(distribution_type d, hwloc_topology& t,
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores, std::size_t max_cores,
+        std::vector<std::size_t>& num_pus, error_code& ec)
+    {
+        switch (d) {
+        case compact:
+            decode_compact_distribution(t, affinities, used_cores, max_cores,
+                num_pus, ec);
+            break;
+
+        case scatter:
+            decode_scatter_distribution(t, affinities, used_cores, max_cores,
+                num_pus, ec);
+            break;
+
+        case balanced:
+            decode_balanced_distribution(t, affinities, used_cores, max_cores,
+                num_pus, ec);
+            break;
+
+        default:
+            HPX_ASSERT(false);
+        }
+    }
 }}}
 
 namespace hpx { namespace threads
 {
     ///////////////////////////////////////////////////////////////////////////
     void parse_affinity_options(std::string const& spec,
-        std::vector<mask_type>& affinities, error_code& ec)
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores, std::size_t max_cores,
+        std::vector<std::size_t>& num_pus, error_code& ec)
     {
         detail::mappings_type mappings;
         detail::parse_mappings(spec, mappings, ec);
-        if (!ec) {
-            BOOST_FOREACH(detail::full_mapping_type& m, mappings)
-            {
-                if (m.first.type_ != detail::spec_type::thread)
-                {
-                    HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
-                        boost::str(boost::format("bind specification (%1%) is "
-                            "ill formatted") % spec));
-                    return;
-                }
-
-                if (m.second.size() != 3)
-                {
-                    HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
-                        boost::str(boost::format("bind specification (%1%) is "
-                            "ill formatted") % spec));
-                    return;
-                }
-
-                if (m.second[0].type_ == detail::spec_type::unknown &&
-                    m.second[1].type_ == detail::spec_type::unknown &&
-                    m.second[2].type_ == detail::spec_type::unknown)
-                {
-                    HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
-                        boost::str(boost::format("bind specification (%1%) is "
-                            "ill formatted") % spec));
-                    return;
-                }
-
-                detail::decode_mappings(m, affinities, ec);
-                if (ec) return;
-            }
-        }
-    }
-
-    ///////////////////////////////////////////////////////////////////////////
-    void print_affinity_options(std::ostream& os, std::size_t num_threads,
-        std::string const& affinity_options, error_code& ec)
-    {
-        std::vector<mask_type> affinities(num_threads);
-        parse_affinity_options(affinity_options, affinities, ec);
         if (ec) return;
 
-        int i = 0;
-        BOOST_FOREACH(mask_type const& m, affinities)
+        // We need to instantiate a new topology object as the runtime has not
+        // been initialized yet
+        threads::hwloc_topology& t = threads::create_topology();
+
+        switch (mappings.which())
         {
-            os << i++ << ": 0x"
-               << std::hex << std::setw(sizeof(mask_type)*2)
-               << std::setfill('0') << m << std::endl;
+        case 0:
+            {
+                detail::decode_distribution(
+                    boost::get<detail::distribution_type>(mappings),
+                    t, affinities, used_cores, max_cores, num_pus, ec);
+                if (ec) return;
+            }
+            break;
+        case 1:
+            {
+//                    std::cout << "got mappings " << spec << " ...\n";
+                detail::mappings_spec_type mappings_specs(
+                    boost::get<detail::mappings_spec_type>(mappings));
+
+                BOOST_FOREACH(detail::full_mapping_type& m, mappings_specs)
+                {
+                    if (m.first.type_ != detail::spec_type::thread)
+                    {
+                        HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
+                            boost::str(boost::format("bind specification (%1%) is "
+                                "ill formatted") % spec));
+                        return;
+                    }
+
+                    if (m.second.size() != 3)
+                    {
+                        HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
+                            boost::str(boost::format("bind specification (%1%) is "
+                                "ill formatted") % spec));
+                        return;
+                    }
+
+                    if (m.second[0].type_ == detail::spec_type::unknown &&
+                        m.second[1].type_ == detail::spec_type::unknown &&
+                        m.second[2].type_ == detail::spec_type::unknown)
+                    {
+                        HPX_THROWS_IF(ec, bad_parameter, "parse_affinity_options",
+                            boost::str(boost::format("bind specification (%1%) is "
+                                "ill formatted") % spec));
+                        return;
+                    }
+
+                    detail::decode_mappings(t, m, affinities, ec);
+                    if (ec) return;
+                }
+            }
+            break;
         }
     }
 }}

@@ -9,7 +9,6 @@
 #include <hpx/runtime/actions/plain_action.hpp>
 #include <hpx/runtime/components/plain_component_factory.hpp>
 #include <hpx/util/high_resolution_timer.hpp>
-#include <hpx/lcos/future_wait.hpp>
 #include <hpx/include/async.hpp>
 
 #include <algorithm>
@@ -118,7 +117,7 @@ void quicksort_parallel<T>::call(id_type prefix, id_type d, std::size_t begin,
                 (std::max)(begin + 1, middle_idx), end);
 
             call(prefix, d, begin, middle_idx);
-            ::hpx::lcos::wait(n);
+            ::hpx::wait_all(n);
         }
 
         else
@@ -127,7 +126,7 @@ void quicksort_parallel<T>::call(id_type prefix, id_type d, std::size_t begin,
                 begin, middle_idx);
 
             call(prefix, d, (std::max)(begin + 1, middle_idx), end);
-            ::hpx::lcos::wait(n);
+            ::hpx::wait_all(n);
         }
     }
 }
@@ -154,8 +153,7 @@ int hpx_main(variables_map& vm)
 
     {
         // create a (remote) memory block
-        memory_block mb;
-        mb.create<int, uint8_t>(prefix, elements);
+        memory_block mb = memory_block::create<int, uint8_t>(prefix, elements);
         access_memory_block<int> data(mb.get());
 
         // randomly fill the vector
@@ -183,7 +181,7 @@ int hpx_main(variables_map& vm)
         t.restart();
         future<void> n = async<quicksort_int_action>(
             prefix, prefix, mb.get_gid(), 0, elements);
-        ::hpx::lcos::wait(n);
+        ::hpx::wait_all(n);
         elapsed = t.elapsed();
 
         std::cout << "  elapsed=" << elapsed << "\n"

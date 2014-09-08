@@ -20,7 +20,7 @@ system and application performance.
 
           where:[br] `<agas_service>` is one of the following:
             `allocate`, `bind`, `bind_gid`, `bind_name`, `bind_prefix`,
-            `change_credit`, `free`, `get_component_typename`,
+            `increment_credit`, `decrement_credit`, `free`, `get_component_typename`,
             `iterate_names`, `iterate_types`, `localities`,
             `num_localities`, `num_localities_type`, `num_threads`, `resolve`,
             `resolve_gid`, `resolve_id`, `resolve_locality`, `resolved_localities`,
@@ -29,22 +29,41 @@ system and application performance.
         [`<agas_instance>/total`
 
           where:[br] `<agas_instance>` is the name of the AGAS service to query.
-          Currently, this value will be `locality#*`, where `*` is the locality
-          id of the locality hosting the AGAS service. Except for `<agas_service>`
-          `route`, `bind_gid`, `resolve_gid`, `unbind_gid`, and `change_credit`
-          the only value for `*` is `0` (only the primary AGAS service components
-          live on all localities, whereas all other AGAS services are available
-          on `locality#0` only).
+          Currently, this value will be `locality#0`, where `0` is the root locality
+          (the id of the locality hosting the AGAS service). Except for `<agas_service>`
+          `route`, `bind_gid`, `resolve_gid`, `unbind_gid`, `increment_credit`,
+          `decrement_credit`, `bind`, `resolve`, `unbind`, and `iterate_names`
+          for which the value for `*` can be any locality id (only the primary and
+          symbol AGAS service components live on all localities, whereas all other AGAS services
+          are available on `locality#0` only).
         ]
         [None]
         [Returns the total number of invocations of the specified AGAS service
          since its creation.]
     ]
+    [   [`/agas/<agas_service_category>/count`
+
+          where:[br] `<agas_service_category>` is one of the following:
+            `primary`, `locality`, `component`, or `symbol`.
+        ]
+        [`<agas_instance>/total`
+
+          where:[br] `<agas_instance>` is the name of the AGAS service to query.
+          Currently, this value will be `locality#0`, where `0` is the root locality
+          (the id of the locality hosting the AGAS service). Except for
+          `<agas_service_category>` `primary` or `symbol` for which the value for `*` can be any
+          locality id (only the primary and symbol AGAS service components live on all localities,
+          whereas all other AGAS services are available on `locality#0` only).
+        ]
+        [None]
+        [Returns the overall total number of invocations of all AGAS services
+         provided by the given AGAS service category since its creation.]
+    ]
     [   [`/agas/time/<agas_service>`
 
           where:[br] `<agas_service>` is one of the following:
             `allocate`, `bind`, `bind_gid`, `bind_name`, `bind_prefix`,
-            `change_credit`, `free`, `get_component_typename`,
+            `increment_credit`, `decrement_credit`, `free`, `get_component_typename`,
             `iterate_names`, `iterate_types`, `localities`,
             `num_localities`, `num_localities_type`, `num_threads`, `resolve`,
             `resolve_gid`, `resolve_id`, `resolve_locality`, `resolved_localities`,
@@ -53,16 +72,35 @@ system and application performance.
         [`<agas_instance>/total`
 
           where:[br] `<agas_instance>` is the name of the AGAS service to query.
-          Currently, this value will be `locality#*`, where `*` is the locality
-          id of the locality hosting the AGAS service. Except for `<agas_service>`
-          `route`, `bind_gid`, `resolve_gid`, `unbind_gid`, and `change_credit`
-          the only value for `*` is `0` (only the primary AGAS service components
-          live on all localities, whereas all other AGAS services are available
-          on `locality#0` only).
+          Currently, this value will be `locality#0`, where `0` is the root locality
+          (the id of the locality hosting the AGAS service). Except for `<agas_service>`
+          `route`, `bind_gid`, `resolve_gid`, `unbind_gid`, `increment_credit`,
+          `decrement_credit`,`bind`, `resolve`, `unbind`, and `iterate_names`
+          for which the value for `*` can be any locality id (only the primary and symbol AGAS
+          service components live on all localities, whereas all other AGAS services
+          are available on `locality#0` only).
         ]
         [None]
         [Returns the overall execution time of the specified AGAS service
          since its creation (in nanoseconds).]
+    ]
+    [   [`/agas/<agas_service_category>/time`
+
+          where:[br] `<agas_service_category>` is one of the following:
+            `primary`, `locality`, `component`, or `symbol`.
+        ]
+        [`<agas_instance>/total`
+
+          where:[br] `<agas_instance>` is the name of the AGAS service to query.
+          Currently, this value will be `locality#0`, where `0` is the root locality
+          (the id of the locality hosting the AGAS service). Except for
+          `<agas_service_category>` `primary` or `symbol` for which the value for `*` can be any
+          locality id (only the primary and symbol AGAS service components live on all localities,
+          whereas all other AGAS services are available on `locality#0` only).
+        ]
+        [None]
+        [Returns the overall execution time of all AGAS services provided by the
+         given AGAS service category since its creation (in nanoseconds).]
     ]
     [   [`/agas/count/<cache_statistics>`
 
@@ -77,8 +115,40 @@ system and application performance.
         ]
         [None]
         [Returns the number of cache events (evictions, hits, inserts, and
-         misses) in the AGAS cache of the specified locality (see 
+         misses) in the AGAS cache of the specified locality (see
          `<cache_statistics>`.]
+    ]
+    [   [`/agas/count/<full_cache_statistics>`
+
+          where:[br] `<full_cache_statistics>` is one of the following:
+          `cache_get_entry`, `cache_insert_entry`, `cache_update_entry`,
+          `cache_erase_entry`
+        ]
+        [`locality#*/total`
+
+          where:[br] `*` is the locality id of the locality the AGAS cache should
+          be queried. The locality id is a (zero based) number identifying the
+          locality.
+        ]
+        [None]
+        [Returns the number of invocations of the specified cache API function
+         of the AGAS cache.]
+    ]
+    [   [`/agas/time/<full_cache_statistics>`
+
+          where:[br] `<full_cache_statistics>` is one of the following:
+          `cache_get_entry`, `cache_insert_entry`, `cache_update_entry`,
+          `cache_erase_entry`
+        ]
+        [`locality#*/total`
+
+          where:[br] `*` is the locality id of the locality the AGAS cache should
+          be queried. The locality id is a (zero based) number identifying the
+          locality.
+        ]
+        [None]
+        [Returns the the overall time spent executing of the specified API
+         function of the AGAS cache.]
     ]
 ]
 
@@ -89,7 +159,7 @@ system and application performance.
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -102,16 +172,28 @@ system and application performance.
          (see `<operation>`, e.g. `sent` or `received`) for the specified
          `<connection_type>`.
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_SHMEM_PARCELPORT` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `ibverbs` are available
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/data/time/<connection_type>/<operation>`
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -125,16 +207,28 @@ system and application performance.
          operation for the specified `<connection_type>` the given locality
          (see `<operation>`, e.g. `sent` or `received`).
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_SHMEM_PARCELPORT` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `ibverbs` are available
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/serialize/count/<connection_type>/<operation>`
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -147,16 +241,28 @@ system and application performance.
          e.g. `sent` or `received`, possibly compressed) for the specified
          `<connection_type>` by the given locality.
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_SHMEM_PARCELPORT` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `ibverbs` are available
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/serialize/time/<connection_type>/<operation>`
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -169,10 +275,60 @@ system and application performance.
          for the specified `<connection_type>`on the given locality (see
          `<operation>`, e.g. `sent` or `received`).
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_SHMEM_PARCELPORT` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `ibverbs` are available
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
+    ]
+    [   [`/security/time/<connection_type>/<operation>`
+
+          where:[br] `<operation>` is one of the following:
+          `sent`, `received`[br]
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
+        ]
+        [`locality#*/total`
+
+          where:[br] `*` is the locality id of the locality the time spent for
+          security related operation should be queried for. The locality id is
+          a (zero based) number identifying the locality.
+        ]
+        [None]
+        [Returns the overall time spent performing outgoing security operations
+         for the specified `<connection_type>`on the given locality (see
+         `<operation>`, e.g. `sent` or `received`).
+
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `ibverbs` are available
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         These performance counters are available only if the compile time constant
+         `HPX_HAVE_SECURITY` was defined while compiling the __hpx__ core library
+         (which is not defined by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/parcels/count/routed`
         ]
@@ -191,13 +347,13 @@ system and application performance.
          address. In this case a parcel is sent to the AGAS service component
          which is responsible for creating the destination GID (and is
          responsible for resolving the destination address). This AGAS service
-         component will deiver the parcel to its final target.]
+         component will deliver the parcel to its final target.]
     ]
     [   [`/parcels/count/<connection_type>/<operation>`
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -210,21 +366,28 @@ system and application performance.
          `<connection_type>` by the given locality (see `<operation>`, e.g.
          `sent` or `received`).
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_SHMEM` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.
+         by default).
 
          The performance counters for the connection type `ibverbs` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_IBVERBS` was
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/messages/count/<connection_type>/<operation>`
 
           where:[br] `<operation>` is one of the following:
           `sent`, `received`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -238,22 +401,29 @@ system and application performance.
          the specified `<connection_type>` by the given locality (see
          `<operation>`, e.g. `sent` or `received`).
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_SHMEM` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.
+         by default).
 
          The performance counters for the connection type `ibverbs` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_IBVERBS` was
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/parcelport/count/<connection_type>/<cache_statistics>`
 
           where:[br] `<cache_statistics>` is one of the following:
           `cache-insertions`, `cache-evictions`, `cache-hits`, `cache-misses`,
           `cache-misses`[br]
-          `<connection_type>` is one of the following: `tcp`, `shmem`
+          `<connection_type>` is one of the following: `tcp`, `ipc`, `ibverbs`, `mpi`
         ]
         [`locality#*/total`
 
@@ -263,19 +433,26 @@ system and application performance.
         ]
         [None]
         [Returns the overall number cache events (evictions, hits, inserts,
-         misses, andreclaims) for the connection cache of the given connection 
+         misses, and reclaims) for the connection cache of the given connection
          type on the given locality (see `<cache_statistics>`, e.g. `cache-insertions`,
          `cache-evictions`, `cache-hits`, `cache-misses`, or `cache-reclaims`).
 
-         The performance counters for the connection type `shmem` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_SHMEM` was
+         The performance counters for the connection type `ipc` are available
+         only if the compile time constant `HPX_PARCELPORT_IPC` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.
+         by default).
 
          The performance counters for the connection type `ibverbs` are available
-         only if the compile time constant `HPX_USE_PARCELPORT_IBVERBS` was
+         only if the compile time constant `HPX_PARCELPORT_IBVERBS` was
          defined while compiling the __hpx__ core library (which is not defined
-         by default). Please see __cmake_options__ for more details.]
+         by default).
+
+         The performance counters for the connection type `mpi` are available
+         only if the compile time constant `HPX_PARCELPORT_MPI` was
+         defined while compiling the __hpx__ core library (which is not defined
+         by default).
+
+         Please see __cmake_options__ for more details.]
     ]
     [   [`/parcelqueue/length/<operation>`
 
@@ -305,7 +482,7 @@ system and application performance.
           `locality#*` is defining the locality for which the
           overall number of retired __hpx__-threads should be queried for. The
           locality id (given by `*`) is a (zero based) number identifying the
-          locality
+          locality.
 
           `worker-thread#*` is defining the worker thread for which the
           overall number of retired __hpx__-threads should be queried for. The
@@ -320,7 +497,38 @@ system and application performance.
          the counter returns the accumulated number of retired __hpx__-threads
          for all worker threads (cores) on that locality. If the instance name
          is `worker-thread#*` the counter will return the overall number of
-         retired __hpx__-threads for the specified worker thread.]
+         retired __hpx__-threads for all worker threads separately.
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_CUMULATIVE_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/cumulative-phases`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the overall number
+          of executed __hpx__-thread phases (invocations) should be queried
+          for. The locality id (given by `*`) is a (zero based) number
+          identifying the locality.
+
+          `worker-thread#*` is defining the worker thread for which the
+          overall number of executed __hpx__-thread phases (invocations) should
+          be queried for. The worker thread number (given by the `*`) is a
+          (zero based) number identifying the worker thread. The number of
+          available worker threads is usually specified on the command line
+          for the application using the option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the overall number of executed __hpx__-thread phases
+         (invocations) on the given locality since application start. If the
+         instance name is `total` the counter returns the accumulated number
+         of executed __hpx__-thread phases (invocations) for all worker threads
+         (cores) on that locality. If the instance name is `worker-thread#*`
+         the counter will return the overall number of executed __hpx__-thread
+         phases for all worker threads separately.
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_CUMULATIVE_COUNTS` is set to `ON` (default: ON).]
     ]
     [   [`/threads/count/instantaneous/<thread-state>`
 
@@ -352,8 +560,8 @@ system and application performance.
          name is `total` the counter returns the current number of __hpx__-threads
          of the given state for all worker threads (cores) on that locality. If
          the instance name is `worker-thread#*` the counter will return the
-         current number of __hpx__-threads in the given state for the specified
-         worker thread.]
+         current number of __hpx__-threads in the given state for all
+         worker threads separately.]
     ]
     [   [`/threads/wait-time/<thread-state>`
 
@@ -388,12 +596,12 @@ system and application performance.
          name is `total` the counter returns the wait time of __hpx__-threads
          of the given state for all worker threads (cores) on that locality. If
          the instance name is `worker-thread#*` the counter will return the
-         wait time of __hpx__-threads in the given state for the specified
-         worker thread.
+         wait time of __hpx__-threads in the given state for all
+         worker threads separately.
 
          These counters are available only if the compile time constant
          `HPX_THREAD_MAINTAIN_QUEUE_WAITTIME` was defined while compiling the
-         __hpx__ core library (which is defined by default).]
+         __hpx__ core library (default: OFF).]
     ]
     [   [`/threads/idle-rate`]
         [`locality#*/total` or[br]
@@ -416,7 +624,63 @@ system and application performance.
         [Returns the average idle rate for the given worker thread(s) on the
          given locality. The idle rate is defined as the ratio of the time
          spent on scheduling and management tasks and the overall time spent
-         executing work since the application started.]
+         executing work since the application started.
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_IDLE_RATES` is set to `ON` (default: OFF)/.]
+    ]
+    [   [`/threads/creation-idle-rate`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the average idle rate for the given worker thread(s) on the
+         given locality which is caused by creating new threads. The creation
+         idle rate is defined as the ratio of the time spent on creating new
+         threads and the overall time spent executing work since the
+         application started.
+         This counter is available only if the configuration time constants
+         `HPX_THREAD_MAINTAIN_IDLE_RATES` (default: OFF) and
+         `HPX_THREAD_MAINTAIN_CREATION_AND_CLEANUP_RATES` are set to `ON`.]
+    ]
+    [   [`/threads/cleanup-idle-rate`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the average idle rate for the given worker thread(s) on the
+         given locality which is caused by cleaning up terminated threads. The
+         cleanup idle rate is defined as the ratio of the time spent on
+         cleaning up terminated thread objects and the overall time spent
+         executing work since the application started.
+         This counter is available only if the configuration time constants
+         `HPX_THREAD_MAINTAIN_IDLE_RATES` (default: OFF) and
+         `HPX_THREAD_MAINTAIN_CREATION_AND_CLEANUP_RATES` are set to `ON`.]
     ]
     [   [`/threadqueue/length`]
         [`locality#*/total` or[br]
@@ -426,7 +690,7 @@ system and application performance.
           `locality#*` is defining the locality for which the current length
           of all thread queues in the scheduler for all (or one) worker threads
           should be queried for. The locality id (given by `*`) is a (zero
-          based) number identifying the locality
+          based) number identifying the locality.
 
           `worker-thread#*` is defining the worker thread for which the
           current length of all thread queues in the scheduler should be
@@ -462,7 +726,7 @@ system and application performance.
         [Returns the total number of __hpx__-thread recycling operations
          performed.]
     ]
-    [   [`/threads/count/stolen`]
+    [   [`/threads/count/stolen-from-pending`]
         [`locality#*/total`
 
           where:[br] `*` is the locality id of the locality the number of
@@ -470,9 +734,141 @@ system and application performance.
           (zero based) number identifying the locality.
         ]
         [None]
-        [Returns the total number of __hpx__-threads 'stolen' from a
-         neighboring worker thread (these threads are executed by a
-         different worker thread than they were initially scheduled on).]
+        [Returns the total number of __hpx__-threads 'stolen' from the pending
+         thread queue by a neighboring thread worker thread (these threads are
+         executed by a different worker thread than they were initially
+         scheduled on).
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/pending-misses`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the total number of times that the referenced worker-thread
+         on the referenced locality failed to find pending HPX-threads in its
+         associated queue.
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/pending-accesses`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the total number of times that the referenced worker-thread
+         on the referenced locality looked for pending HPX-threads in its
+         associated queue.
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/stolen-from-staged`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the total number of __hpx__-threads 'stolen' from the staged
+         thread queue by a neighboring worker thread (these threads are
+         executed by a different worker thread than they were initially
+         scheduled on).
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/stolen-to-pending`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the total number of __hpx__-threads 'stolen' from the pending
+         thread queue of a neighboring worker thread (these threads are
+         executed by a different worker thread than they were initially
+         scheduled on).
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
+    ]
+    [   [`/threads/count/stolen-to-staged`]
+        [`locality#*/total` or[br]
+         `locality#*/worker-thread#*`
+
+          where:[br]
+          `locality#*` is defining the locality for which the average
+          idle rate of all (or one) worker threads should be queried for. The
+          locality id (given by `*`) is a (zero based) number identifying the
+          locality
+
+          `worker-thread#*` is defining the worker thread for which the
+          averaged idle rate should be queried for. The
+          worker thread number (given by the `*`) is a (zero based) number
+          identifying the worker thread. The number of available worker threads
+          is usually specified on the command line for the application using the
+          option [hpx_cmdline `--hpx:threads`].
+        ]
+        [None]
+        [Returns the total number of __hpx__-threads 'stolen' from the staged
+         thread queue of a neighboring worker thread (these threads are
+         executed by a different worker thread than they were initially
+         scheduled on).
+         This counter is available only if the configuration time constant
+         `HPX_THREAD_MAINTAIN_STEALING_COUNTS` is set to `ON`
+         (default: ON).]
     ]
     [   [`/threads/count/objects`]
         [`locality#*/total` or[br]
@@ -668,33 +1064,61 @@ system and application performance.
         [Returns the sum calculated based on the values queried from the
          underlying counters (the ones specified as the parameters).]
         [The parameter will be interpreted as a comma separated list of
-         two other full performance counter names which are queried whenever
-         this counter is accessed.]
+         full performance counter names which are queried whenever
+         this counter is accessed. Any wildcards in the counter names will
+         be expanded.]
     ]
     [   [`/arithmetics/subtract`]
         [None]
         [Returns the difference calculated based on the values queried from the
          underlying counters (the ones specified as the parameters).]
         [The parameter will be interpreted as a comma separated list of
-         two other full performance counter names which are queried whenever
-         this counter is accessed.]
+         full performance counter names which are queried whenever
+         this counter is accessed. Any wildcards in the counter names will
+         be expanded.]
     ]
     [   [`/arithmetics/multiply`]
         [None]
         [Returns the product calculated based on the values queried from the
          underlying counters (the ones specified as the parameters).]
         [The parameter will be interpreted as a comma separated list of
-         two other full performance counter names which are queried whenever
-         this counter is accessed.]
+         full performance counter names which are queried whenever
+         this counter is accessed. Any wildcards in the counter names will
+         be expanded.]
     ]
     [   [`/arithmetics/divide`]
         [None]
         [Returns the result of division of the values queried from the
          underlying counters (the ones specified as the parameters).]
         [The parameter will be interpreted as a comma separated list of
-         two other full performance counter names which are queried whenever
-         this counter is accessed.]
+         full performance counter names which are queried whenever
+         this counter is accessed. Any wildcards in the counter names will
+         be expanded.]
     ]
+]
+
+[note The /arithmetics counters can consume an arbitrary number of other counters.
+    For this reason those have to be specified as parameters (a comma separated
+    list of counters appended after a `'@'`). For instance:
+    ```
+        ./bin/hello_world -t2 \
+            --hpx:print-counter=/threads{locality#0/worker-thread#*}/count/cumulative \
+            --hpx:print-counter=/arithmetics/add@/threads{locality#0/worker-thread#*}/count/cumulative
+        hello world from OS-thread 0 on locality 0
+        hello world from OS-thread 1 on locality 0
+        /threads{locality#0/worker-thread#0}/count/cumulative,1,0.515640,[s],25
+        /threads{locality#0/worker-thread#1}/count/cumulative,1,0.515520,[s],36
+        /arithmetics/add@/threads{locality#0/worker-thread#*}/count/cumulative,1,0.516445,[s],64
+    ```
+    Since all wildcards in the parameters are expanded, this example is fully equivalent to
+    specifying both counters separately to `/arithmetics/add`:
+    ```
+        ./bin/hello_world -t2 \
+            --hpx:print-counter=/threads{locality#0/worker-thread#*}/count/cumulative \
+            --hpx:print-counter=/arithmetics/add@\
+                /threads{locality#0/worker-thread#0}/count/cumulative,\
+                /threads{locality#0/worker-thread#1}/count/cumulative
+    ```
 ]
 
 [c++]

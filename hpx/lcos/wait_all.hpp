@@ -1,4 +1,5 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
+//  Copyright (c) 2013 Agustin Berge
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -9,363 +10,105 @@
 #define HPX_LCOS_WAIT_ALL_APR_19_2012_1140AM
 
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/util/move.hpp>
-#include <hpx/runtime/threads/thread.hpp>
 #include <hpx/lcos/future.hpp>
-#include <hpx/lcos/local/packaged_task.hpp>
-#include <hpx/lcos/local/packaged_continuation.hpp>
-#include <hpx/util/bind.hpp>
+#include <hpx/lcos/wait_some.hpp>
+#include <hpx/util/always_void.hpp>
+#include <hpx/util/decay.hpp>
+#include <hpx/util/move.hpp>
 #include <hpx/util/tuple.hpp>
 #include <hpx/util/detail/pp_strip_parens.hpp>
 
-#include <vector>
-
-#include <boost/assert.hpp>
 #include <boost/preprocessor/cat.hpp>
-#include <boost/preprocessor/repeat.hpp>
 #include <boost/preprocessor/enum.hpp>
 #include <boost/preprocessor/iterate.hpp>
 
-#include <boost/atomic.hpp>
+#include <algorithm>
+#include <iterator>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx
+namespace hpx { namespace lcos
 {
-    namespace detail
-    {
-        //////////////////////////////////////////////////////////////////////
-        template <typename T, typename F = void>
-        struct when_all;
-
-        //////////////////////////////////////////////////////////////////////
-        // This version has an additional callback to be invoked for each 
-        // future when it gets ready.
-        template <typename T, typename F>
-        struct when_all : when_all<T, void>
-        {
-        private:
-            typedef when_all<T, void> base_type;
-
-            BOOST_MOVABLE_BUT_NOT_COPYABLE(when_all)
-
-            template <typename Index>
-            void on_future_ready_(Index i, threads::thread_id_type id, boost::mpl::false_)
-            {
-                if (this->base_type::lazy_values_[i].has_value()) {
-                    if (success_counter_)
-                        ++*success_counter_;
-                    f_(i, this->base_type::lazy_values_[i].get());  // invoke callback function
-                }
-                this->base_type::on_future_ready(id);   // keep track of ready futures
-            }
-
-            template <typename Index>
-            void on_future_ready_(Index i, threads::thread_id_type id, boost::mpl::true_)
-            {
-                if (this->base_type::lazy_values_[i].has_value()) {
-                    if (success_counter_)
-                        ++*success_counter_;
-                    f_(i);                              // invoke callback function
-                }
-                this->base_type::on_future_ready(id);   // keep track of ready futures
-            }
-
-            void on_future_ready(std::size_t i, threads::thread_id_type id)
-            {
-                on_future_ready_(i, id, boost::is_same<void, T>());
-            }
-
-        public:
-            typedef std::vector<lcos::future<T> > argument_type;
-            typedef std::vector<lcos::future<T> > result_type;
-
-            template <typename F_>
-            when_all(argument_type const& lazy_values, BOOST_FWD_REF(F_) f,
-                    boost::atomic<std::size_t>* success_counter)
-              : base_type(lazy_values), 
-                f_(boost::forward<F>(f)),
-                success_counter_(success_counter)
-            {}
-
-            template <typename F_>
-            when_all(BOOST_RV_REF(argument_type) lazy_values, BOOST_FWD_REF(F_) f,
-                    boost::atomic<std::size_t>* success_counter)
-              : base_type(boost::move(lazy_values)), 
-                f_(boost::forward<F>(f)),
-                success_counter_(success_counter)
-            {}
-
-            when_all(BOOST_RV_REF(when_all) rhs)
-              : base_type(boost::move(rhs.lazy_values_)), 
-                f_(boost::move(rhs.f_)),
-                success_counter_(rhs.success_counter_)
-            {
-                rhs.success_counter_ = 0;
-            }
-
-            when_all& operator= (BOOST_RV_REF(when_all) rhs)
-            {
-                if (this != &rhs) {
-                    this->base_type::operator=(boost::move(rhs));
-                    f_ = boost::move(rhs.f_);
-                    success_counter_ = rhs.success_counter_;
-                    rhs.success_counter_ = 0;
-                }
-                return *this;
-            }
-
-            result_type operator()()
-            {
-                using lcos::detail::get_future_data;
-                this->base_type::ready_count_.store(0);
-
-                // set callback functions to executed when future is ready
-                std::size_t size = this->base_type::lazy_values_.size();
-                threads::thread_id_type id = threads::get_self_id();
-                for (std::size_t i = 0; i != size; ++i)
-                {
-                    get_future_data(this->base_type::lazy_values_[i])->set_on_completed(
-                        util::bind(&when_all::on_future_ready, this, i, id));
-                }
-
-                // If all of the requested futures are already set then our
-                // callback above has already been called, otherwise we suspend
-                // ourselves.
-                if (this->base_type::ready_count_ < size)
-                {
-                    // wait for all of the futures to return to become ready
-                    this_thread::suspend(threads::suspended);
-                }
-
-                // all futures should be ready
-                BOOST_ASSERT(this->base_type::ready_count_ == size);
-
-                // reset all pending callback functions
-                for (std::size_t i = 0; i < size; ++i) 
-                    get_future_data(this->base_type::lazy_values_[i])->reset_on_completed();
-
-                return this->base_type::lazy_values_;
-            }
-
-            typename std::remove_reference<F>::type f_;
-            boost::atomic<std::size_t>* success_counter_;
-        };
-
-        //////////////////////////////////////////////////////////////////////
-        template <typename T>
-        struct when_all<T, void>
-        {
-        private:
-            BOOST_MOVABLE_BUT_NOT_COPYABLE(when_all)
-
-        protected:
-            void on_future_ready(threads::thread_id_type id)
-            {
-                if (ready_count_.fetch_add(1) + 1 == lazy_values_.size())
-                {
-                    // reactivate waiting thread only if it's not us
-                    if (id != threads::get_self_id())
-                        threads::set_thread_state(id, threads::pending);
-                }
-            }
-
-        public:
-            typedef std::vector<lcos::future<T> > argument_type;
-            typedef std::vector<lcos::future<T> > result_type;
-
-            when_all(argument_type const& lazy_values)
-              : lazy_values_(lazy_values),
-                ready_count_(0)
-            {}
-
-            when_all(BOOST_RV_REF(argument_type) lazy_values)
-              : lazy_values_(boost::move(lazy_values)),
-                ready_count_(0)
-            {}
-
-            when_all(BOOST_RV_REF(when_all) rhs)
-              : lazy_values_(boost::move(rhs.lazy_values_)),
-                ready_count_(rhs.ready_count_.load())
-            {
-                rhs.ready_count_.store(0);
-            }
-
-            when_all& operator= (BOOST_RV_REF(when_all) rhs)
-            {
-                if (this != &rhs) {
-                    lazy_values_ = boost::move(rhs.lazy_values_);
-                    ready_count_ = rhs.ready_count_;
-                    rhs.ready_count_ = 0;
-                }
-                return *this;
-            }
-
-            result_type operator()()
-            {
-                using lcos::detail::get_future_data;
-
-                ready_count_.store(0);
-
-                // set callback functions to executed when future is ready
-                std::size_t size = lazy_values_.size();
-                threads::thread_id_type id = threads::get_self_id();
-                for (std::size_t i = 0; i != size; ++i)
-                {
-                    get_future_data(lazy_values_[i])->set_on_completed(
-                        util::bind(&when_all::on_future_ready, this, id));
-                }
-
-                // If all of the requested futures are already set then our
-                // callback above has already been called, otherwise we suspend
-                // ourselves.
-                if (ready_count_ < size)
-                {
-                    // wait for all of the futures to return to become ready
-                    this_thread::suspend(threads::suspended);
-                }
-
-                // all futures should be ready
-                BOOST_ASSERT(ready_count_ == size);
-
-                // reset all pending callback functions
-                for (std::size_t i = 0; i < size; ++i) 
-                    get_future_data(lazy_values_[i])->reset_on_completed();
-
-                return lazy_values_;
-            }
-
-            std::vector<lcos::future<T> > lazy_values_;
-            boost::atomic<std::size_t> ready_count_;
-        };
-    }
-
-    /// The function \a when_all is a operator allowing to join on the result
-    /// of all given futures. It AND-composes all future objects stored in the
-    /// given vector and returns a new future object representing the same
-    /// list of futures after they finished executing.
-    ///
-    /// \return   The returned future holds the same list of futures as has
-    ///           been passed to when_all.
-
-    template <typename Iterator>
-    lcos::future<std::vector<lcos::future<
-        typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-    > > >
-    when_all(Iterator begin, Iterator end)
-    {
-        typedef typename lcos::future_iterator_traits<
-            Iterator>::traits_type::value_type value_type;
-        typedef std::vector<lcos::future<value_type> > return_type;
-
-        return_type lazy_values;
-        std::copy(begin, end, std::back_inserter(lazy_values));
-
-        if (lazy_values.empty())
-            return lcos::make_ready_future(return_type());
-
-        lcos::local::futures_factory<return_type()> p(
-            detail::when_all<value_type>(boost::move(lazy_values)));
-
-        p.apply();
-        return p.get_future();
-    }
-
-    template <typename T>
-    lcos::future<std::vector<lcos::future<T> > >
-    when_all(BOOST_RV_REF(HPX_UTIL_STRIP((
-        std::vector<lcos::future<T> >))) lazy_values)
-    {
-        typedef std::vector<lcos::future<T> > return_type;
-
-        if (lazy_values.empty())
-            return lcos::make_ready_future(return_type());
-
-        lcos::local::futures_factory<return_type()> p(
-            detail::when_all<T>(boost::move(lazy_values)));
-
-        p.apply();
-        return p.get_future();
-    }
-
-    template <typename T>
-    lcos::future<std::vector<lcos::future<T> > > //-V659
-    when_all(std::vector<lcos::future<T> > const& lazy_values)
-    {
-        typedef std::vector<lcos::future<T> > return_type;
-
-        if (lazy_values.empty())
-            return lcos::make_ready_future(return_type());
-
-        lcos::local::futures_factory<return_type()> p =
-            lcos::local::futures_factory<return_type()>(
-                detail::when_all<T>(lazy_values));
-
-        p.apply();
-        return p.get_future();
-    }
-
     /// The function \a wait_all is a operator allowing to join on the result
-    /// of all given futures. It AND-composes all future objects stored in the
-    /// given vector and returns a new future object representing the same
-    /// list of futures after they finished executing.
+    /// of all given futures. It AND-composes all future objects given and
+    /// returns the same list of futures after they finished executing.
     ///
     /// \a wait_all returns after all futures have been triggered.
+    ///
+    /// \note There are three variations of wait_all. The first takes a pair
+    ///       of InputIterators. The second takes an std::vector of future<R>.
+    ///       The third takes any arbitrary number of future<R>, where R need
+    ///       not be the same type.
+    ///
+    /// \return   The same list of futures as has been passed to wait_all.
+    ///           - future<vector<future<R>>>: If the input cardinality is
+    ///             unknown at compile time and the futures are all of the
+    ///             same type.
+    ///           - future<tuple<future<R0>, future<R1>, future<R2>...>>: If
+    ///             inputs are fixed in number and are of heterogeneous types.
+    ///             The inputs can be any arbitrary number of future objects.
+
+    template <typename Future>
+    void wait_all(std::vector<Future> const& lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_some(
+            lazy_values.size(), lazy_values, ec);
+    }
+
+    template <typename Future>
+    void wait_all(std::vector<Future>& lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_all(
+            const_cast<std::vector<Future> const&>(lazy_values), ec);
+    }
+
+    template <typename Future>
+    void wait_all(std::vector<Future> && lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_all(
+            const_cast<std::vector<Future> const&>(lazy_values), ec);
+    }
 
     template <typename Iterator>
-    std::vector<
-        typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-    >
-    wait_all(Iterator begin, Iterator end, error_code& ec = throws)
-    {
-        typedef std::vector<
-            typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-        > result_type;
-
-        lcos::future<result_type> f = when_all(begin, end);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_all", 
-                "lcos::when_all didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
-    }
-
-    template <typename T>
-    std::vector<lcos::future<T> >
-    wait_all(BOOST_RV_REF(HPX_UTIL_STRIP((
-        std::vector<lcos::future<T> >))) lazy_values,
+    typename util::always_void<
+        typename lcos::detail::future_iterator_traits<Iterator>::type
+    >::type wait_all(Iterator begin, Iterator end,
         error_code& ec = throws)
     {
-        typedef std::vector<lcos::future<T> > result_type;
+        typedef
+            typename lcos::detail::future_iterator_traits<Iterator>::type
+            future_type;
+        typedef
+            typename lcos::detail::shared_state_ptr_for<future_type>::type
+            shared_state_ptr;
+        typedef std::vector<shared_state_ptr> result_type;
 
-        lcos::future<result_type> f = when_all(lazy_values);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_all", 
-                "lcos::when_all didn't return a valid future");
-            return result_type();
-        }
+        result_type lazy_values_;
+        std::transform(begin, end, std::back_inserter(lazy_values_),
+            detail::wait_get_shared_state<future_type>());
 
-        return f.get(ec);
+        boost::shared_ptr<detail::wait_some<result_type> > f =
+            boost::make_shared<detail::wait_some<result_type> >(
+                std::move(lazy_values_), lazy_values_.size());
+
+        return (*f.get())();
     }
 
-    template <typename T>
-    std::vector<lcos::future<T> >
-    wait_all (std::vector<lcos::future<T> > const& lazy_values,
+    template <typename Iterator>
+    Iterator wait_all_n(Iterator begin, std::size_t count,
         error_code& ec = throws)
     {
-        typedef std::vector<lcos::future<T> > result_type;
-
-        lcos::future<result_type> f = when_all(lazy_values);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_all", 
-                "lcos::when_all didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
+        return wait_some_n(count, begin, count, ec);
     }
-}
+
+    inline void wait_all(error_code& ec = throws)
+    {
+        return lcos::wait_some(0, ec);
+    }
+}}
 
 #if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #  include <hpx/lcos/preprocessed/wait_all.hpp>
@@ -386,6 +129,12 @@ namespace hpx
 
 #endif // !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 
+namespace hpx
+{
+    using lcos::wait_all;
+    using lcos::wait_all_n;
+}
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -393,57 +142,16 @@ namespace hpx
 
 #define N BOOST_PP_ITERATION()
 
-#define HPX_WHEN_ALL_PUSH_BACK_ARG(z, n, _)                                   \
-        lazy_values.push_back(BOOST_PP_CAT(f, n));                            \
-    /**/
-#define HPX_WHEN_ALL_FUTURE_ARG(z, n, _)                                      \
-        lcos::future<T> BOOST_PP_CAT(f, n)                                    \
-    /**/
-#define HPX_WHEN_ALL_FUTURE_VAR(z, n, _) BOOST_PP_CAT(f, n)                   \
-    /**/
-
-namespace hpx
+namespace hpx { namespace lcos
 {
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
-    lcos::future<std::vector<lcos::future<T> > >
-    when_all (BOOST_PP_ENUM(N, HPX_WHEN_ALL_FUTURE_ARG, _))
+    template <BOOST_PP_ENUM_PARAMS(N, typename T)>
+    void wait_all(HPX_ENUM_FWD_ARGS(N, T, f), error_code& ec = throws)
     {
-        typedef std::vector<lcos::future<T> > return_type;
-
-        return_type lazy_values;
-        lazy_values.reserve(N);
-        BOOST_PP_REPEAT(N, HPX_WHEN_ALL_PUSH_BACK_ARG, _)
-
-        lcos::local::futures_factory<return_type()> p(
-            detail::when_all<T>(boost::move(lazy_values)));
-
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(N, HPX_ENUM_FORWARD_ARGS(N, T, f), ec);
     }
+}}
 
-    template <typename T>
-    std::vector<lcos::future<T> >
-    wait_all(BOOST_PP_ENUM(N, HPX_WHEN_ALL_FUTURE_ARG, _),
-        error_code& ec = throws)
-    {
-        typedef std::vector<lcos::future<T> > result_type;
-
-        lcos::future<result_type> f = when_all(
-            BOOST_PP_ENUM(N, HPX_WHEN_ALL_FUTURE_VAR, _));
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_all", 
-                "lcos::when_all didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
-    }
-}
-
-#undef HPX_WHEN_ALL_FUTURE_VAR
-#undef HPX_WHEN_ALL_FUTURE_ARG
-#undef HPX_WHEN_ALL_PUSH_BACK_ARG
 #undef N
 
 #endif

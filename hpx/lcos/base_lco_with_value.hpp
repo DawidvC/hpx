@@ -14,14 +14,12 @@
 #include <hpx/runtime/actions/component_action.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/util/ini.hpp>
-
-#if defined(HPX_HAVE_CXX11)
-#include <type_traits>
-#else
-#include <boost/type_traits.hpp>
-#endif
+#include <hpx/util/unused.hpp>
+#include <hpx/util/void_guard.hpp>
 
 #include <boost/mpl/bool.hpp>
+#include <boost/mpl/if.hpp>
+#include <boost/type_traits/is_same.hpp>
 
 namespace hpx { namespace lcos
 {
@@ -35,6 +33,10 @@ namespace hpx { namespace lcos
     template <typename Result, typename RemoteResult>
     class base_lco_with_value : public base_lco
     {
+        typedef typename boost::mpl::if_<
+            boost::is_same<void, Result>, util::unused_type, Result
+        >::type result_type;
+
     protected:
         /// Destructor, needs to be virtual to allow for clean destruction of
         /// derived objects
@@ -45,9 +47,9 @@ namespace hpx { namespace lcos
             set_value(RemoteResult());
         }
 
-        virtual void set_value (BOOST_RV_REF(RemoteResult) result) = 0;
+        virtual void set_value (RemoteResult && result) = 0;
 
-        virtual Result get_value() = 0;
+        virtual result_type const& get_value(error_code& ec = throws) = 0;
 
     public:
         // components must contain a typedef for wrapping_type defining the
@@ -72,9 +74,9 @@ namespace hpx { namespace lcos
         ///
         /// \param result [in] The result value to be transferred from the
         ///               remote operation back to this LCO instance.
-        void set_value_nonvirt (BOOST_RV_REF(RemoteResult) result)
+        void set_value_nonvirt (RemoteResult && result)
         {
-            set_value(boost::move(result));
+            set_value(std::move(result));
         }
 
         /// The \a function get_result_nonvirt is called whenever a
@@ -83,7 +85,7 @@ namespace hpx { namespace lcos
         /// is overloaded by the derived concrete LCO.
         Result get_value_nonvirt()
         {
-            return get_value();
+            return util::void_guard<Result>(), get_value();
         }
 
     public:
@@ -98,9 +100,9 @@ namespace hpx { namespace lcos
         ///
         /// \param RemoteResult [in] The type of the result to be transferred
         ///               back to this LCO instance.
-#if defined(HPX_GCC_VERSION) && (HPX_GCC_VERSION <= 40400)
+#if defined(HPX_GCC44_WORKAROUND)
         typedef hpx::actions::direct_action1<
-            base_lco_with_value, BOOST_RV_REF(RemoteResult),
+            base_lco_with_value, RemoteResult &&,
             &base_lco_with_value::set_value_nonvirt
         > set_value_action;
 #else
@@ -110,7 +112,7 @@ namespace hpx { namespace lcos
 
         /// The \a get_value_action may be used to query the value this LCO
         /// instance exposes as its 'result' value.
-#if defined(HPX_GCC_VERSION) && (HPX_GCC_VERSION <= 40400)
+#if defined(HPX_GCC44_WORKAROUND)
         typedef hpx::actions::direct_result_action0<
             base_lco_with_value, Result,
             &base_lco_with_value::get_value_nonvirt
@@ -157,7 +159,7 @@ namespace hpx { namespace traits
 
         static void set(components::component_type)
         {
-            BOOST_ASSERT(false);
+            HPX_ASSERT(false);
         }
     };
 }}
@@ -208,5 +210,6 @@ HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(boost::int64_t, int64_t)
 HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(boost::uint64_t, uint64_t)
 HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(bool, bool)
 HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(hpx::util::section, section)
+HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(std::string, std_string)
 
 #endif

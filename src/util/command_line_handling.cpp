@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -11,7 +11,13 @@
 #include <hpx/util/parse_command_line.hpp>
 #include <hpx/util/manage_config.hpp>
 #include <hpx/util/command_line_handling.hpp>
+#include <hpx/util/detail/reset_function.hpp>
+#include <hpx/runtime/threads/topology.hpp>
+#include <hpx/runtime/threads/policies/affinity_data.hpp>
+#include <hpx/runtime/threads/policies/topology.hpp>
+#include <hpx/util/mpi_environment.hpp>
 
+#include <boost/asio.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 #include <boost/foreach.hpp>
@@ -31,6 +37,17 @@ namespace hpx { namespace util
         {
             out << std::endl << hpx::copyright() << std::endl;
             out << hpx::complete_version() << std::endl;
+            return 1;
+        }
+
+        int print_info(std::ostream& out, util::command_line_handling const& cfg)
+        {
+            out << "Static configuration:\n---------------------\n";
+            out << hpx::configuration_string() << std::endl;
+
+            out << "Runtime configuration:\n----------------------\n";
+            out << hpx::runtime_configuration_string(cfg) << std::endl;
+
             return 1;
         }
 
@@ -76,16 +93,195 @@ namespace hpx { namespace util
                 << std::endl;
         }
 
-        void report_locality_warning(std::string const& batch_name)
+        void report_locality_warning_batch(std::string const& batch_name,
+            std::size_t batch_localities, std::size_t num_localities)
         {
             std::cerr << "hpx::init: command line warning: "
                     "--hpx:localities used when running with "
                 << batch_name
-                << ", requesting a different number of localities than have "
-                    "been assigned by "
+                << ", requesting a different number of localities ("
+                << num_localities
+                << ") than have been assigned by "
                 << batch_name
-                << ", the application might not run properly."
+                << " ("
+                << batch_localities
+                << "), the application might not run properly."
                 << std::endl;
+        }
+
+        void report_locality_warning(std::string const& batch_name,
+            std::size_t cmdline_localities, std::size_t num_localities)
+        {
+            std::cerr << "hpx::init: command line warning: "
+                    "--hpx:localities used when running with "
+                << batch_name
+                << ", requesting a different number of localities ("
+                << num_localities
+                << ") than have been assigned on the command line "
+                << " ("
+                << cmdline_localities
+                << "), the application might not run properly."
+                << std::endl;
+        }
+
+        std::string convert_to_log_file(std::string const& dest)
+        {
+            if (dest.empty())
+                return "cout";
+
+            if (dest == "cout" || dest == "cerr" || dest == "console")
+                return dest;
+#if defined(ANDROID) || defined(__ANDROID__)
+            if (dest == "android_log")
+                return dest;
+#endif
+            // everything else is assumed to be a file name
+            return "file(" + dest + ")";
+        }
+
+        ///////////////////////////////////////////////////////////////////////
+        std::size_t handle_num_localities(util::manage_config& cfgmap,
+            boost::program_options::variables_map& vm,
+            util::batch_environment& env, bool using_nodelist,
+            std::size_t num_localities)
+        {
+            std::size_t batch_localities = env.retrieve_number_of_localities();
+            if (num_localities == 1)
+            {
+                std::size_t cfg_num_localities = cfgmap.get_value<std::size_t>(
+                    "hpx.localities", batch_localities);
+                if (cfg_num_localities > 1)
+                    num_localities = cfg_num_localities;
+            }
+
+            if ((env.run_with_pbs() || env.run_with_slurm()) &&
+                using_nodelist && (batch_localities != num_localities) &&
+                (num_localities != 1))
+            {
+                detail::report_locality_warning_batch(env.get_batch_name(),
+                    batch_localities, num_localities);
+            }
+
+            if (vm.count("hpx:localities")) {
+                std::size_t localities = vm["hpx:localities"].as<std::size_t>();
+
+                if (localities == 0)
+                {
+                    throw std::logic_error("Number of --hpx:localities "
+                        "must be greater than 0");
+                }
+
+                if ((env.run_with_pbs() || env.run_with_slurm()) &&
+                    using_nodelist && (localities != num_localities) &&
+                    (num_localities != 1))
+                {
+                    detail::report_locality_warning(env.get_batch_name(),
+                        localities, num_localities);
+                }
+                num_localities = localities;
+            }
+            return num_localities;
+        }
+
+        ///////////////////////////////////////////////////////////////////////
+        std::size_t handle_num_threads(util::manage_config& cfgmap,
+            boost::program_options::variables_map& vm,
+            util::batch_environment& env, bool using_nodelist)
+        {
+            std::size_t batch_threads = env.retrieve_number_of_threads();
+            if(batch_threads == std::size_t(-1)) { batch_threads = 1; }
+            std::string threads_str = cfgmap.get_value<std::string>(
+                "hpx.os_threads", "");
+
+            if ("all" == threads_str) {
+                cfgmap.config_["hpx.os_threads"] =
+                    boost::lexical_cast<std::string>(
+                        thread::hardware_concurrency());
+            }
+
+            std::size_t threads = cfgmap.get_value<std::size_t>(
+                "hpx.os_threads", batch_threads);
+
+            if ((env.run_with_pbs() || env.run_with_slurm()) &&
+                using_nodelist && (threads > batch_threads))
+            {
+                detail::report_thread_warning(env.get_batch_name(),
+                    threads, batch_threads);
+            }
+
+            if (vm.count("hpx:threads")) {
+                threads_str = vm["hpx:threads"].as<std::string>();
+                if ("all" == threads_str)
+                    threads = thread::hardware_concurrency(); //-V101
+                else
+                    threads = boost::lexical_cast<std::size_t>(threads_str);
+
+                if (threads == 0)
+                {
+                    throw std::logic_error("Number of --hpx:threads "
+                        "must be greater than 0");
+                }
+
+                if ((env.run_with_pbs() || env.run_with_slurm()) &&
+                    using_nodelist && (threads > batch_threads))
+                {
+                    detail::report_thread_warning(env.get_batch_name(),
+                        threads, batch_threads);
+                }
+
+#if defined(HPX_MAX_CPU_COUNT)
+                if (threads > HPX_MAX_CPU_COUNT) {
+                    throw std::logic_error("Requested more than "
+                        BOOST_PP_STRINGIZE(HPX_MAX_CPU_COUNT)" --hpx:threads "
+                        "to use for this application, use the option "
+                        "-DHPX_MAX_CPU_COUNT=<N> when configuring HPX.");
+                }
+#endif
+            }
+            return threads;
+        }
+
+        ///////////////////////////////////////////////////////////////////////
+        std::size_t get_number_of_default_cores(util::batch_environment& env)
+        {
+            threads::topology& top = threads::create_topology();
+
+            std::size_t batch_threads = env.retrieve_number_of_threads();
+            std::size_t num_cores = top.get_number_of_cores();
+            if(batch_threads == std::size_t(-1))
+                return num_cores;
+
+            // assuming we assign the first N cores ...
+            std::size_t core = 0;
+            for(; core < num_cores; ++core)
+            {
+                batch_threads -= top.get_number_of_core_pus(core);
+                if(batch_threads == 0) break;
+            }
+
+            return core + 1;
+        }
+
+        std::size_t handle_num_cores(util::manage_config& cfgmap,
+            boost::program_options::variables_map& vm, std::size_t num_threads,
+            util::batch_environment& env)
+        {
+            std::string cores_str = cfgmap.get_value<std::string>("hpx.cores", "");
+            if ("all" == cores_str) {
+                cfgmap.config_["hpx.cores"] = boost::lexical_cast<std::string>(
+                    get_number_of_default_cores(env));
+            }
+
+            std::size_t num_cores = cfgmap.get_value<std::size_t>("hpx.cores", num_threads);
+            if (vm.count("hpx:cores")) {
+                cores_str = vm["hpx:cores"].as<std::string>();
+                if ("all" == cores_str)
+                    num_cores = get_number_of_default_cores(env);
+                else
+                    num_cores = boost::lexical_cast<std::size_t>(cores_str);
+            }
+
+            return num_cores;
         }
     }
 
@@ -108,8 +304,12 @@ namespace hpx { namespace util
 
         // The AGAS host name and port number are pre-initialized from
         //the command line
-        std::string agas_host;
-        boost::uint16_t agas_port = HPX_INITIAL_IP_PORT;
+        std::string agas_host =
+            cfgmap.get_value<std::string>("hpx.agas.address", "");
+        boost::uint16_t agas_port =
+            cfgmap.get_value<boost::uint16_t>("hpx.agas.port",
+                HPX_INITIAL_IP_PORT);
+
         if (vm.count("hpx:agas")) {
             if (!util::split_ip_address(
                 vm["hpx:agas"].as<std::string>(), agas_host, agas_port))
@@ -166,81 +366,25 @@ namespace hpx { namespace util
         agas_host = env.agas_host_name(
             agas_host.empty() ? HPX_INITIAL_IP_ADDRESS : agas_host);
 
-        std::string hpx_host(env.host_name(HPX_INITIAL_IP_ADDRESS));
-        boost::uint16_t hpx_port = HPX_INITIAL_IP_PORT;
+        // handle number of cores and threads
+        num_threads_ = detail::handle_num_threads(cfgmap, vm, env, using_nodelist);
+        num_cores_ = detail::handle_num_cores(cfgmap, vm, num_threads_, env);
 
-        // handle number of threads
-        std::size_t batch_threads = env.retrieve_number_of_threads();
+        // handling number of localities, those might have already been initialized
+        // from MPI environment
+        num_localities_ = detail::handle_num_localities(cfgmap, vm, env,
+            using_nodelist, num_localities_);
 
-        {
-            std::string threads_str =
-                cfgmap.get_value<std::string>("hpx.os_threads", "");
+        // Determine our network port, use arbitrary port if running on one
+        // locality.
+        std::string hpx_host =
+            cfgmap.get_value<std::string>("hpx.parcel.address",
+                env.host_name(HPX_INITIAL_IP_ADDRESS));
+        boost::uint16_t hpx_port =
+            cfgmap.get_value<boost::uint16_t>("hpx.parcel.port",
+                num_localities_ == 1 ? 0 : HPX_INITIAL_IP_PORT);
 
-            if ("all" == threads_str) {
-                cfgmap.config_["hpx.os_threads"] =
-                    boost::lexical_cast<std::string>(
-                        thread::hardware_concurrency());
-            }
-        }
-
-        num_threads_ = cfgmap.get_value<std::size_t>("hpx.os_threads", batch_threads);
-
-        if ((env.run_with_pbs() || env.run_with_slurm()) &&
-            using_nodelist && (num_threads_ > batch_threads))
-        {
-            detail::report_thread_warning(env.get_batch_name(),
-                num_threads_, batch_threads);
-        }
-
-        if (vm.count("hpx:threads")) {
-            std::string threads_str = vm["hpx:threads"].as<std::string>();
-
-            std::size_t threads = 0;
-
-            if ("all" == threads_str)
-                threads = thread::hardware_concurrency(); //-V101
-            else
-                threads = boost::lexical_cast<std::size_t>(threads_str);
-
-            if ((env.run_with_pbs() || env.run_with_slurm()) &&
-                using_nodelist && (threads > batch_threads))
-            {
-                detail::report_thread_warning(env.get_batch_name(),
-                    threads, batch_threads);
-            }
-
-#if !defined(HPX_HAVE_MORE_THAN_64_THREADS)
-            if (threads > 64) {
-                throw std::logic_error("Requested more than 64 threads to "
-                    "use for this application, use the option "
-                    "-DHPX_USE_MORE_THAN_64_THREADS when configuring HPX.");
-            }
-#endif
-            num_threads_ = threads;
-        }
-
-        // handling number of localities
-        std::size_t batch_localities = env.retrieve_number_of_localities();
-        num_localities_ = cfgmap.get_value<std::size_t>(
-            "hpx.localities", batch_localities);
-
-        if ((env.run_with_pbs() || env.run_with_slurm()) &&
-            using_nodelist && (batch_localities != num_localities_))
-        {
-            detail::report_locality_warning(env.get_batch_name());
-        }
-
-        if (vm.count("hpx:localities")) {
-            std::size_t localities = vm["hpx:localities"].as<std::size_t>();
-            if ((env.run_with_pbs() || env.run_with_slurm()) &&
-                using_nodelist && (localities != num_localities_))
-            {
-                detail::report_locality_warning(env.get_batch_name());
-            }
-            num_localities_ = localities;
-        }
-
-        bool run_agas_server = vm.count("hpx:run-agas-server") ? true : false;
+        bool run_agas_server = vm.count("hpx:run-agas-server") != 0;
         if (node == std::size_t(-1))
             node = env.retrieve_node_number();
 
@@ -265,16 +409,14 @@ namespace hpx { namespace util
 
                 // do not execute any explicit hpx_main except if asked
                 // otherwise
-                if (!vm.count("hpx:run-hpx-main"))
-                    hpx_main_f_ = 0;
+                if (!vm.count("hpx:run-hpx-main") &&
+                    !cfgmap.get_value<int>("hpx.run_hpx_main", 0))
+                {
+                    util::detail::reset_function(hpx_main_f_);
+                }
             }
             else if (vm.count("hpx:connect")) {
                 mode_ = hpx::runtime_mode_connect;
-
-                // do not execute any explicit hpx_main except if asked
-                // otherwise
-                if (!vm.count("hpx:run-hpx-main"))
-                    hpx_main_f_ = 0;
             }
         }
 
@@ -283,6 +425,14 @@ namespace hpx { namespace util
         if (mode_ == hpx::runtime_mode_connect) {
             // when connecting we need to select a unique port
             hpx_port = HPX_CONNECTING_IP_PORT;
+
+            // do not execute any explicit hpx_main except if asked
+            // otherwise
+            if (!vm.count("hpx:run-hpx-main") &&
+                !cfgmap.get_value<int>("hpx.run_hpx_main", 0))
+            {
+                util::detail::reset_function(hpx_main_f_);
+            }
         }
         else if (node != std::size_t(-1) || vm.count("hpx:node")) {
             // command line overwrites the environment
@@ -307,8 +457,11 @@ namespace hpx { namespace util
 
                     // do not execute any explicit hpx_main except if asked
                     // otherwise
-                    if (!vm.count("hpx:run-hpx-main"))
-                        hpx_main_f_ = 0;
+                    if (!vm.count("hpx:run-hpx-main") &&
+                        !cfgmap.get_value<int>("hpx.run_hpx_main", 0))
+                    {
+                        util::detail::reset_function(hpx_main_f_);
+                    }
                 }
             }
 
@@ -324,7 +477,7 @@ namespace hpx { namespace util
         }
 
         if (vm.count("hpx:hpx")) {
-            if (!util::split_ip_address(vm["hpx:hpx"].as<std::string>(), 
+            if (!util::split_ip_address(vm["hpx:hpx"].as<std::string>(),
                     hpx_host, hpx_port))
             {
                 std::cerr
@@ -338,6 +491,8 @@ namespace hpx { namespace util
         if (vm.count("hpx:queuing"))
             queuing_ = vm["hpx:queuing"].as<std::string>();
 
+        ini_config += "hpx.scheduler=" + queuing_;
+
         // map host names to ip addresses, if requested
         hpx_host = mapnames.map(hpx_host, hpx_port);
         agas_host = mapnames.map(agas_host, agas_port);
@@ -350,13 +505,13 @@ namespace hpx { namespace util
             // and no additional option (--hpx:agas or --hpx:node) has been
             // specified. That simplifies running small standalone
             // applications on one locality.
-            run_agas_server = (mode_ != runtime_mode_connect) ? true : false;
+            run_agas_server = mode_ != runtime_mode_connect;
         }
 
         if (hpx_host == agas_host && hpx_port == agas_port) {
             // we assume that we need to run the agas server if the user
             // asked for the same network addresses for HPX and AGAS
-            run_agas_server = (mode_ != runtime_mode_connect) ? true : false;
+            run_agas_server = mode_ != runtime_mode_connect;
         }
         else if (run_agas_server) {
             // otherwise, if the user instructed us to run the AGAS server,
@@ -372,8 +527,11 @@ namespace hpx { namespace util
 
             // do not execute any explicit hpx_main except if asked
             // otherwise
-            if (!vm.count("hpx:run-hpx-main"))
-                hpx_main_f_ = 0;
+            if (!vm.count("hpx:run-hpx-main") &&
+                !cfgmap.get_value<int>("hpx.run_hpx_main", 0))
+            {
+                util::detail::reset_function(hpx_main_f_);
+            }
         }
 
         // write HPX and AGAS network parameters to the proper ini-file entries
@@ -414,25 +572,31 @@ namespace hpx { namespace util
 
         if (vm.count("hpx:debug-hpx-log")) {
             ini_config += "hpx.logging.console.destination=" +
-                vm["hpx:debug-hpx-log"].as<std::string>();
+                detail::convert_to_log_file(
+                    vm["hpx:debug-hpx-log"].as<std::string>());
             ini_config += "hpx.logging.destination=" +
-                vm["hpx:debug-hpx-log"].as<std::string>();
+                detail::convert_to_log_file(
+                    vm["hpx:debug-hpx-log"].as<std::string>());
             ini_config += "hpx.logging.console.level=5";
             ini_config += "hpx.logging.level=5";
         }
 
         if (vm.count("hpx:debug-agas-log")) {
             ini_config += "hpx.logging.console.agas.destination=" +
-                vm["hpx:debug-agas-log"].as<std::string>();
+                detail::convert_to_log_file(
+                    vm["hpx:debug-agas-log"].as<std::string>());
             ini_config += "hpx.logging.agas.destination=" +
-                vm["hpx:debug-agas-log"].as<std::string>();
+                detail::convert_to_log_file(
+                    vm["hpx:debug-agas-log"].as<std::string>());
             ini_config += "hpx.logging.console.agas.level=5";
             ini_config += "hpx.logging.agas.level=5";
         }
 
-        // Set number of OS threads in configuration.
+        // Set number of cores and OS threads in configuration.
         ini_config += "hpx.os_threads=" +
             boost::lexical_cast<std::string>(num_threads_);
+        ini_config += "hpx.cores=" +
+            boost::lexical_cast<std::string>(num_cores_);
 
         // Set number of localities in configuration (do it everywhere,
         // even if this information is only used by the AGAS server).
@@ -458,7 +622,7 @@ namespace hpx { namespace util
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    void command_line_handling::store_command_line(int argc, char* argv[])
+    void command_line_handling::store_command_line(int argc, char** argv)
     {
         using namespace boost::assign;
 
@@ -536,10 +700,90 @@ namespace hpx { namespace util
         return false;
     }
 
+    void command_line_handling::handle_attach_debugger()
+    {
+#if defined(_POSIX_VERSION) || defined(BOOST_MSVC)
+        if(vm_.count("hpx:attach-debugger")) {
+#if defined(_POSIX_VERSION)
+            volatile int i = 0;
+            std::cerr
+                << "PID: " << getpid() << " on " << boost::asio::ip::host_name()
+                << " ready for attaching debugger. Once attached set i = 1 and continue"
+                << std::endl;
+            while(i == 0)
+            {
+                sleep(1);
+            }
+#elif defined(BOOST_MSVC)
+            DebugBreak();
+#endif
+        }
+#endif
+    }
+
+#if defined(HPX_HAVE_HWLOC)
+    ///////////////////////////////////////////////////////////////////////////
+    void handle_print_bind(boost::program_options::variables_map const& vm_,
+        std::size_t num_threads)
+    {
+        threads::topology& top = threads::create_topology();
+        runtime & rt = get_runtime();
+        {
+            util::osstream strm;    // make sure all output is kept together
+
+            strm << std::string(79, '*') << '\n';
+            strm << "locality: " << hpx::get_locality_id() << '\n';
+            for (std::size_t i = 0; i != num_threads; ++i)
+            {
+                // print the mask for the current PU
+                threads::mask_cref_type pu_mask =
+                    rt.get_thread_manager().get_pu_mask(top, i);
+
+                top.print_affinity_mask(strm, i, pu_mask);
+
+                // Make sure the mask does not contradict the CPU bindings
+                // returned by the system (see #973: Would like option to
+                // report HWLOC bindings).
+                error_code ec(lightweight);
+                threads::mask_type boundcpu = top.get_cpubind_mask(ec);
+
+                // The masks reported by HPX must be the same as the ones
+                // reported from HWLOC.
+                if (!ec && threads::any(boundcpu) &&
+                    !threads::equal(boundcpu, pu_mask, num_threads))
+                {
+                    HPX_THROW_EXCEPTION(invalid_status,
+                        "handle_print_bind",
+                        boost::str(
+                            boost::format("unexpected mismatch between "
+                                "binding reported from HWLOC(%1%) and HPX(%2%)"
+                            ) % boundcpu % pu_mask));
+                }
+            }
+
+            std::cout << util::osstream_get_string(strm);
+        }
+    }
+#endif
+
+    void handle_list_parcelports()
+    {
+        runtime & rt = get_runtime();
+        {
+            util::osstream strm;    // make sure all output is kept together
+            strm << std::string(79, '*') << '\n';
+            strm << "locality: " << hpx::get_locality_id() << '\n';
+
+            rt.get_parcel_handler().list_parcelports(strm);
+
+            std::cout << util::osstream_get_string(strm);
+        }
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     int command_line_handling::call(
-        boost::program_options::options_description& desc_cmdline,
-        int argc, char* argv[])
+        boost::program_options::options_description const& desc_cmdline,
+        int argc, char** argv)
     {
         util::manage_config cfgmap(ini_config_);
         std::size_t node = std::size_t(-1);
@@ -589,6 +833,8 @@ namespace hpx { namespace util
         // Re-run program option analysis, ini settings (such as aliases)
         // will be considered now.
 
+        util::mpi_environment::init(&argc, &argv, *this, node);
+
         // minimally assume one locality and this is the console
         if (node == std::size_t(-1))
             node = 0;
@@ -604,6 +850,9 @@ namespace hpx { namespace util
         {
             return -1;
         }
+
+        // break into debugger, if requested
+        handle_attach_debugger();
 
         // handle all --hpx:foo and --hpx:*:foo options
         if (!handle_arguments(cfgmap, vm_, ini_config_, node))
@@ -622,31 +871,11 @@ namespace hpx { namespace util
 
         // print version/copyright information
         if (vm_.count("hpx:version"))
-            return detail::print_version(std::cout);
+            detail::print_version(std::cout);
 
-#if defined(HPX_HAVE_HWLOC)
-        if (vm_.count("hpx:print-bind")) {
-            if (!vm_.count("hpx:bind")) {
-                throw std::logic_error("Invalid command line option "
-                    "--hpx:print-bind, valid only if --hpx:bind is "
-                    "specified as well.");
-            }
-
-            std::string affinity_desc;
-            std::vector<std::string> bind_affinity =
-                vm_["hpx:bind"].as<std::vector<std::string> >();
-            BOOST_FOREACH(std::string const& s, bind_affinity)
-            {
-                if (!affinity_desc.empty())
-                    affinity_desc += ";";
-                affinity_desc += s;
-            }
-
-            threads::print_affinity_options(std::cout, num_threads_,
-                affinity_desc);
-            return 1;
-        }
-#endif
+        // print configuration information (static and dynamic)
+        if (vm_.count("hpx:info"))
+            detail::print_info(std::cout, *this);
 
         // all is good
         return 0;

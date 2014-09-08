@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -10,6 +10,8 @@
 
 #include <hpx/util/plugin.hpp>
 #include <hpx/util/plugin/export_plugin.hpp>
+#include <hpx/runtime/components/static_factory_data.hpp>
+
 #include <boost/mpl/list.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,7 +34,8 @@ namespace hpx { namespace components
         /// \return Returns \a true if the parameter \a fillini has been
         ///         successfully initialized with the registry data of all
         ///         implemented in this module.
-        virtual bool get_component_info(std::vector<std::string>& fillini) = 0;
+        virtual bool get_component_info(std::vector<std::string>& fillini,
+            std::string const& filepath, bool is_static = false) = 0;
     };
 }}
 
@@ -44,18 +47,28 @@ namespace hpx { namespace components
         hpx::components::component_registry_base, RegistryType,               \
         componentname, registry)                                              \
 /**/
+#define HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(RegistryType, componentname)  \
+    HPX_PLUGIN_EXPORT_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX,                    \
+        hpx::components::component_registry_base, RegistryType,               \
+        componentname, registry)                                              \
+/**/
 
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_APPLICATION_NAME)
 /// This macro is used to define the required Hpx.Plugin entry points. This
 /// macro has to be used in exactly one compilation unit of a component module.
 #define HPX_REGISTER_REGISTRY_MODULE()                                        \
-    HPX_PLUGIN_EXPORT_LIST(HPX_PLUGIN_COMPONENT_PREFIX, registry)             \
+    HPX_PLUGIN_EXPORT_LIST(HPX_PLUGIN_COMPONENT_PREFIX, registry);            \
+    HPX_INIT_REGISTRY_MODULE_STATIC(HPX_PLUGIN_COMPONENT_PREFIX, registry)    \
+/**/
+#define HPX_REGISTER_REGISTRY_MODULE_DYNAMIC()                                \
+    HPX_PLUGIN_EXPORT_LIST_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX, registry)     \
 /**/
 #else
 // in executables (when HPX_APPLICATION_NAME is defined) this needs to expand
 // to nothing
 #define HPX_REGISTER_REGISTRY_MODULE()
+#define HPX_REGISTER_REGISTRY_MODULE_DYNAMIC()
 #endif
 
 #endif

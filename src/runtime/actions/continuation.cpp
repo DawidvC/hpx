@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -9,28 +9,64 @@
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/lcos/base_lco.hpp>
 
-BOOST_CLASS_EXPORT(hpx::actions::continuation)
-
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx
 {
     void trigger_lco_event(naming::id_type const& id)
     {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
         lcos::base_lco::set_event_action set;
-        apply(set, id);
+        apply(set, target);
+    }
+
+    void trigger_lco_event(naming::id_type const& id, naming::id_type const& cont)
+    {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
+        lcos::base_lco::set_event_action set;
+        apply_c(set, cont, target);
     }
 
     void set_lco_error(naming::id_type const& id, boost::exception_ptr const& e)
     {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
         lcos::base_lco::set_exception_action set;
-        apply(set, id, e);
+        apply(set, target, e);
     }
 
     void set_lco_error(naming::id_type const& id, //-V659
-        BOOST_RV_REF(boost::exception_ptr) e)
+        boost::exception_ptr && e)
     {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
         lcos::base_lco::set_exception_action set;
-        apply(set, id, boost::move(e));
+        apply(set, target, std::move(e));
+    }
+
+    void set_lco_error(naming::id_type const& id, boost::exception_ptr const& e,
+        naming::id_type const& cont)
+    {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
+        lcos::base_lco::set_exception_action set;
+        apply_c(set, cont, target, e);
+    }
+
+    void set_lco_error(naming::id_type const& id, //-V659
+        boost::exception_ptr && e, naming::id_type const& cont)
+    {
+        naming::id_type target(id.get_gid(), id_type::managed_move_credit);
+        id.make_unmanaged();
+
+        lcos::base_lco::set_exception_action set;
+        apply_c(set, cont, target, std::move(e));
     }
 }
 
@@ -65,7 +101,7 @@ namespace hpx { namespace actions
         set_lco_error(gid_, e);
     }
 
-    void continuation::trigger_error(BOOST_RV_REF(boost::exception_ptr) e) const //-V659
+    void continuation::trigger_error(boost::exception_ptr && e) const //-V659
     {
         if (!gid_) {
             HPX_THROW_EXCEPTION(invalid_status,
@@ -75,7 +111,9 @@ namespace hpx { namespace actions
         }
 
         LLCO_(info) << "continuation::trigger_error(" << gid_ << ")";
-        set_lco_error(gid_, boost::move(e));
+        set_lco_error(gid_, std::move(e));
     }
 }}
+
+HPX_REGISTER_TYPED_CONTINUATION(void, hpx_void_typed_continuation);
 

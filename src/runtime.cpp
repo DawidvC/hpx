@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,20 +9,32 @@
 #include <hpx/state.hpp>
 #include <hpx/exception.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/runtime/agas/big_boot_barrier.hpp>
 #include <hpx/runtime/components/runtime_support.hpp>
+#include <hpx/runtime/components/server/runtime_support.hpp>
+#include <hpx/runtime/components/server/memory_block.hpp>
 #include <hpx/runtime/threads/threadmanager.hpp>
 #include <hpx/runtime/threads/policies/topology.hpp>
 #include <hpx/include/performance_counters.hpp>
-#include <hpx/runtime/agas/big_boot_barrier.hpp>
+#include <hpx/performance_counters/registry.hpp>
 #include <hpx/util/high_resolution_clock.hpp>
-#include <hpx/util/coroutine/detail/coroutine_impl_impl.hpp>
 #include <hpx/util/backtrace.hpp>
 #include <hpx/util/query_counters.hpp>
+#include <hpx/util/thread_mapper.hpp>
+#include <hpx/util/coroutine/coroutine.hpp>
+
+#if defined(HPX_HAVE_SECURITY)
+#include <hpx/components/security/parcel_suffix.hpp>
+#include <hpx/components/security/certificate_store.hpp>
+#include <hpx/components/security/verify.hpp>
+#include <hpx/util/security/root_certificate_authority.hpp>
+#include <hpx/util/security/subordinate_certificate_authority.hpp>
+#endif
 
 #include <iostream>
 #include <vector>
 
-#if defined(_WIN64) && defined(_DEBUG) && !defined(HPX_COROUTINE_USE_FIBERS)
+#if defined(_WIN64) && defined(_DEBUG) && !defined(HPX_HAVE_FIBER_BASED_COROUTINES)
 #include <io.h>
 #endif
 
@@ -161,17 +173,314 @@ namespace hpx
         return runtime_mode_invalid;
     }
 
+    namespace strings
+    {
+        char const* const runtime_state_names[] =
+        {
+            "invalid",      // -1
+            "initialized",  // 0
+            "pre_startup",  // 1
+            "startup",      // 2
+            "pre_main",     // 3
+            "running",      // 4
+            "pre_shutdown"  // 5
+            "shutdown",     // 6
+            "stopped"       // 7
+        };
+    }
+
+    char const* get_runtime_state_name(runtime::state state)
+    {
+        if (state < runtime::state_invalid || state >= runtime::state_last)
+            return "invalid (value out of bounds)";
+        return strings::runtime_state_names[state+1];
+    }
+
+#if defined(HPX_HAVE_SECURITY)
+    namespace detail
+    {
+        struct manage_security_data
+        {
+            // manage certificates for root-CA and sub-CA
+            util::security::root_certificate_authority root_certificate_authority_;
+            util::security::subordinate_certificate_authority subordinate_certificate_authority_;
+
+            // certificate store
+            HPX_STD_UNIQUE_PTR<components::security::certificate_store> cert_store_;
+            components::security::signed_certificate locality_certificate_;
+        };
+    }
+
+    components::security::certificate_store const * runtime::cert_store(error_code& ec) const
+    {
+        HPX_ASSERT(security_data_.get() != 0);
+        if (0 == security_data_->cert_store_.get())     // should have been created
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "runtime::verify_parcel_suffix",
+                "the runtime system is not operational at this point");
+            return 0;
+        }
+
+        return security_data_->cert_store_.get();
+    }
+
+    // this is called on all nodes during runtime construction
+    void runtime::init_security()
+    {
+        // this is the AGAS booststrap node (node zero)
+        if (ini_.get_agas_service_mode() == agas::service_mode_bootstrap)
+        {
+            components::security::signed_certificate cert;
+
+            util::security::root_certificate_authority& root_ca =
+                security_data_->root_certificate_authority_;
+
+            {
+                // Initialize the root-CA
+                lcos::local::spinlock::scoped_lock l(security_mtx_);
+
+                root_ca.initialize();
+
+                HPX_ASSERT(security_data_->cert_store_.get() == 0);
+                security_data_->cert_store_.reset(
+                    new components::security::certificate_store(
+                        root_ca.get_certificate()));
+
+                // initialize the sub-CA
+                util::security::subordinate_certificate_authority& sub_ca =
+                    security_data_->subordinate_certificate_authority_;
+                sub_ca.initialize();
+
+                // sign the sub-CA's certificate
+                components::security::signed_certificate_signing_request csr =
+                    sub_ca.get_certificate_signing_request();
+                cert = root_ca.sign_certificate_signing_request(csr);
+
+                // finalize initialization of sub-CA
+                security_data_->locality_certificate_ = cert;
+                sub_ca.set_certificate(cert);
+            }
+
+            // add the sub-CA's certificate to the local certificate store
+            add_locality_certificate(cert);
+
+            LSEC_(debug) << (boost::format(
+                "runtime::init_security: initialized root certificate authority: %1%") %
+                root_ca.get_certificate());
+        }
+    }
+
+    components::security::signed_certificate_signing_request
+        runtime::get_certificate_signing_request() const
+    {
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+
+        // Initialize the sub-CA
+        security_data_->subordinate_certificate_authority_.initialize();
+        return security_data_->subordinate_certificate_authority_.
+            get_certificate_signing_request();
+    }
+
+    components::security::signed_certificate
+        runtime::sign_certificate_signing_request(
+            components::security::signed_certificate_signing_request csr)
+    {
+        LSEC_(debug) << (boost::format(
+            "runtime::sign_certificate_signing_request: received csr(%1%)") %
+            csr);
+
+        components::security::signed_certificate cert;
+
+        {
+            // tend to the given CSR
+            lcos::local::spinlock::scoped_lock l(security_mtx_);
+            cert = security_data_->root_certificate_authority_.
+                sign_certificate_signing_request(csr);
+        }
+
+        LSEC_(debug) << (boost::format(
+            "runtime::sign_certificate_signing_request: signed certificate(%1%)") %
+            cert);
+
+        // store the certificate into our store
+        add_locality_certificate(cert);
+        return cert;
+    }
+
+    // this is called on all non-root localities during locality registration
+    void runtime::store_root_certificate(
+        components::security::signed_certificate const& root_cert)
+    {
+        // Only worker nodes need to store the root certificate at this
+        // point, the root locality was already initialized (see above).
+        if (ini_.get_agas_service_mode() != agas::service_mode_bootstrap)
+        {
+            LSEC_(debug) << (boost::format(
+                "runtime::store_root_certificate: received certificate "
+                "root-CA(%1%)") % root_cert);
+
+            // initialize our certificate store
+            lcos::local::spinlock::scoped_lock l(security_mtx_);
+
+            HPX_ASSERT(security_data_->cert_store_.get() == 0);
+            security_data_->cert_store_.reset(
+                new components::security::certificate_store(root_cert));
+        }
+    }
+
+    void runtime::store_subordinate_certificate(
+        components::security::signed_certificate const& root_subca_cert,
+        components::security::signed_certificate const& subca_cert)
+    {
+        // Only worker nodes need to store the root certificate at this
+        // point, the root locality was already initialized (see above).
+        if (ini_.get_agas_service_mode() != agas::service_mode_bootstrap)
+        {
+            LSEC_(debug) << (boost::format(
+                "runtime::store_subordinate_certificate: received certificates "
+                "root-sub-CA(%1%), sub-CA(%2%)") %
+                root_subca_cert % subca_cert);
+
+            {
+                // finish initializing our sub-CA
+                lcos::local::spinlock::scoped_lock l(security_mtx_);
+                security_data_->locality_certificate_ = subca_cert;
+                security_data_->subordinate_certificate_authority_.set_certificate(subca_cert);
+            }
+
+            // add the certificates of the root's sub-CA and our own
+            add_locality_certificate(subca_cert);
+            add_locality_certificate(root_subca_cert);
+        }
+    }
+
     ///////////////////////////////////////////////////////////////////////////
-    runtime::runtime(util::runtime_configuration const& rtcfg)
+    components::security::signed_certificate
+        runtime::get_root_certificate(error_code& ec) const
+    {
+        if (ini_.get_agas_service_mode() != agas::service_mode_bootstrap)
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "runtime::get_root_certificate",
+                "the root's certificate is available on node zero only");
+            return components::security::signed_certificate::invalid_signed_type;
+        }
+
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        HPX_ASSERT(security_data_.get() != 0);
+        return security_data_->root_certificate_authority_.get_certificate(ec);
+    }
+
+    components::security::signed_certificate
+        runtime::get_certificate(error_code& ec) const
+    {
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        HPX_ASSERT(security_data_.get() != 0);
+        return security_data_->subordinate_certificate_authority_.get_certificate(ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // set the certificate for another locality
+    void runtime::add_locality_certificate(
+        components::security::signed_certificate const& cert)
+    {
+        HPX_ASSERT(security_data_.get() != 0);
+
+        LSEC_(debug) << (boost::format(
+            "runtime::add_locality_certificate: locality(%1%): adding locality "
+            "certificate: %2%") % here() % cert);
+
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        HPX_ASSERT(0 != security_data_->cert_store_.get());     // should have been created
+        security_data_->cert_store_->insert(cert);
+    }
+
+    components::security::signed_certificate const&
+        runtime::get_locality_certificate(error_code& ec) const
+    {
+        HPX_ASSERT(security_data_.get() != 0);
+        if (0 == security_data_->cert_store_.get())     // should have been created
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "runtime::get_locality_certificate",
+                "the runtime system is not operational at this point");
+            return components::security::signed_certificate::invalid_signed_type;
+        }
+
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        return security_data_->locality_certificate_;
+    }
+
+    components::security::signed_certificate const&
+        runtime::get_locality_certificate(boost::uint32_t locality_id,
+            error_code& ec) const
+    {
+        HPX_ASSERT(security_data_.get() != 0);
+        if (0 == security_data_->cert_store_.get())     // should have been created
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "runtime::get_locality_certificate",
+                "the runtime system is not operational at this point");
+            return components::security::signed_certificate::invalid_signed_type;
+        }
+
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+
+        using util::security::get_subordinate_certificate_authority_gid;
+        return security_data_->cert_store_->at(
+            get_subordinate_certificate_authority_gid(locality_id)
+          , ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    void runtime::sign_parcel_suffix(
+        components::security::parcel_suffix const& suffix,
+        components::security::signed_parcel_suffix& signed_suffix,
+        error_code& ec) const
+    {
+        HPX_ASSERT(security_data_.get() != 0);
+        if (0 == security_data_->cert_store_.get())     // should have been created
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "runtime::sign_parcel_suffix",
+                "the runtime system is not operational at this point");
+            return;
+        }
+
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        signed_suffix = security_data_->subordinate_certificate_authority_.
+            get_key_pair().sign(suffix, ec);
+    }
+#endif
+
+    ///////////////////////////////////////////////////////////////////////////
+    runtime::runtime(util::runtime_configuration const& rtcfg
+          , threads::policies::init_affinity_data const& affinity_init)
       : ini_(rtcfg),
         instance_number_(++instance_number_counter_),
+        thread_support_(new util::thread_mapper),
+        affinity_init_(affinity_init),
         topology_(threads::create_topology()),
-        state_(state_invalid)
+        state_(state_invalid),
+        memory_(new components::server::memory),
+        runtime_support_(new components::server::runtime_support)
+#if defined(HPX_HAVE_SECURITY)
+      , security_data_(new detail::manage_security_data)
+#endif
     {
         // initialize our TSS
         runtime::init_tss();
+        util::reinit_construct();       // call only after TLS was initialized
 
         counters_.reset(new performance_counters::registry());
+    }
+
+    runtime::~runtime()
+    {
+        // allow to reuse instance number if this was the only instance
+        if (0 == instance_number_counter_)
+            --instance_number_counter_;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -187,7 +496,7 @@ namespace hpx
         // initialize our TSS
         if (NULL == runtime::runtime_.get())
         {
-            BOOST_ASSERT(NULL == threads::coroutine_type::impl_type::get_self());
+            HPX_ASSERT(NULL == threads::coroutine_type::impl_type::get_self());
 
             runtime::runtime_.reset(new runtime* (this));
             runtime::uptime_.reset(new boost::uint64_t);
@@ -205,9 +514,10 @@ namespace hpx
         runtime::runtime_.reset();
     }
 
-    std::string const* runtime::get_thread_name()
+    std::string runtime::get_thread_name()
     {
-        return runtime::thread_name_.get();
+        std::string const* str = runtime::thread_name_.get();
+        return str ? *str : "<unknown>";
     }
 
     boost::uint64_t runtime::get_system_uptime()
@@ -216,7 +526,28 @@ namespace hpx
         return diff < 0LL ? 0ULL : static_cast<boost::uint64_t>(diff);
     }
 
+    performance_counters::registry& runtime::get_counter_registry()
+    {
+        return *counters_;
+    }
+
+    performance_counters::registry const& runtime::get_counter_registry() const
+    {
+        return *counters_;
+    }
+
+    util::thread_mapper& runtime::get_thread_mapper()
+    {
+        return *thread_support_;
+    }
+
     ///////////////////////////////////////////////////////////////////////////
+    void runtime::register_query_counters(
+        boost::shared_ptr<util::query_counters> const& active_counters)
+    {
+        active_counters_ = active_counters;
+    }
+
     void runtime::start_active_counters(error_code& ec)
     {
         if (active_counters_.get())
@@ -242,20 +573,27 @@ namespace hpx
             active_counters_->evaluate_counters(reset, description, ec);
     }
 
+    void runtime::stop_evaluating_counters()
+    {
+        if (active_counters_.get())
+            active_counters_->stop_evaluating_counters();
+    }
+
     parcelset::policies::message_handler* runtime::create_message_handler(
         char const* message_handler_type, char const* action,
         parcelset::parcelport* pp, std::size_t num_messages,
         std::size_t interval, error_code& ec)
     {
-        return runtime_support_.create_message_handler(message_handler_type, 
+        return runtime_support_->create_message_handler(message_handler_type,
             action, pp, num_messages, interval, ec);
     }
 
     util::binary_filter* runtime::create_binary_filter(
-        char const* binary_filter_type, bool compress, error_code& ec)
+        char const* binary_filter_type, bool compress,
+        util::binary_filter* next_filter, error_code& ec)
     {
-        return runtime_support_.create_binary_filter(binary_filter_type, 
-            compress, ec);
+        return runtime_support_->create_binary_filter(binary_filter_type,
+            compress, next_filter, ec);
     }
 
     /// \brief Register all performance counter types related to this runtime
@@ -402,10 +740,47 @@ namespace hpx
             sizeof(arithmetic_counter_types)/sizeof(arithmetic_counter_types[0]));
     }
 
+    boost::uint32_t runtime::assign_cores(std::string const& locality_basename,
+        boost::uint32_t cores_needed)
+    {
+        boost::mutex::scoped_lock l(mtx_);
+
+        used_cores_map_type::iterator it = used_cores_map_.find(locality_basename);
+        if (it == used_cores_map_.end())
+        {
+            used_cores_map_.insert(
+                used_cores_map_type::value_type(locality_basename, cores_needed));
+            return 0;
+        }
+
+        boost::uint32_t current = (*it).second;
+        (*it).second += cores_needed;
+        return current;
+    }
+
+    boost::uint32_t runtime::assign_cores()
+    {
+        // initialize thread affinity settings in the scheduler
+        if (affinity_init_.used_cores_ == 0) {
+            // correct used_cores from config data if appropriate
+            affinity_init_.used_cores_ = std::size_t(
+                this->get_config().get_first_used_core());
+        }
+
+        return static_cast<boost::uint32_t>(
+            this->get_thread_manager().init(affinity_init_));
+    }
+
+    boost::shared_ptr<util::one_size_heap_list_base> runtime::get_promise_heap(
+        components::component_type type)
+    {
+        return runtime_support_->get_promise_heap(type);
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     runtime& get_runtime()
     {
-        BOOST_ASSERT(NULL != runtime::runtime_.get());   // should have been initialized
+        HPX_ASSERT(NULL != runtime::runtime_.get());   // should have been initialized
         return **runtime::runtime_;
     }
 
@@ -445,7 +820,7 @@ namespace hpx
         hpx::applier::get_applier().get_thread_manager().report_error(num_thread, e);
     }
 
-    bool register_on_exit(HPX_STD_FUNCTION<void()> f)
+    bool register_on_exit(HPX_STD_FUNCTION<void()> const& f)
     {
         runtime* rt = get_runtime_ptr();
         if (NULL == rt)
@@ -508,7 +883,7 @@ namespace hpx
             return naming::invalid_id;
         }
 
-        if (&ec != &throws) 
+        if (&ec != &throws)
             ec = make_success_code();
 
         return naming::id_type(console_locality, naming::id_type::unmanaged);
@@ -544,19 +919,33 @@ namespace hpx
     }
 
     std::vector<naming::id_type>
-    find_remote_localities(components::component_type type)
+    find_remote_localities(components::component_type type, error_code& ec)
     {
         std::vector<naming::id_type> locality_ids;
-        if (NULL != hpx::applier::get_applier_ptr())
-            hpx::applier::get_applier().get_remote_localities(locality_ids, type);
+        if (NULL == hpx::applier::get_applier_ptr())
+        {
+            HPX_THROWS_IF(ec, invalid_status, "hpx::find_remote_localities",
+                "the runtime system is not available at this time");
+            return locality_ids;
+        }
+
+        hpx::applier::get_applier().get_remote_localities(locality_ids, type, ec);
         return locality_ids;
     }
 
-    std::vector<naming::id_type> find_remote_localities()
+    std::vector<naming::id_type> find_remote_localities(error_code& ec)
     {
         std::vector<naming::id_type> locality_ids;
-        if (NULL != hpx::applier::get_applier_ptr())
-            hpx::applier::get_applier().get_remote_localities(locality_ids);
+        if (NULL == hpx::applier::get_applier_ptr())
+        {
+            HPX_THROWS_IF(ec, invalid_status, "hpx::find_remote_localities",
+                "the runtime system is not available at this time");
+            return locality_ids;
+        }
+
+        hpx::applier::get_applier().get_remote_localities(locality_ids,
+            components::component_invalid, ec);
+
         return locality_ids;
     }
 
@@ -582,7 +971,7 @@ namespace hpx
 
     /// \brief Return the number of localities which are currently registered
     ///        for the running application.
-    boost::uint32_t get_num_localities(error_code& ec)
+    boost::uint32_t get_num_localities_sync(error_code& ec)
     {
         if (NULL == hpx::get_runtime_ptr())
             return 0;
@@ -590,7 +979,15 @@ namespace hpx
         return get_runtime().get_agas_client().get_num_localities(ec);
     }
 
-    boost::uint32_t get_num_localities(components::component_type type,
+    boost::uint32_t get_initial_num_localities()
+    {
+        if (NULL == hpx::get_runtime_ptr())
+            return 0;
+
+        return get_runtime().get_config().get_num_localities();
+    }
+
+    boost::uint32_t get_num_localities_sync(components::component_type type,
         error_code& ec)
     {
         if (NULL == hpx::get_runtime_ptr())
@@ -599,7 +996,7 @@ namespace hpx
         return get_runtime().get_agas_client().get_num_localities(type, ec);
     }
 
-    lcos::future<boost::uint32_t> get_num_localities_async()
+    lcos::future<boost::uint32_t> get_num_localities()
     {
         if (NULL == hpx::get_runtime_ptr())
             return lcos::make_ready_future<boost::uint32_t>(0);
@@ -607,7 +1004,7 @@ namespace hpx
         return get_runtime().get_agas_client().get_num_localities_async();
     }
 
-    lcos::future<boost::uint32_t> get_num_localities_async(
+    lcos::future<boost::uint32_t> get_num_localities(
         components::component_type type)
     {
         if (NULL == hpx::get_runtime_ptr())
@@ -619,12 +1016,18 @@ namespace hpx
     ///////////////////////////////////////////////////////////////////////////
     namespace detail
     {
-        naming::gid_type get_next_id()
+        naming::gid_type get_next_id(std::size_t count)
         {
             if (NULL == get_runtime_ptr())
                 return naming::invalid_gid;
 
-            return get_runtime().get_next_id();
+            return get_runtime().get_next_id(count);
+        }
+
+        ///////////////////////////////////////////////////////////////////////////
+        void dijkstra_make_black()
+        {
+            get_runtime_support_ptr()->dijkstra_make_black();
         }
     }
 
@@ -633,8 +1036,22 @@ namespace hpx
     {
         runtime* rt = get_runtime_ptr();
         if (NULL == rt)
-            return 0;
+            return std::size_t(0);
         return rt->get_config().get_os_thread_count();
+    }
+
+    std::size_t get_os_thread_count(threads::executor& exec)
+    {
+        runtime* rt = get_runtime_ptr();
+        if (NULL == rt)
+            return std::size_t(0);
+
+        if (!exec)
+            return rt->get_config().get_os_thread_count();
+
+        error_code ec(lightweight);
+        return exec.executor_data_->get_policy_element(
+            threads::detail::current_concurrency, ec);
     }
 
     std::size_t get_worker_thread_num()
@@ -651,7 +1068,8 @@ namespace hpx
         if (NULL == rt)
             return std::size_t(0);
         error_code ec(lightweight);
-        return rt->get_agas_client().get_num_overall_threads();
+        return static_cast<std::size_t>(
+            rt->get_agas_client().get_num_overall_threads(ec));
     }
 
     bool is_scheduler_numa_sensitive()
@@ -690,6 +1108,12 @@ namespace hpx
             return rt->get_state() == runtime::state_running;
         return false;
     }
+
+    bool is_starting()
+    {
+        runtime* rt = get_runtime_ptr();
+        return NULL != rt ? rt->get_state() <= runtime::state_startup : true;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -719,9 +1143,9 @@ namespace hpx { namespace naming
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace parcelset
 {
-    void flush_buffers()
+    void do_background_work()
     {
-        get_runtime().get_parcel_handler().flush_buffers();
+        get_runtime().get_parcel_handler().do_background_work();
     }
 }}
 
@@ -747,6 +1171,106 @@ namespace hpx { namespace threads
     }
 }}
 
+namespace hpx { namespace components { namespace detail
+{
+    boost::shared_ptr<util::one_size_heap_list_base> get_promise_heap(
+        components::component_type type)
+    {
+        return get_runtime().get_promise_heap(type);
+    }
+}}}
+
+#if defined(HPX_HAVE_SECURITY)
+namespace hpx
+{
+    /// \brief Return the certificate for this locality
+    ///
+    /// \returns This function returns the signed certificate for this locality.
+    components::security::signed_certificate const&
+        get_locality_certificate(error_code& ec)
+    {
+        runtime* rt = get_runtime_ptr();
+        if (0 == rt ||
+            rt->get_state() < runtime::state_initialized ||
+            rt->get_state() >= runtime::state_stopped)
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "hpx::get_locality_certificate",
+                "the runtime system is not operational at this point");
+            return components::security::signed_certificate::invalid_signed_type;
+        }
+
+        return rt->get_locality_certificate(ec);
+    }
+
+    /// \brief Return the certificate for the given locality
+    ///
+    /// \param id The id representing the locality for which to retrieve
+    ///           the signed certificate.
+    ///
+    /// \returns This function returns the signed certificate for the locality
+    ///          identified by the parameter \a id.
+    components::security::signed_certificate const&
+        get_locality_certificate(boost::uint32_t locality_id, error_code& ec)
+    {
+        runtime* rt = get_runtime_ptr();
+        if (0 == rt ||
+            rt->get_state() < runtime::state_initialized ||
+            rt->get_state() >= runtime::state_stopped)
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "hpx::get_locality_certificate",
+                "the runtime system is not operational at this point");
+            return components::security::signed_certificate::invalid_signed_type;
+        }
+
+        return rt->get_locality_certificate(locality_id, ec);
+    }
+
+    /// \brief Add the given certificate to the certificate store of this locality.
+    ///
+    /// \param cert The certificate to add to the certificate store of this
+    ///             locality
+    void add_locality_certificate(
+        components::security::signed_certificate const& cert,
+        error_code& ec)
+    {
+        runtime* rt = get_runtime_ptr();
+        if (0 == rt)
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "hpx::add_locality_certificate",
+                "the runtime system is not operational at this point");
+            return;
+        }
+
+        rt->add_locality_certificate(cert);
+    }
+
+    /// \brief Sign the given parcel-suffix
+    ///
+    /// \param suffix         The parcel suffoix to be signed
+    /// \param signed_suffix  The signed parcel suffix will be placed here
+    ///
+    void sign_parcel_suffix(
+        components::security::parcel_suffix const& suffix,
+        components::security::signed_parcel_suffix& signed_suffix,
+        error_code& ec)
+    {
+        runtime* rt = get_runtime_ptr();
+        if (0 == rt)
+        {
+            HPX_THROWS_IF(ec, invalid_status,
+                "hpx::sign_parcel_suffix",
+                "the runtime system is not operational at this point");
+            return;
+        }
+
+        rt->sign_parcel_suffix(suffix, signed_suffix, ec);
+    }
+}
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx
 {
@@ -755,7 +1279,7 @@ namespace hpx
         return agas::get_locality_id(ec);
     }
 
-    std::string const* get_thread_name()
+    std::string get_thread_name()
     {
         return runtime::get_thread_name();
     }
@@ -825,7 +1349,7 @@ namespace hpx
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    /// \brief Create an instance of a message handler plugin
+    // Create an instance of a message handler plugin
     parcelset::policies::message_handler* create_message_handler(
         char const* message_handler_type, char const* action,
         parcelset::parcelport* pp, std::size_t num_messages,
@@ -843,17 +1367,24 @@ namespace hpx
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    /// \brief Create an instance of a binary filter plugin
+    // Create an instance of a binary filter plugin
     util::binary_filter* create_binary_filter(char const* binary_filter_type,
-        bool compress, error_code& ec)
+        bool compress, util::binary_filter* next_filter, error_code& ec)
     {
         runtime* rt = get_runtime_ptr();
         if (NULL != rt)
-            return rt->create_binary_filter(binary_filter_type, compress, ec);
+            return rt->create_binary_filter(binary_filter_type, compress, next_filter, ec);
 
         HPX_THROWS_IF(ec, invalid_status, "create_binary_filter",
             "the runtime system is not available at this time");
         return 0;
+    }
+
+    // helper function to stop evaluating counters during shutdown
+    void stop_evaluating_counters()
+    {
+        runtime* rt = get_runtime_ptr();
+        if (NULL != rt) rt->stop_evaluating_counters();
     }
 }
 

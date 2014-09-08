@@ -1,5 +1,6 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
+//  Copyright (c)      2013 Adrian Serio
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -23,13 +24,16 @@
 //  HPX_VERSION_FULL & 0x00FF00 is the minor version
 //  HPX_VERSION_FULL & 0xFF0000 is the major version
 //
-#define HPX_VERSION_FULL         0x090506
+//  HPX_VERSION_DATE   YYYYMMDD is the date of the release
+//                               (estimated release date for master branch)
+//
+#define HPX_VERSION_FULL         0x000909
 
 #define HPX_VERSION_MAJOR        0
 #define HPX_VERSION_MINOR        9
-#define HPX_VERSION_SUBMINOR     6
+#define HPX_VERSION_SUBMINOR     9
 
-#define HPX_VERSION_DATE         20130407
+#define HPX_VERSION_DATE         20141110
 
 #if !defined(HPX_AGAS_VERSION)
     #define HPX_AGAS_VERSION 0x30
@@ -107,6 +111,17 @@ namespace hpx
     // Returns the HPX build date and time
     HPX_EXPORT std::string build_date_time();
 
+    // Return the HPX configuration information
+    HPX_EXPORT std::string configuration_string();
+
+    // Return the HPX runtime configuration information
+    namespace util
+    {
+        struct command_line_handling;
+    }
+
+    HPX_EXPORT std::string runtime_configuration_string(
+        util::command_line_handling const& cfg);
 
     // Helper data structures allowing to automatically detect version problems
     // between applications and the core libraries.
@@ -115,15 +130,24 @@ namespace hpx
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_EXPORTS)
+#if !defined(HPX_EXPORTS) && !defined(HPX_NO_VERSION_CHECK)
     // This is instantiated for each translation unit outside of the HPX core
     // library, forcing to resolve the variable HPX_CHECK_VERSION.
     namespace
     {
+
 #if defined(__clang__)
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wunused-function"
 #endif
+
+#if defined(__GNUG__) && !defined(__INTEL_COMPILER)
+#  if defined(HPX_GCC_DIAGNOSTIC_PRAGMA_CONTEXTS)
+#    pragma GCC diagnostic push
+#  endif
+#  pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
         // Note: this function is never executed.
         char const* check_hpx_version()
         {
@@ -132,9 +156,17 @@ namespace hpx
             };
             return versions[0];
         }
+
+#if defined(__GNUG__) && !defined(__INTEL_COMPILER)
+#if defined(HPX_GCC_DIAGNOSTIC_PRAGMA_CONTEXTS)
+#pragma GCC diagnostic pop
+#endif
+#endif
+
 #if defined(__clang__)
 #  pragma clang diagnostic pop
 #endif
+
     }
 #endif
 

@@ -4,15 +4,9 @@
 #include <boost/version.hpp>
 #include <hpx/config.hpp>
 
-#if !defined(HPX_USE_PORTABLE_ARCHIVES) || HPX_USE_PORTABLE_ARCHIVES == 0
-#include <boost/archive/binary_iarchive.hpp>
-
-namespace hpx { namespace util
-{
-    typedef boost::archive::binary_iarchive portable_binary_iarchive;
-}}
-
-#else
+#include <boost/mpl/bool.hpp>
+#include <boost/type_traits/is_unsigned.hpp>
+#include <boost/type_traits/is_integral.hpp>
 
 // MS compatible compilers support #pragma once
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
@@ -28,7 +22,7 @@ namespace hpx { namespace util
 // portable_binary_iarchive.hpp
 
 // (C) Copyright 2002-7 Robert Ramey - http://www.rrsd.com .
-// Copyright (c) 2007-2012 Hartmut Kaiser
+// Copyright (c) 2007-2013 Hartmut Kaiser
 //
 // Use, modification and distribution is subject to the Boost Software
 // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -42,7 +36,9 @@ namespace hpx { namespace util
 #include <boost/serialization/string.hpp>
 #include <boost/archive/archive_exception.hpp>
 #include <boost/archive/detail/common_iarchive.hpp>
+#if BOOST_VERSION < 105600
 #include <boost/archive/shared_ptr_helper.hpp>
+#endif
 #include <boost/archive/detail/register_archive.hpp>
 #if BOOST_VERSION >= 104400
 #include <boost/serialization/item_version_type.hpp>
@@ -58,10 +54,16 @@ namespace hpx { namespace util
 namespace hpx { namespace util
 {
 
+#if defined(BOOST_MSVC) || defined(BOOST_INTEL_WIN)
+#define HPX_SERIALIZATION_EXPORT
+#else
+#define HPX_SERIALIZATION_EXPORT HPX_ALWAYS_EXPORT
+#endif
+
 /////////1/////////2/////////3/////////4/////////5/////////6/////////7/////////8
 // exception to be thrown if integer read from archive doesn't fit
 // variable being loaded
-class HPX_ALWAYS_EXPORT portable_binary_iarchive_exception :
+class HPX_SERIALIZATION_EXPORT portable_binary_iarchive_exception :
     public virtual boost::archive::archive_exception
 {
 public:
@@ -89,20 +91,16 @@ public:
 // "Portable" input binary archive.  It addresses integer size and endianness so
 // that binary archives can be passed across systems. Note:floating point types
 // are passed through as is.
-#if defined(BOOST_MSVC) || defined(BOOST_INTEL_WIN)
-#define HPX_SERIALIZATION_EXPORT
-#else
-#define HPX_SERIALIZATION_EXPORT HPX_ALWAYS_EXPORT
-#endif
-
 class HPX_SERIALIZATION_EXPORT portable_binary_iarchive :
     public hpx::util::basic_binary_iprimitive<
         portable_binary_iarchive
     >,
     public boost::archive::detail::common_iarchive<
         portable_binary_iarchive
-    >,
-    public boost::archive::detail::shared_ptr_helper
+    >
+#if BOOST_VERSION < 105600
+    , public boost::archive::detail::shared_ptr_helper
+#endif
 {
     typedef hpx::util::basic_binary_iprimitive<
         portable_binary_iarchive
@@ -120,9 +118,9 @@ public:
     friend class boost::archive::load_access;
 protected:
 #endif
-    unsigned int m_flags;
-    HPX_ALWAYS_EXPORT void
-    load_impl(boost::int64_t& l, char maxsize);
+
+    HPX_ALWAYS_EXPORT void load_impl(boost::int64_t& l, char const maxsize);
+    HPX_ALWAYS_EXPORT void load_impl(boost::uint64_t& l, char const maxsize);
 
     // default fall through for any types not specified here
 #if defined(__GNUG__) && !defined(__INTEL_COMPILER)
@@ -132,18 +130,31 @@ protected:
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 #endif
     template <typename T>
-    void load(T& t, typename boost::enable_if<boost::is_integral<T> >::type* = 0)
+    void load_integral(T& t, boost::mpl::false_)
     {
         boost::int64_t l = 0;
         load_impl(l, sizeof(T));
-        // use cast to avoid compile time warning
-        t = static_cast<T>(l);
+        t = static_cast<T>(l);      // use cast to avoid compile time warning
+    }
+
+    template <typename T>
+    void load_integral(T& t, boost::mpl::true_)
+    {
+        boost::uint64_t l = 0;
+        load_impl(l, sizeof(T));
+        t = static_cast<T>(l);      // use cast to avoid compile time warning
     }
 #if defined(__GNUG__) && !defined(__INTEL_COMPILER)
 #if defined(HPX_GCC_DIAGNOSTIC_PRAGMA_CONTEXTS)
 #pragma GCC diagnostic pop
 #endif
 #endif
+
+    template <typename T>
+    void load(T& t, typename boost::enable_if<boost::is_integral<T> >::type* = 0)
+    {
+        load_integral(t, typename boost::is_unsigned<T>::type());
+    }
 
     template <typename T>
     void load(T& t, typename boost::disable_if<boost::is_integral<T> >::type* = 0)
@@ -253,22 +264,26 @@ protected:
     // binary files don't include the optional information
     void load_override(boost::archive::class_id_optional_type&, int) {}
 
-    HPX_ALWAYS_EXPORT void init(unsigned int flags);
+    HPX_ALWAYS_EXPORT boost::uint32_t init(boost::uint32_t flags);
 
 public:
-    template <typename Vector>
-    portable_binary_iarchive(Vector const& buffer,
-            boost::uint64_t inbound_data_size, unsigned flags = 0)
-      : primitive_base_t(buffer, inbound_data_size, flags),
-        archive_base_t(flags),
-        m_flags(0)
+    template <typename Container>
+    portable_binary_iarchive(Container const& buffer,
+            boost::uint64_t inbound_data_size, unsigned flags_value = 0)
+      : primitive_base_t(buffer, inbound_data_size, flags_value),
+        archive_base_t(flags_value)
     {
-        init(flags);
+        init(flags_value);
     }
 
-    unsigned int flags() const
+    template <typename Container>
+    portable_binary_iarchive(Container const& buffer,
+            std::vector<serialization_chunk> const* chunks,
+            boost::uint64_t inbound_data_size, unsigned flags_value = 0)
+      : primitive_base_t(buffer, chunks, inbound_data_size, flags_value),
+        archive_base_t(flags_value)
     {
-        return m_flags;
+        init(flags_value);
     }
 
     // the optimized load_array dispatches to load_binary
@@ -278,40 +293,40 @@ public:
         // If we need to potentially flip bytes we serialize each element
         // separately.
 #ifdef BOOST_BIG_ENDIAN
-        if (m_flags & endian_little) {
+        if (this->flags() & (endian_little | disable_array_optimization)) {
             for (std::size_t i = 0; i != a.count(); ++i)
                 load(a.address()[i]);
         }
 #else
-        if (m_flags & endian_big) {
+        if (this->flags() & (endian_big | disable_array_optimization)) {
             for (std::size_t i = 0; i != a.count(); ++i)
                 load(a.address()[i]);
         }
 #endif
         else {
-            this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(T));
+            this->primitive_base_t::load_array(a);
         }
     }
 
     void load_array(boost::serialization::array<float>& a, unsigned int)
     {
-        this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(float));
+        this->primitive_base_t::load_array(a);
     }
     void load_array(boost::serialization::array<double>& a, unsigned int)
     {
-        this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(double));
+        this->primitive_base_t::load_array(a);
     }
     void load_array(boost::serialization::array<char>& a, unsigned int)
     {
-        this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(char));
+        this->primitive_base_t::load_array(a);
     }
     void load_array(boost::serialization::array<unsigned char>& a, unsigned int)
     {
-        this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(unsigned char));
+        this->primitive_base_t::load_array(a);
     }
     void load_array(boost::serialization::array<signed char>& a, signed int)
     {
-        this->primitive_base_t::load_binary(a.address(), a.count()*sizeof(signed char));
+        this->primitive_base_t::load_array(a);
     }
 };
 
@@ -393,7 +408,7 @@ namespace boost { namespace archive { namespace detail
         template <typename T>
         static void check_load(T& /* t */)
         {
-            check_pointer_level< T >();
+            // check_pointer_level< T >();         // this has to be disabled to avoid warnings
             // check_pointer_tracking< T >();      // this has to be disabled to avoid warnings
         }
 
@@ -431,5 +446,4 @@ namespace boost { namespace archive { namespace detail
 #pragma warning( pop )
 #endif
 
-#endif // HPX_USE_PORTABLE_ARCHIVES == 0
 #endif // PORTABLE_BINARY_IARCHIVE_HPP

@@ -25,12 +25,12 @@
 #error Donot include this directly. Include hpx/util/logging/logging.hpp instead
 #endif
 
+#include <hpx/util/assert.hpp>
 #include <hpx/util/logging/detail/fwd.hpp>
 #include <map>
 #include <vector>
 //#include <boost/thread/detail/config.hpp>
 #include <boost/config.hpp>
-#include <boost/assert.hpp>
 
 namespace hpx { namespace util { namespace logging { namespace detail {
 
@@ -43,7 +43,8 @@ typedef pthread_t thread_id_type;
 #error Unknown threading type
 #endif
 
-inline thread_id_type get_thread_id() {
+inline thread_id_type get_thread_id()
+{
 #if defined (BOOST_HAS_WINTHREADS)
     return ::GetCurrentThreadId();
 #elif defined (BOOST_HAS_PTHREADS)
@@ -105,7 +106,7 @@ public:
         return m_is_caching_off;
     }
 
-    template<class writer_type> 
+    template<class writer_type>
     void turn_cache_off(const writer_type & writer_) {
         if ( is_cache_turned_off() )
             return; // already turned off
@@ -166,12 +167,12 @@ private:
 // Messages that were logged before initializing the log - NOT Caching them
 
 template<class msg_type> struct cache_before_init {
-    template<class writer_type> 
+    template<class writer_type>
     void on_do_write(msg_type & msg, const writer_type & writer) const {
         writer(msg);
     }
 
-    template<class writer_type> 
+    template<class writer_type>
     void turn_cache_off(const writer_type & writer) {
     }
 

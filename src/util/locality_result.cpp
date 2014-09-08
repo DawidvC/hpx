@@ -5,6 +5,8 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/util/locality_result.hpp>
+#include <hpx/runtime/components/component_factory.hpp>
+#include <hpx/runtime/components/base_lco_factory.hpp>
 #include <hpx/include/serialization.hpp>
 
 #include <boost/serialization/vector.hpp>
@@ -51,7 +53,7 @@ namespace hpx { namespace util
 
     naming::id_type const& locality_result_iterator::data::dereference() const
     {
-        BOOST_ASSERT(!is_at_end_);
+        HPX_ASSERT(!is_at_end_);
         return *current_gid_;
     }
 
@@ -64,8 +66,21 @@ namespace hpx { namespace util
             result_type;
         return result_type(locality_result_iterator(v), locality_result_iterator());
     }
+
+    void remote_locality_result::serialize(
+        hpx::util::portable_binary_oarchive & ar, const unsigned int)
+    {
+        ar & prefix_ & gids_ & type_;
+    }
+
+    void remote_locality_result::serialize(
+        hpx::util::portable_binary_iarchive & ar, const unsigned int)
+    {
+        ar & prefix_ & gids_ & type_;
+    }
 }}
 
 HPX_REGISTER_BASE_LCO_WITH_VALUE(
     std::vector<hpx::util::remote_locality_result>,
     factory_locality_result)
+

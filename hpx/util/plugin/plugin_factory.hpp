@@ -1,5 +1,5 @@
 // Copyright Vladimir Prus 2004.
-// Copyright (c) 2005-2013 Hartmut Kaiser
+// Copyright (c) 2005-2014 Hartmut Kaiser
 // Distributed under the Boost Software License, Version 1.0.
 // (See accompanying file LICENSE_1_0.txt
 // or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -23,6 +23,8 @@
 #include <hpx/util/plugin/dll.hpp>
 #include <hpx/util/plugin/export_plugin.hpp>
 
+#include <hpx/exception.hpp>
+
 namespace hpx { namespace util { namespace plugin {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -31,11 +33,12 @@ namespace hpx { namespace util { namespace plugin {
         template<typename BasePlugin, typename DeleterType>
         std::pair<abstract_factory<BasePlugin> *, dll_handle>
         get_abstract_factory_static(get_plugins_list_type f, DeleterType d,
-            std::string const &class_name, std::string const& libname = "")
+            std::string const &class_name, std::string const& libname = "",
+            error_code& ec = throws)
         {
             typedef typename boost::remove_pointer<get_plugins_list_type>::type PointedType;
 
-            exported_plugins_type& e = f();
+            exported_plugins_type& e = *f();
             std::string clsname(class_name);
             boost::algorithm::to_lower(clsname);
 
@@ -45,7 +48,10 @@ namespace hpx { namespace util { namespace plugin {
                     boost::unsafe_any_cast<abstract_factory<BasePlugin> *>(&(*it).second);
 
                 if (!xw) {
-                    throw std::logic_error("Hpx.Plugin: Can't cast to the right factory type\n");
+                    HPX_THROWS_IF(ec, filesystem_error,
+                        "get_abstract_factory_static",
+                        "Hpx.Plugin: Can't cast to the right factory type\n");
+                    return std::pair<abstract_factory<BasePlugin> *, dll_handle>();
                 }
 
                 abstract_factory<BasePlugin> *w = *xw;
@@ -81,44 +87,39 @@ namespace hpx { namespace util { namespace plugin {
                     str << " No classes exist.";
                 }
 
-                throw std::logic_error(HPX_PLUGIN_OSSTREAM_GETSTRING(str));
+                HPX_THROWS_IF(ec, filesystem_error,
+                    "get_abstract_factory_static",
+                    HPX_PLUGIN_OSSTREAM_GETSTRING(str));
+                return std::pair<abstract_factory<BasePlugin> *, dll_handle>();
             }
         }
 
         template<typename BasePlugin>
         std::pair<abstract_factory<BasePlugin> *, dll_handle>
         get_abstract_factory(dll const& d, std::string const &class_name,
-            std::string const &base_name)
+            std::string const &base_name, error_code& ec = throws)
         {
             typedef boost::function<void (get_plugins_list_type)> DeleterType;
 
-            std::string plugin_entry(
-                HPX_PLUGIN_SYMBOLS_PREFIX_STR "_exported_plugins_list_");
+            std::string plugin_entry(HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC_STR
+                "_exported_plugins_list_");
             plugin_entry += d.get_mapname();
             plugin_entry += "_" + base_name;
 
             std::pair<get_plugins_list_type, DeleterType> f =
-                d.get<get_plugins_list_type, DeleterType>(plugin_entry);
+                d.get<get_plugins_list_type, DeleterType>(plugin_entry, ec);
+            if (ec) return std::pair<abstract_factory<BasePlugin> *, dll_handle>();
 
             return get_abstract_factory_static<BasePlugin>(f.first, f.second,
-                class_name, d.get_name());
+                class_name, d.get_name(), ec);
         }
 
+        ///////////////////////////////////////////////////////////////////////
         inline void
-        get_abstract_factory_names(dll const& d, std::string const &base_name,
-            std::vector<std::string>& names)
+        get_abstract_factory_names_static(get_plugins_list_type f,
+            std::vector<std::string>& names, error_code& ec = throws)
         {
-            typedef boost::function<void (get_plugins_list_type)> DeleterType;
-
-            std::string plugin_entry(
-                HPX_PLUGIN_SYMBOLS_PREFIX_STR "_exported_plugins_list_");
-            plugin_entry += d.get_mapname();
-            plugin_entry += "_" + base_name;
-
-            std::pair<get_plugins_list_type, DeleterType> f =
-                d.get<get_plugins_list_type, DeleterType>(plugin_entry);
-
-            exported_plugins_type& e = (f.first)();
+            exported_plugins_type& e = *f();
 
             exported_plugins_type::iterator end = e.end();
             for (exported_plugins_type::iterator it = e.begin(); it != end; ++it)
@@ -127,18 +128,40 @@ namespace hpx { namespace util { namespace plugin {
             }
         }
 
+        inline void
+        get_abstract_factory_names(dll const& d, std::string const &base_name,
+            std::vector<std::string>& names, error_code& ec = throws)
+        {
+            typedef boost::function<void (get_plugins_list_type)> DeleterType;
+
+            std::string plugin_entry(HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC_STR
+                "_exported_plugins_list_");
+            plugin_entry += d.get_mapname();
+            plugin_entry += "_" + base_name;
+
+            std::pair<get_plugins_list_type, DeleterType> f =
+                d.get<get_plugins_list_type, DeleterType>(plugin_entry, ec);
+            if (ec) return;
+
+            get_abstract_factory_names_static(f.first, names, ec);
+        }
+
         ///////////////////////////////////////////////////////////////////////
         struct plugin_factory_item_base
         {
+            plugin_factory_item_base(dll& d, std::string const& basename)
+              : m_dll(d), m_basename(basename)
+            {}
+
             void create(int******) const;
 
-            void get_names(std::vector<std::string>& names) const
+            void get_names(std::vector<std::string>& names, error_code& ec = throws) const
             {
-                get_abstract_factory_names(this->m_dll, this->m_basename, names);
+                get_abstract_factory_names(this->m_dll, this->m_basename, names, ec);
             }
 
         protected:
-            dll m_dll;
+            dll& m_dll;
             std::string m_basename;
         };
 
@@ -150,10 +173,16 @@ namespace hpx { namespace util { namespace plugin {
         struct plugin_factory_item<BasePlugin, Base, boost::mpl::list<> >
         :   public Base
         {
-            BasePlugin* create(std::string const& name) const
+            plugin_factory_item(dll& d, std::string const& basename)
+              : Base(d, basename)
+            {}
+
+            BasePlugin* create(std::string const& name, error_code& ec = throws) const
             {
                 std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
-                    get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename);
+                    get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename, ec);
+                if (ec) return 0;
+
                 return r.first->create(r.second);
             }
         };
@@ -162,11 +191,24 @@ namespace hpx { namespace util { namespace plugin {
         struct plugin_factory_item<BasePlugin, Base, boost::mpl::list<A1> >
         :   public Base
         {
+            plugin_factory_item(dll& d, std::string const& basename)
+              : Base(d, basename)
+            {}
+
             using Base::create;
             BasePlugin* create(std::string const& name, A1 a1) const
             {
                 std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                     get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename);
+                return r.first->create(r.second, a1);
+            }
+
+            BasePlugin* create(std::string const& name, error_code& ec, A1 a1) const
+            {
+                std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                    get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename, ec);
+                if (ec) return 0;
+
                 return r.first->create(r.second, a1);
             }
         };
@@ -175,11 +217,24 @@ namespace hpx { namespace util { namespace plugin {
         struct plugin_factory_item<BasePlugin, Base, boost::mpl::list<A1, A2> >
         :   public Base
         {
+            plugin_factory_item(dll& d, std::string const& basename)
+              : Base(d, basename)
+            {}
+
             using Base::create;
             BasePlugin* create(std::string const& name, A1 a1, A2 a2) const
             {
                 std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                     get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename);
+                return r.first->create(r.second, a1, a2);
+            }
+
+            BasePlugin* create(std::string const& name, error_code& ec, A1 a1, A2 a2) const
+            {
+                std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                    get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename, ec);
+                if (ec) return 0;
+
                 return r.first->create(r.second, a1, a2);
             }
         };
@@ -192,7 +247,16 @@ namespace hpx { namespace util { namespace plugin {
         ///////////////////////////////////////////////////////////////////////
         struct static_plugin_factory_item_base
         {
+            static_plugin_factory_item_base(get_plugins_list_type const& f_)
+              : f(f_)
+            {}
+
             void create(int******) const;
+
+            void get_names(std::vector<std::string>& names, error_code& ec = throws) const
+            {
+                get_abstract_factory_names_static(f, names, ec);
+            }
 
         protected:
             get_plugins_list_type f;
@@ -206,11 +270,17 @@ namespace hpx { namespace util { namespace plugin {
         struct static_plugin_factory_item<BasePlugin, Base, boost::mpl::list<> >
         :   public Base
         {
-            BasePlugin* create(std::string const& name) const
+            static_plugin_factory_item(get_plugins_list_type const& f)
+              : Base(f)
+            {}
+
+            BasePlugin* create(std::string const& name, error_code& ec = throws) const
             {
                 std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                     get_abstract_factory_static<BasePlugin>(
-                        this->f, &empty_deleter, name);
+                        this->f, &empty_deleter, name, "", ec);
+                if (ec) return 0;
+
                 return r.first->create(r.second);
             }
         };
@@ -219,6 +289,10 @@ namespace hpx { namespace util { namespace plugin {
         struct static_plugin_factory_item<BasePlugin, Base, boost::mpl::list<A1> >
         :   public Base
         {
+            static_plugin_factory_item(get_plugins_list_type const& f)
+              : Base(f)
+            {}
+
             using Base::create;
             BasePlugin* create(std::string const& name, A1 a1) const
             {
@@ -227,18 +301,42 @@ namespace hpx { namespace util { namespace plugin {
                         this->f, &empty_deleter, name);
                 return r.first->create(r.second, a1);
             }
+
+            BasePlugin* create(std::string const& name, error_code& ec, A1 a1) const
+            {
+                std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                    get_abstract_factory_static<BasePlugin>(
+                        this->f, &empty_deleter, name, "", ec);
+                if (ec) return 0;
+
+                return r.first->create(r.second, a1);
+            }
         };
 
         template<typename BasePlugin, typename Base, typename A1, typename A2>
         struct static_plugin_factory_item<BasePlugin, Base, boost::mpl::list<A1, A2> >
         :   public Base
         {
+            static_plugin_factory_item(get_plugins_list_type const& f)
+              : Base(f)
+            {}
+
             using Base::create;
             BasePlugin* create(std::string const& name, A1 a1, A2 a2) const
             {
                 std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                     get_abstract_factory_static<BasePlugin>(
                         this->f, &empty_deleter, name);
+                return r.first->create(r.second, a1, a2);
+            }
+
+            BasePlugin* create(std::string const& name, error_code& ec, A1 a1, A2 a2) const
+            {
+                std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                    get_abstract_factory_static<BasePlugin>(
+                        this->f, &empty_deleter, name, ec);
+                if (ec) return 0;
+
                 return r.first->create(r.second, a1, a2);
             }
         };
@@ -262,11 +360,18 @@ namespace hpx { namespace util { namespace plugin {
             detail::plugin_factory_item_base
         >::type
     {
-        plugin_factory(dll const& d, std::string const& basename)
-        {
-            this->m_dll = d;
-            this->m_basename = basename;
-        }
+    private:
+        typedef typename boost::mpl::inherit_linearly <
+            typename virtual_constructors<BasePlugin>::type,
+            detail::plugin_factory_item<BasePlugin,
+                boost::mpl::placeholders::_, boost::mpl::placeholders::_>,
+            detail::plugin_factory_item_base
+        >::type base_type;
+
+    public:
+        plugin_factory(dll& d, std::string const& basename)
+          : base_type(d, basename)
+        {}
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -279,10 +384,18 @@ namespace hpx { namespace util { namespace plugin {
             detail::static_plugin_factory_item_base
         >::type
     {
-        static_plugin_factory(get_plugins_list_type f)
-        {
-            this->f = f;
-        }
+    private:
+        typedef typename boost::mpl::inherit_linearly <
+            typename virtual_constructors<BasePlugin>::type,
+            detail::static_plugin_factory_item<BasePlugin,
+                boost::mpl::placeholders::_, boost::mpl::placeholders::_>,
+            detail::static_plugin_factory_item_base
+        >::type base_type;
+
+    public:
+        static_plugin_factory(get_plugins_list_type const& f)
+          : base_type(f)
+        {}
     };
 
 ///////////////////////////////////////////////////////////////////////////////

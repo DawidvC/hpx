@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -7,6 +7,7 @@
 #include <hpx/include/plain_actions.hpp>
 #include <hpx/include/async.hpp>
 #include <hpx/util/lightweight_test.hpp>
+#include <hpx/config/compiler_specific.hpp>
 
 #include <boost/foreach.hpp>
 #include <boost/assign/std/vector.hpp>
@@ -17,14 +18,14 @@
 using hpx::test::movable_object;
 using hpx::test::non_movable_object;
 
+
 ///////////////////////////////////////////////////////////////////////////////
 template <typename Action, typename Object>
 std::size_t pass_object(hpx::naming::id_type id)
 {
     using hpx::test::action_move_semantics;
 
-    action_move_semantics test;
-    test.create(id);
+    action_move_semantics test = action_move_semantics::create(id);
 
     Object obj;
     obj.reset_count();
@@ -38,8 +39,7 @@ std::size_t move_object(hpx::naming::id_type id)
 {
     using hpx::test::action_move_semantics;
 
-    action_move_semantics test; 
-    test.create(id);
+    action_move_semantics test = action_move_semantics::create(id);
 
     Object obj;
     obj.reset_count();
@@ -53,8 +53,7 @@ std::size_t return_object(hpx::naming::id_type id)
 {
     using hpx::test::action_move_semantics;
 
-    action_move_semantics test;
-    test.create(id);
+    action_move_semantics test = action_move_semantics::create(id);
 
     Object obj(hpx::async<Action>(test.get_gid()).get());
     return obj.get_count();
@@ -66,107 +65,243 @@ std::size_t return_move_object(hpx::naming::id_type id)
 {
     using hpx::test::action_move_semantics;
 
-    action_move_semantics test;
-    test.create(id);
+    action_move_semantics test = action_move_semantics::create(id);
 
     Object obj(boost::move(hpx::async<Action>(test.get_gid()).move_out()));
     return obj.get_count();
 }
 
-
-int hpx_main(boost::program_options::variables_map&)
+///////////////////////////////////////////////////////////////////////////////
+void test_actions()
 {
     using hpx::test::server::action_move_semantics;
 
     std::vector<hpx::naming::id_type> localities = hpx::find_all_localities();
     BOOST_FOREACH(hpx::naming::id_type id, localities)
     {
-        bool is_local = (id == hpx::find_here()) ? true : false;
+        bool is_local = id == hpx::find_here();
 
-        // test for movable object ('normal' actions)
-        HPX_TEST_EQ((
-            pass_object<
-                action_move_semantics::test_movable_action, movable_object
-            >(id)
-        ), is_local ? 1u : 1u);
+        // test std::size_t(movable_object const& obj)
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_movable_action, movable_object
+                >(id)
+            ), 1u); // bind
 
-        // test for movable object (direct actions)
-        HPX_TEST_EQ((
-            pass_object<
-                action_move_semantics::test_movable_direct_action, movable_object
-            >(id)
-        ), is_local ? 0u : 1u);
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_movable_action, movable_object
+                >(id)
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_movable_action, movable_object
+                >(id)
+            ), 1u); // transfer_action
 
-        // FIXME: Can we get down to one copy for non-movable objects as well?
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_movable_action, movable_object
+                >(id)
+            ), 0u);
+        }
 
-        // test for a non-movable object ('normal' actions)
-        HPX_TEST_EQ((
-            pass_object<
-                action_move_semantics::test_non_movable_action, non_movable_object
-            >(id)
-        ), is_local ? 2u : 4u);
+        // test std::size_t(non_movable_object const& obj)
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_non_movable_action, non_movable_object
+                >(id)
+            ), 2u); // bind + function
 
-        // test for a non-movable object (direct actions)
-        HPX_TEST_EQ((
-            pass_object<
-                action_move_semantics::test_non_movable_direct_action, non_movable_object
-            >(id)
-        ), is_local ? 0u : 4u);
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_non_movable_action, non_movable_object
+                >(id)
+            ), 2u); // bind + function
+        } else {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_non_movable_action, non_movable_object
+                >(id)
+            ), 3u); // transfer_action + bind + function
 
-        // test for movable object ('normal' actions)
-        HPX_TEST_EQ((
-            move_object<
-                action_move_semantics::test_movable_action, movable_object
-            >(id)
-        ), is_local ? 0u : 0u);
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_non_movable_action, non_movable_object
+                >(id)
+            ), 3u); // transfer_action + bind + function
+        }
 
-        // test for movable object (direct actions)
-        HPX_TEST_EQ((
-            move_object<
-                action_move_semantics::test_movable_direct_action, movable_object
-            >(id)
-        ), is_local ? 0u : 0u);
+        // test movable_object()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                return_object<
+                    action_move_semantics::return_test_movable_action, movable_object
+                >(id)
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                return_object<
+                    action_move_semantics::return_test_movable_action, movable_object
+                >(id)
+            ), 0u);
+        }
 
-        // FIXME: Can we get down to one copy for non-movable objects as well?
-
-        // test for a non-movable object ('normal' actions)
-        HPX_TEST_EQ((
-            move_object<
-                action_move_semantics::test_non_movable_action, non_movable_object
-            >(id)
-        ), is_local ? 4u : 4u);
-
-        // test for a non-movable object (direct actions)
-        HPX_TEST_EQ((
-            move_object<
-                action_move_semantics::test_non_movable_direct_action, non_movable_object
-            >(id)
-        ), is_local ? 2u : 4u);
-        
-        HPX_TEST_EQ((
-            return_object<
-                action_move_semantics::return_test_movable_action, movable_object
-            >(id)
-        ), is_local ? 1u : 1u);
-
-        HPX_TEST_EQ((
-            return_object<
-                action_move_semantics::return_test_movable_direct_action, movable_object
-            >(id)
-        ), is_local ? 1u : 1u);
-
-        HPX_TEST_EQ((
-            return_object<
-                action_move_semantics::return_test_non_movable_action, non_movable_object
-            >(id)
-        ), is_local ? 5u : 7u);
-
-        HPX_TEST_EQ((
-            return_object<
-                action_move_semantics::return_test_non_movable_direct_action, non_movable_object
-            >(id)
-        ), is_local ? 2u : 7u);
+        // test non_movable_object()
+        if (is_local)
+        {
+#if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION < 40600
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_action, non_movable_object
+                >(id)
+            ), 1u, 4u);
+#else
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_action, non_movable_object
+                >(id)
+            ), 1u, 3u); // ?call + value_or_error(w) + ?return
+#endif
+        } else {
+#if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION < 40600
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_action, non_movable_object
+                >(id)
+            ), 4u, 7u);
+#else
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_action, non_movable_object
+                >(id)
+            ), 4u, 6u); // transfer_action + bind + function + ?call +
+                    // value_or_error(w) + ?return
+#endif
+        }
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_direct_actions()
+{
+    using hpx::test::server::action_move_semantics;
+
+    std::vector<hpx::naming::id_type> localities = hpx::find_all_localities();
+    BOOST_FOREACH(hpx::naming::id_type id, localities)
+    {
+        bool is_local = id == hpx::find_here();
+
+        // test std::size_t(movable_object const& obj)
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_movable_direct_action, movable_object
+                >(id)
+            ), 0u);
+
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_movable_direct_action, movable_object
+                >(id)
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_movable_direct_action, movable_object
+                >(id)
+            ), 1u); // transfer_action
+
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_movable_direct_action, movable_object
+                >(id)
+            ), 0u);
+        }
+
+        // test std::size_t(non_movable_object const& obj)
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 0u);
+
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                pass_object<
+                    action_move_semantics::test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 3u); // transfer_action + bind + function
+
+            HPX_TEST_EQ((
+                move_object<
+                    action_move_semantics::test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 3u); // transfer_action + bind + function
+        }
+
+        // test movable_object()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                return_object<
+                    action_move_semantics::return_test_movable_direct_action, movable_object
+                >(id)
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                return_object<
+                    action_move_semantics::return_test_movable_direct_action, movable_object
+                >(id)
+            ), 0u);
+        }
+
+        // test non_movable_object()
+        if (is_local)
+        {
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 1u, 3u); // ?call + value_or_error(w) + ?return
+        } else {
+#if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION < 40600
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 4u, 7u);
+#else
+            HPX_TEST_RANGE((
+                return_object<
+                    action_move_semantics::return_test_non_movable_direct_action, non_movable_object
+                >(id)
+            ), 4u, 6u); // transfer_action + bind + function + ?call +
+                    // value_or_error(w) + ?return
+#endif
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+int hpx_main(boost::program_options::variables_map&)
+{
+    test_actions();
+    test_direct_actions();
 
     hpx::finalize();
     return hpx::util::report_errors();
@@ -187,4 +322,3 @@ int main(int argc, char* argv[])
     // Initialize and run HPX.
     return hpx::init(desc_commandline, argc, argv, cfg);
 }
-

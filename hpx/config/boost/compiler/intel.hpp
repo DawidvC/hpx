@@ -27,7 +27,8 @@
 #endif
 
 // Flags determined by comparing output of 'icpc -dM -E' with and without '-std=c++0x'
-#if (!(defined(_WIN32) || defined(_WIN64)) && defined(__STDC_HOSTED__) && (__STDC_HOSTED__ && (BOOST_INTEL_CXX_VERSION <= 1310))) || defined(__GXX_EXPERIMENTAL_CPP0X__)
+#if (!(defined(_WIN32) || defined(_WIN64)) && defined(__STDC_HOSTED__) && (__STDC_HOSTED__ && (BOOST_INTEL_CXX_VERSION <= 1310))) \
+    || defined(__GXX_EXPERIMENTAL_CPP0X__) || defined(__GXX_EXPERIMENTAL_CXX0X__)
 #  define BOOST_INTEL_STDCXX0X
 #endif
 #if defined(_MSC_VER) && (_MSC_VER >= 1600)
@@ -173,10 +174,10 @@ template<> struct assert_intrinsic_wchar_t<unsigned short> {};
 
 //
 // An attempt to value-initialize a pointer-to-member may trigger an
-// internal error on Intel <= 11.1 (last checked version), as was 
+// internal error on Intel <= 11.1 (last checked version), as was
 // reported by John Maddock, Intel support issue 589832, May 2010.
 // Moreover, according to test results from Huang-Vista-x86_32_intel,
-// intel-vc9-win-11.1 may leave a non-POD array uninitialized, in some 
+// intel-vc9-win-11.1 may leave a non-POD array uninitialized, in some
 // cases when it should be value-initialized.
 // (Niels Dekker, LKEB, May 2010)
 // Apparently Intel 12.1 (compiler version number 9999 !!) has the same issue (compiler regression).
@@ -215,7 +216,7 @@ template<> struct assert_intrinsic_wchar_t<unsigned short> {};
 //#  undef  BOOST_NO_CXX11_RVALUE_REFERENCES // Enabling this breaks Filesystem and Exception libraries
 //#  undef  BOOST_NO_CXX11_SCOPED_ENUMS  // doesn't really work!!
 #  undef  BOOST_NO_CXX11_DELETED_FUNCTIONS
-#  undef  BOOST_NO_CXX11_DEFAULTED_FUNCTIONS
+//#  undef  BOOST_NO_CXX11_DEFAULTED_FUNCTIONS
 #  undef  BOOST_NO_CXX11_LAMBDAS
 #  undef  BOOST_NO_CXX11_LOCAL_CLASS_TEMPLATE_PARAMETERS
 #  undef  BOOST_NO_CXX11_DECLTYPE
@@ -224,18 +225,21 @@ template<> struct assert_intrinsic_wchar_t<unsigned short> {};
 #endif
 
 // icl Version 12.1.0.233 Build 20110811 and possibly some other builds
-// had an incorrect __INTEL_COMPILER value of 9999. Intel say this has been fixed. 
+// had an incorrect __INTEL_COMPILER value of 9999. Intel say this has been fixed.
 #if defined(BOOST_INTEL_STDCXX0X) && (BOOST_INTEL_CXX_VERSION > 1200)
 #  undef  BOOST_NO_CXX11_FUNCTION_TEMPLATE_DEFAULT_ARGS
+// std::nullptr seems to be enabled starting with gcc 4.4.7
+#if defined(_MSC_VER) || (defined(__GNUC__) && !(__GNUC__ == 4 && __GNUC_MINOR__ == 4 && __GNUC_PATCHLEVEL__ <= 7))
 #  undef  BOOST_NO_CXX11_NULLPTR
+#endif
 #  undef  BOOST_NO_CXX11_RVALUE_REFERENCES
 #  undef  BOOST_NO_SFINAE_EXPR
 #  undef  BOOST_NO_CXX11_TEMPLATE_ALIASES
 #  undef  BOOST_NO_CXX11_VARIADIC_TEMPLATES
 
 // http://software.intel.com/en-us/articles/c0x-features-supported-by-intel-c-compiler/
-// continues to list scoped enum support as "Partial" 
-//#  undef  BOOST_NO_CXX11_SCOPED_ENUMS 
+// continues to list scoped enum support as "Partial"
+//#  undef  BOOST_NO_CXX11_SCOPED_ENUMS
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER <= 1700)
@@ -259,7 +263,7 @@ template<> struct assert_intrinsic_wchar_t<unsigned short> {};
 //
 // last known and checked version:
 #if (BOOST_INTEL_CXX_VERSION > 1200)
-#  if defined(BOOST_ASSERT_CONFIG)
+#  if defined(HPX_ASSERT_CONFIG)
 #     error "Unknown compiler version - please run the configure tests and report the results"
 #  elif defined(_MSC_VER)
 //

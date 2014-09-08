@@ -1,4 +1,4 @@
-//  Copyright (c) 1998-2012 Hartmut Kaiser
+//  Copyright (c) 1998-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -21,15 +21,15 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/state.hpp>
 #include <hpx/exception.hpp>
-#include <hpx/lcos/local/shared_mutex.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
 #include <hpx/util/bind.hpp>
+#include <hpx/util/one_size_heap_list_base.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace util
 {
     template <typename Heap, typename Mutex = lcos::local::spinlock>
-    class one_size_heap_list
+    class one_size_heap_list : public one_size_heap_list_base
     {
     public:
         typedef Heap heap_type;
@@ -43,8 +43,8 @@ namespace hpx { namespace util
 
         enum
         {
-            heap_step = heap_type::heap_step,   // default grow step
-            heap_size = heap_type::heap_size    // size of the object
+            heap_step = Heap::heap_step,   // default grow step
+            heap_size = Heap::heap_size    // size of the object
         };
 
         typedef Mutex mutex_type;
@@ -60,7 +60,7 @@ namespace hpx { namespace util
             , max_alloc_count_(0L)
 #endif
         {
-            BOOST_ASSERT(sizeof(typename heap_type::storage_type) == uint64_t(heap_size));
+            HPX_ASSERT(sizeof(typename heap_type::storage_type) == uint64_t(heap_size));
         }
 
         explicit one_size_heap_list(std::string const& class_name)
@@ -72,7 +72,7 @@ namespace hpx { namespace util
             , max_alloc_count_(0L)
 #endif
         {
-            BOOST_ASSERT(sizeof(typename heap_type::storage_type) == uint64_t(heap_size));
+            HPX_ASSERT(sizeof(typename heap_type::storage_type) == uint64_t(heap_size));
         }
 
         ~one_size_heap_list()
@@ -100,7 +100,7 @@ namespace hpx { namespace util
         }
 
         // operations
-        value_type* alloc(std::size_t count = 1)
+        void* alloc(std::size_t count = 1)
         {
             unique_lock_type guard(mtx_);
 
@@ -111,19 +111,19 @@ namespace hpx { namespace util
                     "cannot allocate 0 objects");
             }
 
-            std::size_t size = 0;
+            //std::size_t size = 0;
             value_type* p = NULL;
             {
                 if (!heap_list_.empty())
                 {
-                    size = heap_list_.size();
+                    //size = heap_list_.size();
                     for (iterator it = heap_list_.begin(); it != heap_list_.end(); ++it)
                     {
                         typename list_type::value_type heap = *it;
                         bool allocated = false;
 
                         {
-                            util::unlock_the_lock<unique_lock_type> ul(guard);
+                            util::scoped_unlock<unique_lock_type> ul(guard);
                             allocated = heap->alloc(&p, count);
                         }
 
@@ -169,7 +169,7 @@ namespace hpx { namespace util
                 bool result = false;
 
                 {
-                    util::unlock_the_lock<unique_lock_type> ul(guard);
+                    util::scoped_unlock<unique_lock_type> ul(guard);
                     result = heap->alloc(&p, count);
                 }
 
@@ -272,7 +272,7 @@ namespace hpx { namespace util
                 bool did_allocate = false;
 
                 {
-                    util::unlock_the_lock<unique_lock_type> ull(ul);
+                    util::scoped_unlock<unique_lock_type> ull(ul);
                     did_allocate = heap->did_alloc(p);
                     if (did_allocate)
                         heap->free(p, count);
@@ -297,13 +297,13 @@ namespace hpx { namespace util
         bool did_alloc(void* p) const
         {
             unique_lock_type ul(mtx_);
-            for (iterator it = heap_list_.begin(); it != heap_list_.end(); ++it)
+            for (const_iterator it = heap_list_.begin(); it != heap_list_.end(); ++it)
             {
                 typename list_type::value_type heap = *it;
                 bool did_allocate = false;
 
                 {
-                    util::unlock_the_lock<unique_lock_type> ull(ul);
+                    util::scoped_unlock<unique_lock_type> ull(ul);
                     did_allocate = heap->did_alloc(p);
                 }
 
@@ -321,7 +321,7 @@ namespace hpx { namespace util
         }
 
     protected:
-        mutex_type mtx_;
+        mutable mutex_type mtx_;
         list_type heap_list_;
 
     private:

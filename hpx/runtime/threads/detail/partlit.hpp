@@ -73,7 +73,7 @@ namespace hpx { namespace threads { namespace detail
         typename String::const_iterator stri = str.begin();
         typename String::const_iterator str_last = str.end();
 
-        for (; stri != str_last; ++stri, ++i) 
+        for (; stri != str_last; ++stri, ++i)
         {
             if (i == last || (*stri != *i))
             {
@@ -156,7 +156,7 @@ namespace hpx { namespace threads { namespace detail
     ///////////////////////////////////////////////////////////////////////////
     // Parse for (possibly partial) literal strings
     template <typename String, bool no_attribute>
-    struct partial_literal_string
+    struct partial_literal_string //-V690
       : boost::spirit::qi::primitive_parser<
             partial_literal_string<String, no_attribute> >
     {
@@ -261,7 +261,7 @@ namespace boost { namespace spirit { namespace qi
 {
     // Parser generators: make_xxx function (objects)
 
-    // lit("...")
+    // partlit("...")
     template <typename Modifiers, typename A0>
     struct make_primitive<
         terminal_ex<hpx::threads::detail::tag::partlit, fusion::vector1<A0> >
@@ -274,7 +274,7 @@ namespace boost { namespace spirit { namespace qi
         typedef typename mpl::if_<
             no_case
           , hpx::threads::detail::no_case_partial_literal_string<const_string, true>
-          , hpx::threads::detail::partial_literal_string<const_string, true> 
+          , hpx::threads::detail::partial_literal_string<const_string, true>
         >::type result_type;
 
         template <typename Terminal>

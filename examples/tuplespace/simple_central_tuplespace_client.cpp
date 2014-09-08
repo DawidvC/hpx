@@ -43,10 +43,14 @@ void print_tuple(const tuple_type& tuple)
 
 void simple_central_tuplespace_test(const std::string& tuplespace_symbol_name, const tuple_type tuple)
 {
-   hpx::naming::id_type ts_gid;                                     
-   hpx::agas::resolve_name(tuplespace_symbol_name, ts_gid);  
+   examples::simple_central_tuplespace central_tuplespace;
 
-   examples::simple_central_tuplespace central_tuplespace(ts_gid);
+   if(!central_tuplespace.connect(tuplespace_symbol_name))
+   {
+       hpx::cerr << "locality " << hpx::get_locality_id() << ": " 
+           << "FAIL to connect " << tuplespace_symbol_name << hpx::endl;
+       return;
+   }
 
    int ret = central_tuplespace.write_sync(tuple);
    hpx::cout << "locality " << hpx::get_locality_id() << ": " << "write_sync ";
@@ -96,15 +100,16 @@ int hpx_main()
         // Find the localities connected to this application.
         std::vector<hpx::id_type> localities = hpx::find_all_localities();
 
-        // Create an central_tuplespace component either on this locality (if the
-        // example is executed on one locality only) or on any of the remote
-        // localities (otherwise).
-        examples::simple_central_tuplespace central_tuplespace(
-            hpx::components::new_<central_tuplespace_type>(localities.back()));
-
-        // register central_tuplespace component in agas
         const std::string tuplespace_symbol_name = "/tuplespace";
-        hpx::agas::register_name(tuplespace_symbol_name, central_tuplespace.get_gid());
+        examples::simple_central_tuplespace central_tuplespace;
+
+        if(!central_tuplespace.create(tuplespace_symbol_name, localities.back()))
+        {
+            hpx::cerr << "locality " << hpx::get_locality_id() << ": " 
+                << "FAIL to create " << tuplespace_symbol_name << hpx::endl;
+
+            return hpx::finalize();
+        }
 
 
         tuple_type tuple1;
@@ -113,11 +118,20 @@ int hpx_main()
             .push_back(small_object(20)) // second elem: small_object
             .push_back(big_object(30, 40)); // third elem: big_object
 
+        hpx::cout << "locality " << hpx::get_locality_id() << ": " << "created tuple1: ";
+        print_tuple(tuple1);
+        hpx::cout<< hpx::endl;
+
+
         tuple_type tuple2;
         tuple2.push_back(std::string("second"))
             .push_back(std::string("string")) // first elem: string
             .push_back(small_object(50)) // second elem: small_object
             .push_back(big_object(60, 70)); // third elem: big_object
+
+        hpx::cout << "locality " << hpx::get_locality_id() << ": " << "created tuple2: ";
+        print_tuple(tuple2);
+        hpx::cout<< hpx::endl;
 
         std::vector<hpx::lcos::future<void> > futures;
 
@@ -132,7 +146,7 @@ int hpx_main()
             futures.push_back(hpx::async<action_type>
                     (node, tuplespace_symbol_name, tuple2));
         }
-        hpx::lcos::wait(futures);
+        hpx::wait_all(futures);
     }
 
     // Initiate shutdown of the runtime systems on all localities.

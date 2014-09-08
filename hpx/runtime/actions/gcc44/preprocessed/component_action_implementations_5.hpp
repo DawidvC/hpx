@@ -19,13 +19,15 @@ namespace hpx { namespace actions
     class base_result_action1
       : public action<
             Component, Result,
-            hpx::util::tuple1<typename detail::remove_qualifiers<T0>::type>,
+            hpx::util::tuple<typename util::decay<T0>::type>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef hpx::util::tuple1<
-            typename detail::remove_qualifiers<T0>::type> arguments_type;
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived>
             base_type;
     protected:
@@ -38,30 +40,36 @@ namespace hpx { namespace actions
             template <typename Arg0>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0) const
+                Arg0 && arg0) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0));
+                        std::forward<Arg0>( arg0 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << ")";
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -77,27 +85,41 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    lva, util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_result_action" << 1
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            return (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)));
         }
     };
     
@@ -171,20 +193,6 @@ namespace hpx { namespace actions
             direct_result_action1, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_result_action" << 1
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            return (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0));
-        }
         
         
         static base_action::action_type get_action_type()
@@ -227,14 +235,15 @@ namespace hpx { namespace actions
         void (Component::*F)(T0), typename Derived>
     class base_action1
       : public action<
-            Component, util::unused_type,
-            hpx::util::tuple1<typename detail::remove_qualifiers<T0>::type>,
+            Component, void,
+            hpx::util::tuple<typename util::decay<T0>::type>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
-        typedef hpx::util::tuple1<
-            typename detail::remove_qualifiers<T0>::type> arguments_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived> 
             base_type;
     protected:
@@ -247,30 +256,27 @@ namespace hpx { namespace actions
             template <typename Arg0>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0) const
+                Arg0 && arg0) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0));
+                        std::forward<Arg0>( arg0 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -285,29 +291,44 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             
             
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(), lva,
-                    util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function_void(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function_void(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_action" << 1
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)));
+            return util::unused;
         }
     };
     
@@ -373,21 +394,6 @@ namespace hpx { namespace actions
             direct_action1, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_action" << 1
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0));
-            return util::unused;
-        }
         
         
         static base_action::action_type get_action_type()
@@ -445,13 +451,15 @@ namespace hpx { namespace actions
     class base_result_action2
       : public action<
             Component, Result,
-            hpx::util::tuple2<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type>,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef hpx::util::tuple2<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type> arguments_type;
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived>
             base_type;
     protected:
@@ -464,30 +472,36 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1) const
+                Arg0 && arg0 , Arg1 && arg1) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << ")";
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -503,27 +517,41 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    lva, util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_result_action" << 2
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            return (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)));
         }
     };
     
@@ -597,20 +625,6 @@ namespace hpx { namespace actions
             direct_result_action2, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_result_action" << 2
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            return (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1));
-        }
         
         
         static base_action::action_type get_action_type()
@@ -653,14 +667,15 @@ namespace hpx { namespace actions
         void (Component::*F)(T0 , T1), typename Derived>
     class base_action2
       : public action<
-            Component, util::unused_type,
-            hpx::util::tuple2<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type>,
+            Component, void,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
-        typedef hpx::util::tuple2<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type> arguments_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived> 
             base_type;
     protected:
@@ -673,30 +688,27 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1) const
+                Arg0 && arg0 , Arg1 && arg1) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -711,29 +723,44 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             
             
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(), lva,
-                    util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function_void(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function_void(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_action" << 2
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)));
+            return util::unused;
         }
     };
     
@@ -799,21 +826,6 @@ namespace hpx { namespace actions
             direct_action2, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_action" << 2
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1));
-            return util::unused;
-        }
         
         
         static base_action::action_type get_action_type()
@@ -871,13 +883,15 @@ namespace hpx { namespace actions
     class base_result_action3
       : public action<
             Component, Result,
-            hpx::util::tuple3<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type>,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef hpx::util::tuple3<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type> arguments_type;
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived>
             base_type;
     protected:
@@ -890,30 +904,36 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << ")";
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -929,27 +949,41 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    lva, util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_result_action" << 3
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            return (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)));
         }
     };
     
@@ -1023,20 +1057,6 @@ namespace hpx { namespace actions
             direct_result_action3, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_result_action" << 3
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            return (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2));
-        }
         
         
         static base_action::action_type get_action_type()
@@ -1079,14 +1099,15 @@ namespace hpx { namespace actions
         void (Component::*F)(T0 , T1 , T2), typename Derived>
     class base_action3
       : public action<
-            Component, util::unused_type,
-            hpx::util::tuple3<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type>,
+            Component, void,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
-        typedef hpx::util::tuple3<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type> arguments_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived> 
             base_type;
     protected:
@@ -1099,30 +1120,27 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -1137,29 +1155,44 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             
             
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(), lva,
-                    util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function_void(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function_void(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_action" << 3
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)));
+            return util::unused;
         }
     };
     
@@ -1225,21 +1258,6 @@ namespace hpx { namespace actions
             direct_action3, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_action" << 3
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2));
-            return util::unused;
-        }
         
         
         static base_action::action_type get_action_type()
@@ -1297,13 +1315,15 @@ namespace hpx { namespace actions
     class base_result_action4
       : public action<
             Component, Result,
-            hpx::util::tuple4<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type>,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef hpx::util::tuple4<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type> arguments_type;
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived>
             base_type;
     protected:
@@ -1316,30 +1336,36 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2 , typename Arg3>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2 , BOOST_FWD_REF(Arg3) arg3) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2 , Arg3 && arg3) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2) , boost::move(arg3));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ) , std::forward<Arg3>( arg3 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << ")";
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -1355,27 +1381,41 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    lva, util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_result_action" << 4
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            return (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)));
         }
     };
     
@@ -1449,20 +1489,6 @@ namespace hpx { namespace actions
             direct_result_action4, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_result_action" << 4
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            return (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3));
-        }
         
         
         static base_action::action_type get_action_type()
@@ -1505,14 +1531,15 @@ namespace hpx { namespace actions
         void (Component::*F)(T0 , T1 , T2 , T3), typename Derived>
     class base_action4
       : public action<
-            Component, util::unused_type,
-            hpx::util::tuple4<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type>,
+            Component, void,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
-        typedef hpx::util::tuple4<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type> arguments_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived> 
             base_type;
     protected:
@@ -1525,30 +1552,27 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2 , typename Arg3>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2 , BOOST_FWD_REF(Arg3) arg3) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2 , Arg3 && arg3) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2) , boost::move(arg3));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ) , std::forward<Arg3>( arg3 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -1563,29 +1587,44 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             
             
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(), lva,
-                    util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function_void(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function_void(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_action" << 4
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)));
+            return util::unused;
         }
     };
     
@@ -1651,21 +1690,6 @@ namespace hpx { namespace actions
             direct_action4, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_action" << 4
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3));
-            return util::unused;
-        }
         
         
         static base_action::action_type get_action_type()
@@ -1723,13 +1747,15 @@ namespace hpx { namespace actions
     class base_result_action5
       : public action<
             Component, Result,
-            hpx::util::tuple5<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type , typename detail::remove_qualifiers<T4>::type>,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type , typename util::decay<T4>::type>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef hpx::util::tuple5<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type , typename detail::remove_qualifiers<T4>::type> arguments_type;
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type , typename util::decay<T4>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived>
             base_type;
     protected:
@@ -1742,30 +1768,36 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2 , typename Arg3 , typename Arg4>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2 , BOOST_FWD_REF(Arg3) arg3 , BOOST_FWD_REF(Arg4) arg4) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2 , Arg3 && arg3 , Arg4 && arg4) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2) , boost::move(arg3) , boost::move(arg4));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ) , std::forward<Arg3>( arg3 ) , std::forward<Arg4>( arg4 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << ")";
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -1781,27 +1813,41 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    lva, util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type4>::call( args. a4)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)) , util::get< 4>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_result_action" << 5
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            return (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)) , util::get< 4>(std::forward<Arguments>( args)));
         }
     };
     
@@ -1875,20 +1921,6 @@ namespace hpx { namespace actions
             direct_result_action5, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_result_action" << 5
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            return (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type4>::call( args. a4));
-        }
         
         
         static base_action::action_type get_action_type()
@@ -1931,14 +1963,15 @@ namespace hpx { namespace actions
         void (Component::*F)(T0 , T1 , T2 , T3 , T4), typename Derived>
     class base_action5
       : public action<
-            Component, util::unused_type,
-            hpx::util::tuple5<typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type , typename detail::remove_qualifiers<T4>::type>,
+            Component, void,
+            hpx::util::tuple<typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type , typename util::decay<T4>::type>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
-        typedef hpx::util::tuple5<
-            typename detail::remove_qualifiers<T0>::type , typename detail::remove_qualifiers<T1>::type , typename detail::remove_qualifiers<T2>::type , typename detail::remove_qualifiers<T3>::type , typename detail::remove_qualifiers<T4>::type> arguments_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+        typedef hpx::util::tuple<
+            typename util::decay<T0>::type , typename util::decay<T1>::type , typename util::decay<T2>::type , typename util::decay<T3>::type , typename util::decay<T4>::type> arguments_type;
         typedef action<Component, result_type, arguments_type, Derived> 
             base_type;
     protected:
@@ -1951,30 +1984,27 @@ namespace hpx { namespace actions
             template <typename Arg0 , typename Arg1 , typename Arg2 , typename Arg3 , typename Arg4>
             BOOST_FORCEINLINE result_type operator()(
                 naming::address::address_type lva,
-                BOOST_FWD_REF(Arg0) arg0 , BOOST_FWD_REF(Arg1) arg1 , BOOST_FWD_REF(Arg2) arg2 , BOOST_FWD_REF(Arg3) arg3 , BOOST_FWD_REF(Arg4) arg4) const
+                Arg0 && arg0 , Arg1 && arg1 , Arg2 && arg2 , Arg3 && arg3 , Arg4 && arg4) const
             {
                 try {
                     LTM_(debug) << "Executing component action("
                                 << detail::get_action_name<Derived>()
                                 << ") lva(" << reinterpret_cast<void const*>
                                     (get_lva<Component>::call(lva)) << ")";
-                    
-                    
-                    
-                    
                     (get_lva<Component>::call(lva)->*F)(
-                        boost::move(arg0) , boost::move(arg1) , boost::move(arg2) , boost::move(arg3) , boost::move(arg4));
+                        std::forward<Arg0>( arg0 ) , std::forward<Arg1>( arg1 ) , std::forward<Arg2>( arg2 ) , std::forward<Arg3>( arg3 ) , std::forward<Arg4>( arg4 ));
+                }
+                catch (hpx::thread_interrupted const&) {
+                     
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing component action("
-                            << detail::get_action_name<Derived>()
-                            << ") lva(" << reinterpret_cast<void const*>
-                                (get_lva<Component>::call(lva)) << "): " << e.what();
-                        
-                        hpx::report_error(boost::current_exception());
-                    }
+                    LTM_(error)
+                        << "Unhandled exception while executing component action("
+                        << detail::get_action_name<Derived>()
+                        << ") lva(" << reinterpret_cast<void const*>
+                            (get_lva<Component>::call(lva)) << "): " << e.what();
+                    
+                    hpx::report_error(boost::current_exception());
                 }
                 
                 
@@ -1989,29 +2019,44 @@ namespace hpx { namespace actions
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             
             
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(), lva,
-                    util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type4>::call( args. a4)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()), lva,
+                    util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)) , util::get< 4>(std::forward<Arguments>( args))));
         }
         
         
         
         
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                    base_type::construct_continuation_thread_object_function_void(
-                        cont, F, get_lva<Component>::call(lva),
-                        boost::forward<Arguments>(args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                base_type::construct_continuation_thread_object_function_void(
+                    cont, F, get_lva<Component>::call(lva),
+                    std::forward<Arguments>(args)));
+        }
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "base_action" << 5
+                << "::execute_function name("
+                << detail::get_action_name<Derived>()
+                << ") lva(" << reinterpret_cast<void const*>(
+                    get_lva<Component>::call(lva)) << ")";
+            (get_lva<Component>::call(lva)->*F)(
+                util::get< 0>(std::forward<Arguments>( args)) , util::get< 1>(std::forward<Arguments>( args)) , util::get< 2>(std::forward<Arguments>( args)) , util::get< 3>(std::forward<Arguments>( args)) , util::get< 4>(std::forward<Arguments>( args)));
+            return util::unused;
         }
     };
     
@@ -2077,21 +2122,6 @@ namespace hpx { namespace actions
             direct_action5, Derived
         >::type derived_type;
         typedef boost::mpl::true_ direct_execution;
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "direct_action" << 5
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>()
-                << ") lva(" << reinterpret_cast<void const*>(
-                    get_lva<Component>::call(lva)) << ")";
-            (get_lva<Component>::call(lva)->*F)(
-                util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type0>::call( args. a0) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type1>::call( args. a1) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type2>::call( args. a2) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type3>::call( args. a3) , util::detail::move_if_no_ref< typename util::detail::remove_reference<Arguments>::type:: member_type4>::call( args. a4));
-            return util::unused;
-        }
         
         
         static base_action::action_type get_action_type()

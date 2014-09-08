@@ -21,22 +21,22 @@ namespace hpx
 {
     ///////////////////////////////////////////////////////////////////////////
     threads::thread_id_type const thread::uninitialized =
-        reinterpret_cast<threads::thread_id_type>(0);
+        threads::thread_id_type();
 
     ///////////////////////////////////////////////////////////////////////////
     thread::thread() BOOST_NOEXCEPT
       : id_(uninitialized)
     {}
 
-    thread::thread(BOOST_RV_REF(thread) rhs) BOOST_NOEXCEPT
-      : id_(threads::invalid_thread_id)   // the rhs needs to end up with an invalid_id
+    thread::thread(thread && rhs) BOOST_NOEXCEPT
+      : id_(uninitialized)   // the rhs needs to end up with an invalid_id
     {
         rhs.swap(*this);
     }
 
-    thread& thread::operator=(BOOST_RV_REF(thread) rhs) BOOST_NOEXCEPT
+    thread& thread::operator=(thread && rhs) BOOST_NOEXCEPT
     {
-        thread tmp(boost::move(rhs));
+        thread tmp(std::move(rhs));
         swap(tmp);
         return *this;
     }
@@ -45,7 +45,7 @@ namespace hpx
     {
         // If the thread is still running, we terminate the whole application
         // as we have no chance of reporting this error (we can't throw)
-        threads::thread_id_type id = threads::invalid_thread_id;
+        threads::thread_id_type id = uninitialized;
 
         {
             mutex_type::scoped_lock l(mtx_);
@@ -53,7 +53,7 @@ namespace hpx
         }
 
         // if joinable
-        if (threads::invalid_thread_id != id && uninitialized != id) {
+        if (uninitialized != id) {
             try {
                 // free all registered exit-callback functions
                 threads::free_thread_exit_callbacks(id);
@@ -92,18 +92,19 @@ namespace hpx
         try {
             func();
         }
-        catch (hpx::exception const& e) {
-            if (e.get_error() != hpx::thread_interrupted) {
-                // Verify that there are no more registered locks for this
-                // OS-thread. This will throw if there are still any locks
-                // held.
-                util::force_error_on_lock();
+        catch (hpx::thread_interrupted const&) { //-V565
+            /* swallow this exception */
+        }
+        catch (hpx::exception const&) {
+            // Verify that there are no more registered locks for this
+            // OS-thread. This will throw if there are still any locks
+            // held.
+            util::force_error_on_lock();
 
-                // run all callbacks attached to the exit event for this thread
-                run_thread_exit_callbacks();
+            // run all callbacks attached to the exit event for this thread
+            run_thread_exit_callbacks();
 
-                throw;    // rethrow any exception except 'thread_interrupted'
-            }
+            throw;    // rethrow any exception except 'thread_interrupted'
         }
 
         // Verify that there are no more registered locks for this
@@ -126,10 +127,11 @@ namespace hpx
         return hpx::threads::hardware_concurrency();
     }
 
-    void thread::start_thread(BOOST_RV_REF(HPX_STD_FUNCTION<void()>) func)
+    void thread::start_thread(HPX_STD_FUNCTION<void()> && func)
     {
         threads::thread_init_data data(
-            HPX_STD_BIND(&thread::thread_function_nullary, boost::move(func)),
+            util::bind(util::one_shot(&thread::thread_function_nullary),
+                std::move(func)),
             "thread::thread_function_nullary");
 
         error_code ec(lightweight);
@@ -160,7 +162,7 @@ namespace hpx
         }
     }
 
-    static void resume_thread(threads::thread_id_type id)
+    static void resume_thread(threads::thread_id_type const& id)
     {
         threads::set_thread_state(id, threads::pending);
     }
@@ -180,12 +182,12 @@ namespace hpx
         if (handle != threads::invalid_thread_id)
         {
             // the thread object should have been initialized at this point
-            BOOST_ASSERT(uninitialized != handle);
+            HPX_ASSERT(uninitialized != handle);
 
             // register callback function to be called when thread exits
-            native_handle_type this_id = threads::get_self().get_thread_id();
+            native_handle_type this_id = threads::get_self_id();
             if (threads::add_thread_exit_callback(handle,
-                    HPX_STD_BIND(&resume_thread, this_id)))
+                    util::bind(&resume_thread, this_id)))
             {
                 // wait for thread to be terminated
                 this_thread::suspend(threads::suspended, "thread::join");
@@ -211,7 +213,7 @@ namespace hpx
         threads::interrupt_thread(id.id_, flag);
     }
 
-#if HPX_THREAD_MAINTAIN_THREAD_DATA
+#ifdef HPX_THREAD_MAINTAIN_LOCAL_STORAGE
     std::size_t thread::get_thread_data() const
     {
         return threads::get_thread_data(native_handle());
@@ -232,33 +234,24 @@ namespace hpx
             typedef lcos::detail::future_data<void>::mutex_type mutex_type;
             typedef boost::intrusive_ptr<thread_task_base> future_base_type;
 
+        protected:
+            typedef lcos::detail::future_data<void>::result_type result_type;
+
         public:
-            thread_task_base(threads::thread_id_type id)
+            thread_task_base(threads::thread_id_type const& id)
               : id_(thread::uninitialized)
             {
                 if (threads::add_thread_exit_callback(id,
-                        HPX_STD_BIND(&thread_task_base::thread_exit_function,
+                        util::bind(&thread_task_base::thread_exit_function,
                             future_base_type(this))))
                 {
                     id_ = id;
                 }
             }
 
-            // retrieving the value
-            void get(error_code& ec = throws)
-            {
-                this->get_data(ec);
-            }
-
-            // moving out the value
-            void move(error_code& ec = throws)
-            {
-                this->move_data(ec);
-            }
-
             bool valid() const
             {
-                return id_ != threads::invalid_thread_id && 
+                return id_ != threads::invalid_thread_id &&
                        id_ != thread::uninitialized;
             }
 
@@ -271,9 +264,9 @@ namespace hpx
             void cancel()
             {
                 mutex_type::scoped_lock l(this->mtx_);
-                if (!this->ready()) {
+                if (!this->is_ready()) {
                     threads::interrupt_thread(id_);
-                    this->set_error(thread_interrupted,
+                    this->set_error(thread_cancelled,
                         "thread_task_base::cancel",
                         "future has been canceled");
                     id_ = threads::invalid_thread_id;
@@ -285,7 +278,7 @@ namespace hpx
             {
                 // might have been finished or canceled
                 mutex_type::scoped_lock l(this->mtx_);
-                if (!this->ready())
+                if (!this->is_ready())
                     this->set_data(result_type());
                 id_ = threads::invalid_thread_id;
             }
@@ -297,7 +290,7 @@ namespace hpx
 
     lcos::future<void> thread::get_future(error_code& ec)
     {
-        if (id_ == threads::invalid_thread_id || id_ == thread::uninitialized) 
+        if (id_ == threads::invalid_thread_id || id_ == thread::uninitialized)
         {
             HPX_THROWS_IF(ec, null_thread_id, "thread::get_future",
                 "NULL thread id encountered");
@@ -305,14 +298,15 @@ namespace hpx
         }
 
         detail::thread_task_base* p = new detail::thread_task_base(id_);
-        boost::intrusive_ptr<lcos::detail::future_data_base<void> > base(p);
+        boost::intrusive_ptr<lcos::detail::future_data<void> > base(p);
         if (!p->valid()) {
             HPX_THROWS_IF(ec, thread_resource_error, "thread::get_future",
                 "Could not create future as thread has been terminated.");
             return lcos::future<void>();
         }
 
-        return lcos::detail::make_future_from_data<void>(boost::move(base));
+        using traits::future_access;
+        return future_access<lcos::future<void> >::create(std::move(base));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -334,6 +328,11 @@ namespace hpx
             return threads::get_thread_priority(threads::get_self_id());
         }
 
+        std::ptrdiff_t get_stack_size()
+        {
+            return threads::get_stack_size(threads::get_self_id());
+        }
+
         void interruption_point()
         {
             threads::interruption_point(threads::get_self_id());
@@ -347,6 +346,12 @@ namespace hpx
         bool interruption_requested()
         {
             return threads::get_thread_interruption_requested(threads::get_self_id());
+        }
+
+        void interrupt()
+        {
+            threads::interrupt_thread(threads::get_self_id());
+            threads::interruption_point(threads::get_self_id());
         }
 
         void sleep_until(boost::posix_time::ptime const& at)
@@ -364,7 +369,7 @@ namespace hpx
           : interruption_was_enabled_(interruption_enabled())
         {
             if (interruption_was_enabled_) {
-                interruption_was_enabled_ = 
+                interruption_was_enabled_ =
                     threads::set_thread_interruption_enabled(
                         threads::get_self_id(), false);
             }
@@ -374,8 +379,8 @@ namespace hpx
         {
             threads::thread_self* p = threads::get_self_ptr();
             if (p) {
-                threads::set_thread_interruption_enabled(p->get_thread_id(),
-                    interruption_was_enabled_);
+                threads::set_thread_interruption_enabled(
+                    threads::get_self_id(), interruption_was_enabled_);
             }
         }
 
@@ -396,7 +401,7 @@ namespace hpx
             threads::thread_self* p = threads::get_self_ptr();
             if (p) {
                 threads::set_thread_interruption_enabled(
-                    p->get_thread_id(), interruption_was_enabled_);
+                    threads::get_self_id(), interruption_was_enabled_);
             }
         }
     }

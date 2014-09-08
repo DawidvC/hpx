@@ -7,12 +7,12 @@
 
 [section:consuming Consuming Performance Counter Data]
 
-You can consume performance data using either the command line interface of
-your __hpx__ application or the __hpx__ API. The command line interface is
-easier to use than the API, but it is less flexible and does not allow to adjust
+You can consume performance data using either the command line interface or
+via the __hpx__ application or the __hpx__ API. The command line interface is
+easier to use, but it is less flexible and does not allow one to adjust
 the behaviour of your application at runtime.
-The command line interface is essentially a convenience abstraction for
-querying and logging performance counter data for a set of performance counters.
+The command line interface provides a convenience abstraction but simplified
+abstraction for querying and logging performance counter data for a set of performance counters.
 
 [/////////////////////////////////////////////////////////////////////////////]
 [section:commandline Consuming Performance Counter Data from the Command Line]
@@ -20,7 +20,7 @@ querying and logging performance counter data for a set of performance counters.
 __hpx__ provides a set of predefined command line options for every application
 which uses `hpx::init` for its initialization. While there are much more command
 line options available (see __commandline__), the set of options related to
-Performance Counters allow to list existing counters, query existing counters
+Performance Counters allow one to list existing counters, query existing counters
 once at application termination or repeatedly after a constant time interval.
 
 The following table summarizes the available command line options:

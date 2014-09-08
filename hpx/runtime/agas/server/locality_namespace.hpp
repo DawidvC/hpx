@@ -19,7 +19,6 @@
 #include <hpx/runtime/components/server/fixed_component_base.hpp>
 #include <hpx/runtime/naming/locality.hpp>
 #include <hpx/util/insert_checked.hpp>
-#include <hpx/util/merging_map.hpp>
 #include <hpx/util/logging.hpp>
 #include <hpx/util/high_resolution_clock.hpp>
 #include <hpx/lcos/local/mutex.hpp>
@@ -39,7 +38,7 @@ namespace server
 {
 
 // Base name used to register the component
-char const* const locality_namespace_service_name = "locality_namespace/";
+char const* const locality_namespace_service_name = "locality/";
 
 struct HPX_EXPORT locality_namespace
   : components::fixed_component_base<locality_namespace>
@@ -50,14 +49,14 @@ struct HPX_EXPORT locality_namespace
 
     typedef boost::int32_t component_type;
 
-    // stores the locality id, next gid available to this locality, and number
-    // of OS-threads running on this locality
-    typedef boost::fusion::vector3<
-        boost::uint32_t, naming::gid_type, boost::uint32_t>
+    // stores the locality id, and number of OS-threads running on this locality
+    typedef boost::fusion::vector2<
+        boost::uint32_t, boost::uint32_t>
     partition_type;
 
-    typedef std::map<naming::locality, partition_type>
-        partition_table_type;
+    typedef std::map<naming::locality, partition_type> partition_table_type;
+
+    typedef std::set<boost::uint32_t> reverse_partition_table_type;
     // }}}
 
   private:
@@ -67,6 +66,7 @@ struct HPX_EXPORT locality_namespace
     std::string instance_name_;
 
     partition_table_type partitions_;
+    reverse_partition_table_type prefixes_;
     boost::uint32_t prefix_counter_;
     primary_namespace* primary_;
 
@@ -100,6 +100,7 @@ struct HPX_EXPORT locality_namespace
         boost::int64_t get_num_localities_count(bool);
         boost::int64_t get_num_threads_count(bool);
         boost::int64_t get_resolved_localities_count(bool);
+        boost::int64_t get_overall_count(bool);
 
         boost::int64_t get_allocate_time(bool);
         boost::int64_t get_resolve_locality_time(bool);
@@ -108,6 +109,7 @@ struct HPX_EXPORT locality_namespace
         boost::int64_t get_num_localities_time(bool);
         boost::int64_t get_num_threads_time(bool);
         boost::int64_t get_resolved_localities_time(bool);
+        boost::int64_t get_overall_time(bool);
 
         // increment counter values
         void increment_allocate_count();
@@ -261,15 +263,6 @@ struct HPX_EXPORT locality_namespace
 
     HPX_DEFINE_COMPONENT_ACTION(locality_namespace, remote_service, service_action);
     HPX_DEFINE_COMPONENT_ACTION(locality_namespace, remote_bulk_service, bulk_service_action);
-
-    /// This is the default hook implementation for decorate_action which
-    /// does no hooking at all.
-    static HPX_STD_FUNCTION<threads::thread_function_type>
-    wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-        naming::address::address_type)
-    {
-        return boost::move(f);
-    }
 };
 
 }}}

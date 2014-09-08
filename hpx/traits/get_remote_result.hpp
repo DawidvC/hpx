@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,9 +21,9 @@ namespace hpx { namespace traits
             return Result(rhs);
         }
 
-        static Result call(BOOST_RV_REF(RemoteResult) rhs) //-V659
+        static Result call(RemoteResult && rhs) //-V659
         {
-          return Result(boost::move(rhs));
+            return Result(std::move(rhs));
         }
     };
 
@@ -34,22 +34,15 @@ namespace hpx { namespace traits
         {
             return rhs;
         }
-#if !defined(BOOST_NO_RVALUE_REFERENCES)
 #if __GNUC__ == 4 && __GNUC_MINOR__ == 4
         static Result&& call(Result&& rhs)
         {
-          return rhs;
+            return rhs;
         }
 #else
-        static Result&& call(Result&& rhs) //-V659
+        static Result && call(Result && rhs)
         {
-          return boost::move(rhs);
-        }
-#endif
-#else
-        static ::boost::rv<Result>& call(BOOST_RV_REF(Result) rhs)
-        {
-          return boost::move(rhs);
+            return std::move(rhs);
         }
 #endif
     };

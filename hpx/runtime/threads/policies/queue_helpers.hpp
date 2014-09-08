@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -17,17 +17,19 @@
 namespace hpx { namespace threads { namespace policies
 {
 
-struct add_new_tag {};
+    struct add_new_tag {};
+
+#ifdef HPX_THREAD_MINIMAL_DEADLOCK_DETECTION
+    ///////////////////////////////////////////////////////////////////////////
+    // We globally control whether to do minimal deadlock detection using this
+    // global bool variable. It will be set once by the runtime configuration
+    // startup code
+    extern bool minimal_deadlock_detection;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace detail
 {
-    template <typename Fifo>
-    inline void log_fifo_statistics(Fifo const& q, char const* const desc)
-    {
-        // FIXME
-    }
-
     ///////////////////////////////////////////////////////////////////////////
     // debug helper function, logs all suspended threads
     // this returns true if all threads in the map are currently suspended
@@ -39,12 +41,14 @@ namespace detail
     bool dump_suspended_threads(std::size_t num_thread,
         Map& tm, boost::int64_t& idle_loop_count, bool running)
     {
-#if !HPX_THREAD_MINIMAL_DEADLOCK_DETECTION
-        (void)tm;
-        (void)idle_loop_count;
-        (void)running;
+#ifndef HPX_THREAD_MINIMAL_DEADLOCK_DETECTION
+        HPX_UNUSED(tm);
+        HPX_UNUSED(idle_loop_count);
+        HPX_UNUSED(running); //-V601
         return false;
 #else
+        if (!minimal_deadlock_detection)
+            return false;
         if (HPX_LIKELY(idle_loop_count++ < HPX_IDLE_LOOP_COUNT_MAX))
             return false;
 
@@ -58,7 +62,7 @@ namespace detail
         typename Map::const_iterator end = tm.end();
         for (typename Map::const_iterator it = tm.begin(); it != end; ++it)
         {
-            threads::thread_data const* thrd = (*it).second;
+            threads::thread_data_base const* thrd = (*it).get();
             threads::thread_state state = thrd->get_state();
             threads::thread_state marked_state = thrd->get_marked_state();
 
@@ -66,12 +70,12 @@ namespace detail
                 // log each thread only once
                 if (!logged_headline) {
                     if (running) {
-                        LTM_(error)
+                        LTM_(error) //-V128
                             << "Listing suspended threads while queue ("
                             << num_thread << ") is empty:";
                     }
                     else {
-                        LHPX_CONSOLE_(hpx::util::logging::level::error)
+                        LHPX_CONSOLE_(hpx::util::logging::level::error) //-V128
                             << "  [TM] Listing suspended threads while queue ("
                             << num_thread << ") is empty:\n";
                     }
@@ -79,16 +83,16 @@ namespace detail
                 }
 
                 if (running) {
-                    LTM_(error) << "queue(" << num_thread << "): "
+                    LTM_(error) << "queue(" << num_thread << "): " //-V128
                                 << get_thread_state_name(state)
                                 << "(" << std::hex << std::setw(8)
-                                    << std::setfill('0') << (*it).first
+                                    << std::setfill('0') << (*it).get()
                                 << "." << std::hex << std::setw(2)
                                     << std::setfill('0') << thrd->get_thread_phase()
                                 << "/" << std::hex << std::setw(8)
                                     << std::setfill('0') << thrd->get_component_id()
                                 << ")"
-#if HPX_THREAD_MAINTAIN_PARENT_REFERENCE
+#ifdef HPX_THREAD_MAINTAIN_PARENT_REFERENCE
                                 << " P" << std::hex << std::setw(8)
                                     << std::setfill('0') << thrd->get_parent_thread_id()
 #endif
@@ -96,17 +100,17 @@ namespace detail
                                 << ": " << thrd->get_lco_description();
                 }
                 else {
-                    LHPX_CONSOLE_(hpx::util::logging::level::error) << "  [TM] "
+                    LHPX_CONSOLE_(hpx::util::logging::level::error) << "  [TM] " //-V128
                                 << "queue(" << num_thread << "): "
                                 << get_thread_state_name(state)
                                 << "(" << std::hex << std::setw(8)
-                                    << std::setfill('0') << (*it).first
+                                    << std::setfill('0') << (*it).get()
                                 << "." << std::hex << std::setw(2)
                                     << std::setfill('0') << thrd->get_thread_phase()
                                 << "/" << std::hex << std::setw(8)
                                     << std::setfill('0') << thrd->get_component_id()
                                 << ")"
-#if HPX_THREAD_MAINTAIN_PARENT_REFERENCE
+#ifdef HPX_THREAD_MAINTAIN_PARENT_REFERENCE
                                 << " P" << std::hex << std::setw(8)
                                     << std::setfill('0') << thrd->get_parent_thread_id()
 #endif

@@ -55,7 +55,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -77,12 +77,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 BOOST_PP_CAT(component_constructor_functor, N)<
                     typename Component::wrapping_type,
                     BOOST_PP_ENUM_PARAMS(N, A)>(
-                        HPX_ENUM_MOVE_IF_NO_REF_ARGS(N, A, a)));
+                        HPX_ENUM_FORWARD_ARGS(N, A, a)));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -115,14 +115,6 @@ namespace hpx { namespace components { namespace server
                 Component BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, A)> >
     {};
 }}}
-
-///////////////////////////////////////////////////////////////////////////////
-// Declaration of serialization support for the runtime_support actions
-HPX_SERIALIZATION_REGISTER_TEMPLATE_ACTION(
-    (template <typename Component
-        BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, typename A)>)
-  , (hpx::components::server::BOOST_PP_CAT(create_component_action, N)<
-        Component BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, A)>))
 
 #undef N
 

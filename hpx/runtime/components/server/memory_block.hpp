@@ -14,6 +14,7 @@
 #include <hpx/runtime/components/server/wrapper_heap_list.hpp>
 #include <hpx/runtime/actions/component_action.hpp>
 #include <hpx/runtime/actions/manage_object_action.hpp>
+#include <hpx/lcos/base_lco_with_value.hpp>
 #include <hpx/util/reinitializable_static.hpp>
 #include <hpx/util/stringstream.hpp>
 
@@ -37,7 +38,7 @@ namespace hpx { namespace components { namespace server { namespace detail
     ///////////////////////////////////////////////////////////////////////////
     /// \brief The memory_block_header holds all information needed to describe
     ///        a block of memory managed by a server#memory_block component.
-    class memory_block_header : boost::noncopyable
+    class memory_block_header : boost::noncopyable //-V690
     {
     public:
         /// This constructor is called on the locality where there memory_block
@@ -47,7 +48,7 @@ namespace hpx { namespace components { namespace server { namespace detail
           : count_(0), size_(size), wrapper_(wrapper),
             managing_object_(act.get_instance())
         {
-            BOOST_ASSERT(act.construct());
+            HPX_ASSERT(act.construct());
             act.construct()(this->get_ptr(), size);
         }
 
@@ -57,7 +58,7 @@ namespace hpx { namespace components { namespace server { namespace detail
           : count_(0), size_(size), wrapper_(wrapper),
             managing_object_(act.get_instance())
         {
-            BOOST_ASSERT(act.clone());
+            HPX_ASSERT(act.clone());
             act.clone()(this->get_ptr(), rhs->get_ptr(), size);
         }
 
@@ -68,21 +69,21 @@ namespace hpx { namespace components { namespace server { namespace detail
           : count_(0), size_(size), wrapper_(NULL),
             managing_object_(act.get_instance())
         {
-            BOOST_ASSERT(act.construct());
+            HPX_ASSERT(act.construct());
             act.construct()(this->get_ptr(), size);
         }
 
         ~memory_block_header()
         {
             // invoke destructor, if needed
-            BOOST_ASSERT(this->managing_object_.destruct());
+            HPX_ASSERT(this->managing_object_.destruct());
             this->managing_object_.destruct()(this->get_ptr());
         }
 
         memory_block_header& operator= (memory_block_header const& rhs)
         {
             if (this != &rhs) {
-                BOOST_ASSERT(this->managing_object_.assign());
+                HPX_ASSERT(this->managing_object_.assign());
                 this->managing_object_.assign()(
                     this->get_ptr(), rhs.get_ptr(), size_);
             }
@@ -283,12 +284,12 @@ namespace hpx { namespace components
                 const_cast<actions::manage_object_action_base*>(
                     &data->get_managing_object().get_instance());
 
-            BOOST_ASSERT(act);
+            HPX_ASSERT(act);
 
-            ar << size;
+            ar << size; //-V128
             ar << act;
 
-            BOOST_ASSERT(act->save());
+            HPX_ASSERT(act->save());
             if (config) {
                 act->save()(data->get_ptr(), data->get_size(), ar, version,
                     config->get_ptr());
@@ -301,7 +302,7 @@ namespace hpx { namespace components
         template <class Archive>
         void save(Archive & ar, const unsigned int version) const
         {
-            bool has_config = config_ ? true : false;
+            bool has_config = config_ != 0;
             ar << has_config;
             if (has_config)
                 save_(ar, version, config_.get());
@@ -317,7 +318,7 @@ namespace hpx { namespace components
             std::size_t size = 0;
             actions::manage_object_action_base* act = 0;
 
-            ar >> size;
+            ar >> size; //-V128
             ar >> act;
 
             typedef server::detail::memory_block_header alloc_type;
@@ -325,7 +326,7 @@ namespace hpx { namespace components
                 new (server::detail::allocate_block<alloc_type>(size))
                     alloc_type(size, act->get_instance());
 
-            BOOST_ASSERT(act->load());
+            HPX_ASSERT(act->load());
             if (config) {
                 act->load()(p->get_ptr(), size, ar, version,
                     config->get_ptr());
@@ -417,13 +418,22 @@ namespace hpx { namespace components { namespace server { namespace detail
         HPX_DEFINE_COMPONENT_ACTION(memory_block, checkin);
         HPX_DEFINE_COMPONENT_ACTION(memory_block, clone);
 
-        /// This is the default hook implementation for decorate_action which 
+        /// This is the default hook implementation for decorate_action which
         /// does no hooking at all.
-        static HPX_STD_FUNCTION<threads::thread_function_type> 
-        wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-            naming::address::address_type)
+        template <typename F>
+        static threads::thread_function_type
+        decorate_action(naming::address::address_type, F && f)
         {
-            return boost::move(f);
+            return std::forward<F>(f);
+        }
+
+        /// This is the default hook implementation for schedule_thread which
+        /// forwards to the default scheduler.
+        static void schedule_thread(naming::address::address_type,
+            threads::thread_init_data& data,
+            threads::thread_state_enum initial_state)
+        {
+            hpx::threads::register_work_plain(data, initial_state); //-V106
         }
     };
 }}}}
@@ -486,7 +496,7 @@ namespace hpx { namespace components { namespace server
         /// \brief finalize() will be called just before the instance gets
         ///        destructed
         ///
-        /// \param self [in] The PX \a thread used to execute this function.
+        /// \param self [in] The HPX \a thread used to execute this function.
         /// \param appl [in] The applier to be used for finalization of the
         ///             component instance.
         void finalize() {}
@@ -607,7 +617,7 @@ namespace hpx { namespace components { namespace server
             actions::manage_object_action_base const& act)
         {
             // allocate the memory
-            memory_block* p = get_heap().alloc();
+            void* p = get_heap().alloc();
             return new (p) memory_block(count, act);
         }
 
@@ -615,7 +625,7 @@ namespace hpx { namespace components { namespace server
             actions::manage_object_action_base const& act)
         {
             // allocate the memory
-            memory_block* p = get_heap().alloc();
+            void* p = get_heap().alloc();
             return new (p) memory_block(rhs, act);
         }
 
@@ -677,7 +687,7 @@ namespace hpx { namespace components { namespace server
 
         inline naming::gid_type memory_block_header::get_base_gid() const
         {
-            BOOST_ASSERT(wrapper_);
+            HPX_ASSERT(wrapper_);
             return wrapper_->get_base_gid();
         }
     }
@@ -700,6 +710,7 @@ HPX_REGISTER_ACTION_DECLARATION(
 HPX_REGISTER_ACTION_DECLARATION(
     hpx::components::server::detail::memory_block::clone_action,
     memory_block_clone_action)
+
 HPX_REGISTER_BASE_LCO_WITH_VALUE_DECLARATION(
     hpx::components::memory_block_data,
     memory_data_type)

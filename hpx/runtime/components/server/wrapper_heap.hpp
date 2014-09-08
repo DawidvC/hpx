@@ -17,14 +17,15 @@
 
 #include <hpx/config.hpp>
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/lcos/local/mutex.hpp>
 #include <hpx/exception.hpp>
-#include <hpx/util/logging.hpp>
+#include <hpx/lcos/local/spinlock.hpp>
 #include <hpx/runtime/applier/applier.hpp>
 #include <hpx/runtime/applier/bind_naming_wrappers.hpp>
 #include <hpx/runtime/naming/name.hpp>
 #include <hpx/util/generate_unique_ids.hpp>
 #include <hpx/util/itt_notify.hpp>
+#include <hpx/util/logging.hpp>
+#include <hpx/util/scoped_unlock.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace components { namespace detail
@@ -109,7 +110,7 @@ namespace hpx { namespace components { namespace detail
         {
             util::itt::heap_internal_access hia;
 
-            BOOST_ASSERT(sizeof(storage_type) == heap_size);
+            HPX_ASSERT(sizeof(storage_type) == heap_size);
 
         // adjust step to reasonable value
             if (static_cast<std::size_t>(-1) == step_ || step_ < heap_step) //-V104
@@ -131,37 +132,37 @@ namespace hpx { namespace components { namespace detail
             heap_alloc_function_("wrapper_heap::alloc", "<unknown>"),
             heap_free_function_("wrapper_heap::free", "<unknown>")
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
 
-            BOOST_ASSERT(sizeof(storage_type) == heap_size);
+            HPX_ASSERT(sizeof(storage_type) == heap_size);
             if (!init_pool())
                 throw std::bad_alloc();
         }
 
         ~wrapper_heap()
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             tidy();
         }
 
         std::size_t size() const
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             return size_ - free_size_;
         }
         std::size_t free_size() const
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             return free_size_;
         }
         bool is_empty() const
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             return NULL == pool_;
         }
         bool has_allocatable_slots() const
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             return first_free_ < pool_+size_;
         }
 
@@ -181,11 +182,11 @@ namespace hpx { namespace components { namespace detail
 #endif
 
             value_type* p = static_cast<value_type*>(first_free_->address());
-            BOOST_ASSERT(p != NULL);
+            HPX_ASSERT(p != NULL);
 
             first_free_ += count;
 
-            BOOST_ASSERT(free_size_ >= count);
+            HPX_ASSERT(free_size_ >= count);
             free_size_ -= count;
 
 #if HPX_DEBUG_WRAPPER_HEAP != 0
@@ -202,25 +203,25 @@ namespace hpx { namespace components { namespace detail
             util::itt::heap_free heap_free(heap_free_function_, p);
 
 #if HPX_DEBUG_WRAPPER_HEAP != 0
-            BOOST_ASSERT(did_alloc(p));
+            HPX_ASSERT(did_alloc(p));
 #endif
             scoped_lock l(mtx_);
 
 #if HPX_DEBUG_WRAPPER_HEAP != 0
             storage_type* p1 = static_cast<storage_type*>(p);
 
-            BOOST_ASSERT(NULL != pool_ && p1 >= pool_);
-            BOOST_ASSERT(NULL != pool_ && p1 + count <= pool_ + size_);
-            BOOST_ASSERT(first_free_ == NULL || p1 != first_free_);
-            BOOST_ASSERT(free_size_ + count <= size_);
+            HPX_ASSERT(NULL != pool_ && p1 >= pool_);
+            HPX_ASSERT(NULL != pool_ && p1 + count <= pool_ + size_);
+            HPX_ASSERT(first_free_ == NULL || p1 != first_free_);
+            HPX_ASSERT(free_size_ + count <= size_);
             // make sure this has not been freed yet
-            BOOST_ASSERT(!debug::test_fill_bytes(p1->address(), freed_value,
+            HPX_ASSERT(!debug::test_fill_bytes(p1->address(), freed_value,
                 count*sizeof(storage_type)));
 
             // give memory back to pool
             debug::fill_bytes(p1->address(), freed_value, sizeof(storage_type));
 #else
-            (void)p;
+            HPX_UNUSED(p);
 #endif
 
 #if defined(HPX_DEBUG)
@@ -234,7 +235,7 @@ namespace hpx { namespace components { namespace detail
         bool did_alloc (void *p) const
         {
             // no lock is necessary here as all involved variables are immutable
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
             return NULL != pool_ && NULL != p && pool_ <= p && p < pool_ + size_;
         }
 
@@ -244,39 +245,36 @@ namespace hpx { namespace components { namespace detail
         ///
         /// \note  The pointer given by the parameter \a p must have been
         ///        allocated by this instance of a \a wrapper_heap
-        naming::gid_type get_gid(util::unique_id_ranges& ids, void* p)
+        naming::gid_type get_gid(util::unique_id_ranges& ids, void* p,
+            components::component_type type)
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
 
-            BOOST_ASSERT(did_alloc(p));
+            HPX_ASSERT(did_alloc(p));
 
             scoped_lock l(mtx_);
             value_type* addr = static_cast<value_type*>(pool_->address());
 
             if (!base_gid_) {
-                hpx::applier::applier& appl = hpx::applier::get_applier();
-
                 naming::gid_type base_gid;
 
                 {
                     // this is the first call to get_gid() for this heap - allocate
                     // a sufficiently large range of global ids
-                    util::unlock_the_lock<scoped_lock> ul(l);
-                    base_gid = ids.get_id(appl.here(), appl.get_agas_client(), step_);
+                    util::scoped_unlock<scoped_lock> ul(l);
+                    base_gid = ids.get_id(step_);
+
+                    // register the global ids and the base address of this heap
+                    // with the AGAS
+                    if (!applier::bind_range_local(base_gid, step_,
+                            naming::address(hpx::get_locality(), type, addr),
+                            sizeof(value_type)))
+                    {
+                        return naming::invalid_gid;
+                    }
                 }
 
-                // register the global ids and the base address of this heap
-                // with the AGAS
-                if (!applier::bind_range(base_gid, step_,
-                        naming::address(appl.here(),
-                            components::get_component_type<typename value_type::type_holder>(),
-                            addr),
-                        sizeof(value_type)))
-                {
-                    return naming::invalid_gid;
-                }
-
-                // if some other thread has already set the base GID for this 
+                // if some other thread has already set the base GID for this
                 // heap, we ignore the result
                 if (!base_gid_)
                 {
@@ -286,7 +284,8 @@ namespace hpx { namespace components { namespace detail
                 else
                 {
                     // unbind the range which is not needed anymore
-                    applier::unbind_range(base_gid, step_);
+                    util::scoped_unlock<scoped_lock> ul(l);
+                    applier::unbind_range_local(base_gid, step_);
                 }
             }
 
@@ -296,7 +295,7 @@ namespace hpx { namespace components { namespace detail
 
         void set_gid(naming::gid_type const& g)
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
 
             scoped_lock l(mtx_);
             base_gid_ = g;
@@ -304,7 +303,7 @@ namespace hpx { namespace components { namespace detail
 
         naming::address get_address()
         {
-            util::itt::heap_internal_access hia; (void)hia;
+            util::itt::heap_internal_access hia; HPX_UNUSED(hia);
 
             value_type* addr = static_cast<value_type*>(pool_->address());
             return naming::address(get_locality(),
@@ -313,18 +312,18 @@ namespace hpx { namespace components { namespace detail
         }
 
     protected:
-        bool test_release(scoped_lock& lk)
+        bool test_release(scoped_lock& /*lk*/)
         {
             if (pool_ == NULL || free_size_ < size_ || first_free_ < pool_+size_)
                 return false;
-            BOOST_ASSERT(free_size_ == size_);
+            HPX_ASSERT(free_size_ == size_);
 
             // unbind in AGAS service
             if (base_gid_) {
                 naming::gid_type base_gid = base_gid_;
                 base_gid_ = naming::invalid_gid;
 
-                applier::unbind_range(base_gid, step_);
+                applier::unbind_range_local(base_gid, step_);
             }
 
             tidy();
@@ -342,8 +341,8 @@ namespace hpx { namespace components { namespace detail
 
         bool init_pool()
         {
-            BOOST_ASSERT(size_ == 0);
-            BOOST_ASSERT(first_free_ == NULL);
+            HPX_ASSERT(size_ == 0);
+            HPX_ASSERT(first_free_ == NULL);
 
             std::size_t s = step_ * heap_size; //-V104
             pool_ = static_cast<storage_type*>(Allocator::alloc(s));
@@ -354,7 +353,7 @@ namespace hpx { namespace components { namespace detail
             size_ = s / heap_size; //-V104
             free_size_ = size_;
 
-            LOSH_(info)
+            LOSH_(info) //-V128
                 << "wrapper_heap ("
                 << (!class_name_.empty() ? class_name_.c_str() : "<Unknown>")
                 << "): init_pool (" << std::hex << pool_ << ")"
@@ -366,7 +365,7 @@ namespace hpx { namespace components { namespace detail
         void tidy()
         {
             if (pool_ != NULL) {
-                LOSH_(debug)
+                LOSH_(debug) //-V128
                     << "wrapper_heap ("
                     << (!class_name_.empty() ? class_name_.c_str() : "<Unknown>")
                     << ")"
@@ -381,7 +380,7 @@ namespace hpx { namespace components { namespace detail
 #endif
                   )
                 {
-                    LOSH_(warning)
+                    LOSH_(warning) //-V128
                         << "wrapper_heap ("
                         << (!class_name_.empty() ? class_name_.c_str() : "<Unknown>")
                         << "): releasing heap (" << std::hex << pool_ << ")"
@@ -431,7 +430,7 @@ namespace hpx { namespace components { namespace detail
         // but which does not reallocate the heap (it doesn't grow)
         struct fixed_mallocator
         {
-            static void* alloc(std::size_t& size)
+            static void* alloc(std::size_t size)
             {
                 return ::malloc(size);
             }

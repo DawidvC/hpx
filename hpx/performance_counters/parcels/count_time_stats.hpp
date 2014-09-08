@@ -8,8 +8,12 @@
 #if !defined(HPX_05A1C29B_DB73_463A_8C9D_B8EDC3B69F5E)
 #define HPX_05A1C29B_DB73_463A_8C9D_B8EDC3B69F5E
 
+#include <hpx/performance_counters/parcels/count_and_time_data_point.hpp>
+#include <hpx/util/assert.hpp>
+#include <hpx/util/high_resolution_timer.hpp>
+#include <hpx/util/spinlock.hpp>
+
 #include <boost/config.hpp>
-#include <boost/assert.hpp>
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
@@ -17,14 +21,10 @@
 #include <boost/cstdint.hpp>
 #include <boost/atomic.hpp>
 
-#include <hpx/performance_counters/parcels/count_and_time_data_point.hpp>
-#include <hpx/util/high_resolution_timer.hpp>
-#include <hpx/util/spinlock.hpp>
-
 namespace hpx { namespace performance_counters { namespace parcels
 {
 
-class count_time_stats 
+class count_time_stats
 {
     typedef hpx::util::spinlock mutex_type;
     typedef mutex_type::scoped_lock lock;

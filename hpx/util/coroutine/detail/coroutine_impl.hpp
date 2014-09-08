@@ -1,4 +1,5 @@
 //  Copyright (c) 2006, Giovanni P. Deretta
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //
 //  This code may be used under either of the following two licences:
 //
@@ -34,25 +35,28 @@
 #pragma warning (disable: 4355) //this used in base member initializer
 #endif
 
-#include <cstddef>
-#include <boost/assert.hpp>
-#include <boost/optional.hpp>
-#include <boost/config.hpp>
-#include <boost/move/move.hpp>
-
 #include <hpx/config.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/coroutine/detail/config.hpp>
 #include <hpx/util/coroutine/detail/argument_unpacker.hpp>
 #include <hpx/util/coroutine/detail/coroutine_accessor.hpp>
 #include <hpx/util/coroutine/detail/context_base.hpp>
 #include <hpx/util/coroutine/detail/self.hpp>
+#include <hpx/util/decay.hpp>
 #include <hpx/util/reinitializable_static.hpp>
 #include <hpx/util/thread_specific_ptr.hpp>
+#include <hpx/util/detail/reset_function.hpp>
+#include <hpx/runtime/naming/id_type.hpp>
+
+#include <cstddef>
+#include <boost/optional.hpp>
+#include <boost/config.hpp>
+#include <utility>
 
 namespace hpx { namespace util { namespace coroutines { namespace detail
 {
   /////////////////////////////////////////////////////////////////////////////
-  // This class augment the contest_base class with
+  // This class augment the context_base class with
   // the coroutine signature type.
   // This is mostly just a place to put
   // typesafe argument and result type pointers.
@@ -73,12 +77,12 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     typedef typename coroutine_type::arg_slot_traits arg_slot_traits;
     typedef typename coroutine_type::result_type result_type;
     typedef typename coroutine_type::result_slot_type result_slot_type;
-    typedef typename context_base_::thread_id_type thread_id_type;
+    typedef typename context_base_::thread_id_repr_type thread_id_repr_type;
 
     typedef boost::intrusive_ptr<type> pointer;
 
     template <typename DerivedType>
-    coroutine_impl(DerivedType *this_, thread_id_type id,
+    coroutine_impl(DerivedType *this_, thread_id_repr_type id,
             std::ptrdiff_t stack_size)
       : context_base_(*this_, stack_size, id),
         m_arg(0),
@@ -86,18 +90,23 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     {}
 
     template <typename Functor>
-    static inline pointer create(BOOST_FWD_REF(Functor), thread_id_type = 0,
+    static inline type* create(Functor &&,
+        naming::id_type && target, thread_id_repr_type = 0,
         std::ptrdiff_t = default_stack_size);
+
+    template <typename Functor>
+    static inline void rebind(type* p, BOOST_FWD_REF(Functor),
+        BOOST_RV_REF(naming::id_type) target, thread_id_repr_type = 0);
 
 #if HPX_COROUTINE_ARG_MAX > 1
     result_slot_type * result() {
-      BOOST_ASSERT(m_result);
-      BOOST_ASSERT(*m_result);
+      HPX_ASSERT(m_result);
+      HPX_ASSERT(*m_result);
       return *this->m_result;
     }
 
     arg_slot_type * args() {
-      BOOST_ASSERT(m_arg);
+      HPX_ASSERT(m_arg);
       return m_arg;
     };
 
@@ -119,32 +128,38 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       return m_result;
     }
 #else
-    result_type * result() {
-      BOOST_ASSERT(m_result);
+    result_type * result()
+    {
+      HPX_ASSERT(m_result);
       return *this->m_result;
     }
 
     typedef typename arg_slot_traits::template at<0>::type arg0_type;
-    arg0_type * args() {
-      BOOST_ASSERT(m_arg);
+    arg0_type * args()
+    {
+      HPX_ASSERT(m_arg);
       return m_arg;
     };
 
-    void bind_args(arg0_type* arg) {
+    void bind_args(arg0_type* arg)
+    {
       m_arg = arg;
     }
 
-    void bind_result(result_type* res) {
+    void bind_result(result_type* res)
+    {
       *m_result = res;
     }
 
     // Another level of indirection is needed to handle
     // yield_to correctly.
-    void bind_result_pointer(result_type** resp) {
+    void bind_result_pointer(result_type** resp)
+    {
       m_result = resp;
     }
 
-    result_type** result_pointer() {
+    result_type** result_pointer()
+    {
       return m_result;
     }
 #endif
@@ -153,7 +168,8 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     // coroutines. It wakes up the coroutine.
     // Entering the wait state does not cause this
     // method to throw.
-    void run() {
+    void run()
+    {
       arg_slot_type void_args;
       result_slot_type * ptr = 0;
 
@@ -165,7 +181,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       this->wake_up();
     }
 
-#if HPX_THREAD_MAINTAIN_PHASE_INFORMATION
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
     std::size_t get_thread_phase() const
     {
         return this->phase();
@@ -255,22 +271,22 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     typedef CoroutineType coroutine_type;
     typedef typename CoroutineType::result_type result_type;
     typedef coroutine_impl<CoroutineType, ContextImpl, Heap> super_type;
-    typedef typename super_type::thread_id_type thread_id_type;
+    typedef typename super_type::thread_id_repr_type thread_id_repr_type;
 
-    typedef typename hpx::util::detail::remove_reference<
-        typename boost::remove_const<FunctorType>::type
-    >::type functor_type;
+    typedef typename util::decay<FunctorType>::type functor_type;
 
     template <typename Functor>
-    coroutine_impl_wrapper(BOOST_FWD_REF(Functor) f, thread_id_type id,
-                std::ptrdiff_t stack_size)
+    coroutine_impl_wrapper(Functor && f, naming::id_type && target,
+            thread_id_repr_type id, std::ptrdiff_t stack_size)
       : super_type(this, id, stack_size),
-        m_fun(boost::forward<Functor>(f))
+        m_fun(std::forward<Functor>(f)),
+        target_(std::move(target))
     {}
 
     ~coroutine_impl_wrapper()
     {
-        BOOST_ASSERT(!m_fun);   // functor should have been reset by now
+        HPX_ASSERT(!m_fun);   // functor should have been reset by now
+        HPX_ASSERT(!target_);
     }
 
     void operator()()
@@ -288,12 +304,14 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 #if defined(HPX_GENERIC_COROUTINES)
           do_call<result_type>();
 #else
-          BOOST_ASSERT(this->count() > 0);
+          HPX_ASSERT(this->count() > 0);
 
           typedef typename coroutine_type::self self_type;
           {
-              self_type self(this);
-              reset_self_on_exit on_exit(&self);
+              self_type* old_self = super_type::get_self();
+              self_type self(this, old_self);
+              reset_self_on_exit on_exit(&self, old_self);
+
               this->m_result_last = m_fun(*this->args());
 
               // if this thread returned 'terminated' we need to reset the functor
@@ -335,7 +353,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       } while (this->m_state == super_type::ctx_running);
 
       // should not get here, never
-      BOOST_ASSERT(this->m_state == super_type::ctx_running);
+      HPX_ASSERT(this->m_state == super_type::ctx_running);
     }
 
   protected:
@@ -343,14 +361,17 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     {
         typedef typename coroutine_type::self self_type;
 
-        reset_self_on_exit(self_type* val)
+        reset_self_on_exit(self_type* val, self_type* old_val = 0)
+          : old_self(old_val)
         {
             super_type::set_self(val);
         }
         ~reset_self_on_exit()
         {
-            super_type::set_self(NULL);
+            super_type::set_self(old_self);
         }
+
+        self_type* old_self;
     };
 
   public:
@@ -368,7 +389,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     typename boost::enable_if<boost::is_void<ResultType> >::type
     do_call(dummy<0> = 0)
     {
-      BOOST_ASSERT(this->count() > 0);
+      HPX_ASSERT(this->count() > 0);
 
       typedef typename coroutine_type::self self_type;
 
@@ -377,9 +398,9 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       typedef typename coroutine_type::result_slot_type result_slot_type;
 
       {
-//           boost::optional<self_type> self (coroutine_accessor::in_place(this));
-          self_type self(this);
-          reset_self_on_exit on_exit(&self);
+          self_type* old_self = super_type::get_self();
+          self_type self(this, old_self);
+          reset_self_on_exit on_exit(&self, old_self);
           detail::unpack(m_fun, *this->args(),
               detail::trait_tag<typename coroutine_type::arg_slot_traits>());
       }
@@ -393,16 +414,16 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     typename boost::disable_if<boost::is_void<ResultType> >::type
     do_call(dummy<1> = 1)
     {
-      BOOST_ASSERT(this->count() > 0);
+      HPX_ASSERT(this->count() > 0);
 
       typedef typename coroutine_type::self self_type;
       typedef typename coroutine_type::arg_slot_traits traits;
       typedef typename coroutine_type::result_slot_type result_slot_type;
 
       {
-//           boost::optional<self_type> self (coroutine_accessor::in_place(this));
-          self_type self(this);
-          reset_self_on_exit on_exit(&self);
+          self_type* old_self = super_type::get_self();
+          self_type self(this, old_self);
+          reset_self_on_exit on_exit(&self, old_self);
           this->m_result_last = boost::in_place(result_slot_type(
                   detail::unpack(m_fun, *this->args(), detail::trait_tag<traits>())
               ));
@@ -427,15 +448,19 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     void reset()
     {
         this->reset_stack();
-        m_fun.clear();    // just reset the bound function
+        util::detail::reset_function(m_fun); // just reset the bound function
+        target_ = naming::invalid_id;
+        this->super_type::reset();
     }
 
     template <typename Functor>
-    void rebind(BOOST_FWD_REF(Functor) f, thread_id_type id)
+    void rebind(Functor && f, naming::id_type && target,
+        thread_id_repr_type id)
     {
         this->rebind_stack();     // count how often a coroutines object was reused
-        m_fun = boost::forward<Functor>(f);
-        this->super_type::rebind(id);
+        m_fun = std::forward<Functor>(f);
+        target_ = std::move(target);
+        this->super_type::rebind_base(id);
     }
 
     // the memory for the threads is managed by a lockfree caching_freelist
@@ -457,6 +482,8 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 
     static heap_type& get_heap(std::size_t i, ptrdiff_t stacksize)
     {
+        // FIXME: This should check the sizes in runtime_configuration, not the
+        // default macro sizes
         if (stacksize > HPX_MEDIUM_STACK_SIZE) {
             if (stacksize > HPX_LARGE_STACK_SIZE)
                 return get_heap<HPX_COROUTINE_NUM_HEAPS/4, heap_tag_huge>(i % (HPX_COROUTINE_NUM_HEAPS/4)); //-V112
@@ -503,45 +530,60 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 #endif
 
     functor_type m_fun;
+    naming::id_type target_;        // keep target alive, if needed
   };
 
   template<typename CoroutineType, typename ContextImpl, template <typename> class Heap>
   template<typename Functor>
-  inline typename coroutine_impl<CoroutineType, ContextImpl, Heap>::pointer
+  inline typename coroutine_impl<CoroutineType, ContextImpl, Heap>::type*
   coroutine_impl<CoroutineType, ContextImpl, Heap>::
-      create(BOOST_FWD_REF(Functor) f, thread_id_type id, std::ptrdiff_t stack_size)
+      create(Functor && f, naming::id_type && target,
+          thread_id_repr_type id, std::ptrdiff_t stack_size)
   {
-      typedef typename hpx::util::detail::remove_reference<
-          typename boost::remove_const<Functor>::type
-      >::type functor_type;
+      typedef typename hpx::util::decay<Functor>::type functor_type;
 
       typedef coroutine_impl_wrapper<
           functor_type, CoroutineType, ContextImpl, Heap> wrapper_type;
 
       // start looking at the matching heap
       std::size_t const heap_count = wrapper_type::get_heap_count(stack_size);
-      std::size_t const heap_num = std::size_t(id)/8;
+      std::size_t const heap_num = std::size_t(id)/32; //-V112
 
       // look through all heaps to find an available coroutine object
       wrapper_type* wrapper = wrapper_type::allocate(heap_num, stack_size);
-      for (std::size_t i = 1; i < heap_count && !wrapper; ++i) {
-          wrapper = wrapper_type::try_allocate(heap_num + i, stack_size);
+      if (0 == wrapper) {
+          for (std::size_t i = 1; i != heap_count && !wrapper; ++i) {
+              wrapper = wrapper_type::try_allocate(heap_num + i, stack_size);
+          }
       }
-
-#if defined(_DEBUG)
-      wrapper_type::heap_type const* heaps =
-          wrapper_type::get_first_heap_address(stack_size);
-#endif
 
       // allocate a new coroutine object, if non is available (or all heaps are locked)
       if (NULL == wrapper) {
           context_base<ContextImpl>::increment_allocation_count(heap_num);
-          return new wrapper_type(boost::forward<Functor>(f), id, stack_size);
+          return new wrapper_type(std::forward<Functor>(f), std::move(target),
+              id, stack_size);
       }
 
       // if we reuse an existing  object, we need to rebind its function
-      wrapper->rebind(boost::forward<Functor>(f), id);
+      wrapper->rebind(std::forward<Functor>(f), std::move(target), id);
       return wrapper;
+  }
+
+  template<typename CoroutineType, typename ContextImpl, template <typename> class Heap>
+  template<typename Functor>
+  inline void coroutine_impl<CoroutineType, ContextImpl, Heap>::
+      rebind(typename coroutine_impl<CoroutineType, ContextImpl, Heap>::type* p,
+        BOOST_FWD_REF(Functor) f, BOOST_RV_REF(naming::id_type) target,
+        thread_id_repr_type id)
+  {
+      typedef typename hpx::util::decay<Functor>::type functor_type;
+
+      typedef coroutine_impl_wrapper<
+          functor_type, CoroutineType, ContextImpl, Heap> wrapper_type;
+
+      wrapper_type* wrapper = static_cast<wrapper_type*>(p);
+
+      wrapper->rebind(boost::forward<Functor>(f), boost::move(target), id);
   }
 
   template<typename Functor, typename CoroutineType, typename ContextImpl,
@@ -549,24 +591,10 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
   inline void
   coroutine_impl_wrapper<Functor, CoroutineType, ContextImpl, Heap>::destroy(type* p)
   {
-#if defined(_DEBUG)
-      typedef coroutine_impl_wrapper<
-          functor_type, CoroutineType, ContextImpl, Heap> wrapper_type;
-      wrapper_type::heap_type const* heaps =
-          wrapper_type::get_first_heap_address(p->get_stacksize());
-#endif
       // always hand the stack back to the matching heap
-      deallocate(p, std::size_t(p->get_thread_id())/8);
+      deallocate(p, std::size_t(p->get_thread_id())/32); //-V112
   }
 
-
-  template<typename Functor, typename CoroutineType, typename ContextImpl,
-      template <typename> class Heap>
-  inline void
-  coroutine_impl_wrapper<Functor, CoroutineType, ContextImpl, Heap>::reset(type* p)
-  {
-      p->reset();
-  }
 }}}}
 
 #if defined(_MSC_VER)

@@ -18,8 +18,6 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
 {
     class message_buffer
     {
-        BOOST_COPYABLE_AND_MOVABLE(message_buffer);
-
     public:
         enum message_buffer_append_state
         {
@@ -43,13 +41,13 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
             max_messages_(rhs.max_messages_)
         {}
 
-        message_buffer(BOOST_RV_REF(message_buffer) rhs)
-          : messages_(boost::move(rhs.messages_)),
-            handlers_(boost::move(rhs.handlers_)),
+        message_buffer(message_buffer && rhs)
+          : messages_(std::move(rhs.messages_)),
+            handlers_(std::move(rhs.handlers_)),
             max_messages_(rhs.max_messages_)
         {}
 
-        message_buffer& operator=(BOOST_COPY_ASSIGN_REF(message_buffer) rhs)
+        message_buffer& operator=(message_buffer const & rhs)
         {
             if (&rhs != this) {
                 max_messages_ = rhs.max_messages_;
@@ -59,12 +57,12 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
             return *this;
         }
 
-        message_buffer& operator=(BOOST_RV_REF(message_buffer) rhs)
+        message_buffer& operator=(message_buffer && rhs)
         {
             if (&rhs != this) {
                 max_messages_ = rhs.max_messages_;
-                messages_ = boost::move(rhs.messages_);
-                handlers_ = boost::move(rhs.handlers_);
+                messages_ = std::move(rhs.messages_);
+                handlers_ = std::move(rhs.handlers_);
             }
             return *this;
         }
@@ -75,10 +73,10 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
                 set->put_parcels(messages_, handlers_);
         }
 
-        message_buffer_append_state append(parcelset::parcel& p,
+        message_buffer_append_state append(parcelset::parcel const& p,
             parcelset::parcelport::write_handler_type const& f)
         {
-            BOOST_ASSERT(messages_.size() == handlers_.size());
+            HPX_ASSERT(messages_.size() == handlers_.size());
 
             int result = normal;
             if (messages_.empty())
@@ -95,7 +93,7 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
 
         bool empty() const
         {
-            BOOST_ASSERT(messages_.size() == handlers_.size());
+            HPX_ASSERT(messages_.size() == handlers_.size());
             return messages_.empty();
         }
 
@@ -107,7 +105,7 @@ namespace hpx { namespace plugins { namespace parcel { namespace detail
 
         std::size_t size() const
         {
-            BOOST_ASSERT(messages_.size() == handlers_.size());
+            HPX_ASSERT(messages_.size() == handlers_.size());
             return messages_.size();
         }
 

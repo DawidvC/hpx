@@ -1,9 +1,10 @@
-//  Copyright (c) 2007-2011 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c) 2011-2012 Maciej Brodowicz
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <cctype>
 #include <set>
 
@@ -12,6 +13,7 @@
 #include <boost/program_options.hpp>
 
 #include <hpx/hpx.hpp>
+#include <hpx/util/bind.hpp>
 #include <hpx/util/thread_mapper.hpp>
 #include <hpx/components/papi/server/papi.hpp>
 #include <hpx/components/papi/util/papi.hpp>
@@ -19,7 +21,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // Add factory registration functionality
-HPX_REGISTER_COMPONENT_MODULE();
+HPX_REGISTER_COMPONENT_MODULE_DYNAMIC();
 
 ///////////////////////////////////////////////////////////////////////////////
 typedef hpx::components::managed_component<
@@ -139,7 +141,7 @@ namespace hpx { namespace performance_counters { namespace papi
     }
 
     // discover available PAPI counters
-    bool discover_papi_counters(
+    bool discover_papi_counters_helper(
         hpx::performance_counters::counter_info const& info,
         HPX_STD_FUNCTION<hpx::performance_counters::discover_counter_func> const& f,
         hpx::performance_counters::discover_counters_mode mode, hpx::error_code& ec)
@@ -182,31 +184,51 @@ namespace hpx { namespace performance_counters { namespace papi
         }
         else
         { // no wildcards expected here
-            if (p.instanceindex_ < 0 || p.parentinstanceindex_ < 0) return false;
-            hpx::util::thread_mapper& tm = get_runtime().get_thread_mapper();
-            std::string lab = p.instancename_+"#"+
-                boost::lexical_cast<std::string>(p.instanceindex_);
-            if (p.objectname_ == "papi" &&
-                p.parentinstancename_ == "locality" &&
-                tm.get_thread_index(lab) != tm.invalid_index &&
-                !p.countername_.empty())
-            { // validate specific PAPI event
-                int code;
-                if (PAPI_event_name_to_code(const_cast<char *>(p.countername_.c_str()), &code) != PAPI_OK)
+            if (p.instanceindex_ < 0 || p.parentinstanceindex_ < 0) {
+                if (!f(cnt_info, ec) || ec)
                     return false;
-                hpx::performance_counters::counter_status status =
-                    get_counter_name(p, cnt_info.fullname_, ec);
-                if (!status_is_valid(status)) return false;
-                // this is just validation, no helptext required
-                if (!f(cnt_info, ec) || ec) return false;
             }
-            else // unsupported path components
-                return false;
+            else {
+                hpx::util::thread_mapper& tm = get_runtime().get_thread_mapper();
+                std::string lab = p.instancename_+"#"+
+                    boost::lexical_cast<std::string>(p.instanceindex_);
+                if (p.objectname_ == "papi" &&
+                    p.parentinstancename_ == "locality" &&
+                    tm.get_thread_index(lab) != tm.invalid_index &&
+                    !p.countername_.empty())
+                { // validate specific PAPI event
+                    int code;
+                    if (PAPI_event_name_to_code(const_cast<char *>(p.countername_.c_str()), &code) != PAPI_OK)
+                        return false;
+                    hpx::performance_counters::counter_status status =
+                        get_counter_name(p, cnt_info.fullname_, ec);
+                    if (!status_is_valid(status)) return false;
+                    // this is just validation, no helptext required
+                    if (!f(cnt_info, ec) || ec) return false;
+                }
+                // unsupported path components, let runtime handle this
+                else if (!f(cnt_info, ec) || ec) {
+                    return false;
+                }
+            }
         }
 
         if (&ec != &hpx::throws)
             ec = hpx::make_success_code();
         return true;
+    }
+
+    // wrap the actual discoverer allowing HPX to expand all wildcards it knows about
+    bool discover_papi_counters(
+        hpx::performance_counters::counter_info const& info,
+        HPX_STD_FUNCTION<hpx::performance_counters::discover_counter_func> const& f,
+        hpx::performance_counters::discover_counters_mode mode, hpx::error_code& ec)
+    {
+        using hpx::util::placeholders::_1;
+        using hpx::util::placeholders::_2;
+        return performance_counters::locality_thread_counter_discoverer(info,
+            hpx::util::bind(&discover_papi_counters_helper, _1, f, mode, _2),
+            mode, ec);
     }
 
     // enable multiplexing with specified period for thread tix
@@ -249,7 +271,8 @@ namespace hpx { namespace performance_counters { namespace papi
             "the current count of occurrences of a specific PAPI event",
             HPX_PERFORMANCE_COUNTER_V1,
             &create_papi_counter,
-            &discover_papi_counters
+            &discover_papi_counters,
+            ""
         };
         install_counter_types(&papi_cnt_type, 1);
 
@@ -291,6 +314,9 @@ namespace hpx { namespace performance_counters { namespace papi
 
 ///////////////////////////////////////////////////////////////////////////////
 // register a startup function for PAPI performance counter
-HPX_REGISTER_STARTUP_MODULE(hpx::performance_counters::papi::check_startup);
+HPX_REGISTER_STARTUP_MODULE_DYNAMIC(
+    hpx::performance_counters::papi::check_startup);
+
 // register related command line options
-HPX_REGISTER_COMMANDLINE_MODULE(hpx::performance_counters::papi::util::get_options_description);
+HPX_REGISTER_COMMANDLINE_MODULE_DYNAMIC(
+    hpx::performance_counters::papi::util::get_options_description);

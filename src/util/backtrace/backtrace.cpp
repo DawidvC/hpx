@@ -12,6 +12,8 @@
 
 #if defined(HPX_HAVE_STACKTRACES)
 
+#include <hpx/async.hpp>
+
 #define HPX_BACKTRACE_SOURCE
 
 #include <boost/config.hpp>
@@ -27,7 +29,7 @@
 #endif
 #endif
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(__bgq__)
 #define BOOST_HAVE_ABI_CXA_DEMANGLE
 #endif
 
@@ -63,7 +65,7 @@
 namespace hpx { namespace util {
 
     namespace stack_trace {
-        #if defined(BOOST_HAVE_EXECINFO) && defined(BOOST_HAVE_UNWIND) && defined(BOOST_HAVE_EXECINFO)
+#if defined(BOOST_HAVE_EXECINFO) && defined(BOOST_HAVE_UNWIND) && defined(BOOST_HAVE_EXECINFO)
 
         struct trace_data
         {
@@ -82,10 +84,10 @@ namespace hpx { namespace util {
         {
             if (!ptr)
                 return _URC_NO_REASON;
-                
+
             trace_data& d = *(reinterpret_cast<trace_data*>(ptr));
- 
-            // First call. 
+
+            // First call.
             if (std::size_t(-1) != d.count_)
             {
                 // Get the instruction pointer for this frame.
@@ -123,36 +125,36 @@ namespace hpx { namespace util {
 
             return (std::size_t(-1) != d.count_) ? d.count_ : 0;
         }
-        
-        #elif defined(BOOST_HAVE_EXECINFO)
+
+#elif defined(BOOST_HAVE_EXECINFO)
 
         HPX_BACKTRACE_DECL std::size_t trace(void **array,std::size_t n)
         {
             return :: backtrace(array,n);
         }
 
-        #elif defined(BOOST_MSVC)
+#elif defined(BOOST_MSVC)
 
         HPX_BACKTRACE_DECL std::size_t trace(void **array,std::size_t n)
         {
-        #if _WIN32_WINNT < 0x0600
+#if _WIN32_WINNT < 0x0600
             // for Windows XP/Windows Server 2003
             if(n>=63)
                 n=62;
-        #endif
+#endif
             return RtlCaptureStackBackTrace(ULONG(0),ULONG(n),array,NULL);
         }
 
-        #else
+#else
 
         HPX_BACKTRACE_DECL std::size_t trace(void ** /*array*/,std::size_t /*n*/)
         {
             return 0;
         }
 
-        #endif
+#endif
 
-        #if defined(BOOST_HAVE_DLFCN) && defined(BOOST_HAVE_ABI_CXA_DEMANGLE)
+#if defined(BOOST_HAVE_DLFCN) && defined(BOOST_HAVE_ABI_CXA_DEMANGLE)
 
         HPX_BACKTRACE_DECL std::string get_symbol(void *ptr)
         {
@@ -214,7 +216,8 @@ namespace hpx { namespace util {
             out << std::flush;
         }
 
-        #elif defined(BOOST_HAVE_EXECINFO)
+#elif defined(BOOST_HAVE_EXECINFO)
+
         HPX_BACKTRACE_DECL std::string get_symbol(void *address)
         {
             char ** ptr = backtrace_symbols(&address,1);
@@ -253,7 +256,6 @@ namespace hpx { namespace util {
             }
         }
 
-
         HPX_BACKTRACE_DECL void write_symbols(void *const *addresses,std::size_t size,std::ostream &out)
         {
             char ** ptr = backtrace_symbols(addresses,size);
@@ -261,7 +263,7 @@ namespace hpx { namespace util {
             try {
                 if(ptr==0)
                     return;
-                for(int i=0;i<size;i++)
+                for(std::size_t i=0;i<size;i++)
                     out << '\n' << ptr[i];
                 free(ptr);
                 ptr = 0;
@@ -273,7 +275,7 @@ namespace hpx { namespace util {
             }
         }
 
-        #elif defined(BOOST_MSVC)
+#elif defined(BOOST_MSVC)
 
         namespace {
             HANDLE hProcess = 0;
@@ -334,9 +336,10 @@ namespace hpx { namespace util {
             }
             return res;
         }
+
         HPX_BACKTRACE_DECL void write_symbols(void *const *addresses,std::size_t size,std::ostream &out)
         {
-            out << size << ((1==size)?" frame:":" frames:");
+            out << size << ((1==size)?" frame:":" frames:"); //-V128
             for(std::size_t i=0;i<size;i++) {
                 std::string tmp = get_symbol(addresses[i]);
                 if(!tmp.empty()) {
@@ -346,7 +349,7 @@ namespace hpx { namespace util {
             out << std::flush;
         }
 
-        #else
+#else
 
         HPX_BACKTRACE_DECL std::string get_symbol(void *ptr)
         {
@@ -370,7 +373,7 @@ namespace hpx { namespace util {
 
         HPX_BACKTRACE_DECL void write_symbols(void *const *addresses,std::size_t size,std::ostream &out)
         {
-            out << size << ((1==size)?" frame:":" frames:");
+            out << size << ((1 == size)?" frame:":" frames:"); //-V128
             for(std::size_t i=0;i<size;i++) {
                 if(addresses[i]!=0)
                     out << '\n' << std::left << std::setw(sizeof(void*)*2) << std::setfill(' ') << addresses[i];
@@ -378,10 +381,26 @@ namespace hpx { namespace util {
             out << std::flush;
         }
 
-        #endif
-
+#endif
     } // stack_trace
 
+    std::string backtrace::trace_on_new_stack() const
+    {
+        if(frames_.empty())
+            return std::string();
+        if (0 == threads::get_self_ptr())
+            return trace();
+
+        lcos::local::futures_factory<std::string()> p(
+            util::bind(stack_trace::get_symbols, &frames_.front(), frames_.size()));
+
+        error_code ec(lightweight);
+        p.apply(launch::fork, threads::thread_priority_default,
+            threads::thread_stacksize_medium, ec);
+        if (ec) return "<couldn't retrieve stack backtrace>";
+
+        return p.get_future().get(ec);
+    }
 }} // hpx::util
 
 #endif

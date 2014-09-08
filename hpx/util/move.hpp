@@ -6,116 +6,115 @@
 #ifndef HPX_UTIL_MOVE_HPP
 #define HPX_UTIL_MOVE_HPP
 
-#include <hpx/util/detail/remove_reference.hpp>
+#include <hpx/config.hpp>
+
+#include <hpx/util/decay.hpp>
+
+#if defined(BOOST_NO_CXX11_RVALUE_REFERENCES)
+#error HPX needs rvalue reference support
+#endif
 
 #include <boost/preprocessor/cat.hpp>
 #include <boost/preprocessor/repetition/enum.hpp>
 #include <boost/preprocessor/tuple/rem.hpp>
 #include <boost/preprocessor/tuple/elem.hpp>
 
-#include <boost/move/move.hpp>
+#include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-#define HPX_FWD_ARGS(z, n, d)                                                 \
-    BOOST_FWD_REF(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 0, d), n))              \
-    BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 1, d), n)                             \
-    /**/
-#define HPX_FORWARD_ARGS(z, n, d)                                             \
-    boost::forward<BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 0, d), n)>(            \
+#define HPX_FORWARD_ARGS_(z, n, d)                                            \
+    std::forward<BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 0, d), n)>(              \
         BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 1, d), n)                         \
     )                                                                         \
     /**/
-#define HPX_MOVE_ARGS(z, n, d)                                                \
-    boost::move(BOOST_PP_CAT(d, n))                                           \
-    /**/
-#define HPX_MOVE_IF_NO_REF_ARGS(z, n, d)                                      \
-    hpx::util::detail::move_if_no_ref<                                        \
-        BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 0, d), n)>                        \
-            ::call(BOOST_PP_CAT(BOOST_PP_TUPLE_ELEM(2, 1, d), n))             \
+#define HPX_MOVE_ARGS_(z, n, d)                                               \
+    std::move(BOOST_PP_CAT(d, n))                                             \
     /**/
 
 #define HPX_ENUM_FWD_ARGS(N, A, B)                                            \
-    BOOST_PP_ENUM(N, HPX_FWD_ARGS, (A, B))                                    \
-    /**/
-#define HPX_ENUM_FORWARD_ARGS(N, A, B)                                        \
-    BOOST_PP_ENUM(N, HPX_FORWARD_ARGS, (A, B))                                \
-    /**/
-#define HPX_ENUM_MOVE_ARGS(N, A)                                              \
-    BOOST_PP_ENUM(N, HPX_MOVE_ARGS, A)                                        \
-    /**/
-#define HPX_ENUM_MOVE_IF_NO_REF_ARGS(N, A, B)                                 \
-    BOOST_PP_ENUM(N, HPX_MOVE_IF_NO_REF_ARGS, (A, B))                         \
+    BOOST_PP_ENUM_BINARY_PARAMS(N, A, && B)                                   \
     /**/
 
+#define HPX_ENUM_FORWARD_ARGS(N, A, B)                                        \
+    BOOST_PP_ENUM(N, HPX_FORWARD_ARGS_, (A, B))                               \
+    /**/
+#define HPX_ENUM_MOVE_ARGS(N, A)                                              \
+    BOOST_PP_ENUM(N, HPX_MOVE_ARGS_, A)                                       \
+    /**/
+
+#if defined(BOOST_NO_CXX11_DELETED_FUNCTIONS)
+#define HPX_MOVABLE_BUT_NOT_COPYABLE(TYPE)                                    \
+    private:                                                                  \
+        TYPE(TYPE const &);                                                   \
+        TYPE& operator=(TYPE const &);                                        \
+/**/
+#else
+#define HPX_MOVABLE_BUT_NOT_COPYABLE(TYPE)                                    \
+    public:                                                                   \
+        TYPE(TYPE const &) = delete;                                          \
+        TYPE& operator=(TYPE const &) = delete;                               \
+    private:                                                                  \
+/**/
+#endif
 
 namespace hpx { namespace util { namespace detail
 {
-#if !defined(BOOST_NO_RVALUE_REFERENCES)
-    template <typename T, bool IsRvalueRef =
-        std::is_rvalue_reference<T>::type::value>
-#else
-    template <typename T, bool IsRvalueRef = false>
-#endif
-    struct move_if_no_ref
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename T>
+    BOOST_FORCEINLINE typename decay<T>::type
+    decay_copy(T&& v)
     {
-        template <typename A>
-        static T call(BOOST_FWD_REF(A) t)
+        return std::forward<T>(v);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename T>
+    struct make_temporary_impl
+    {
+        typedef T && type;
+
+        template <typename U>
+        BOOST_FORCEINLINE static T && call(U& u)
         {
-            return boost::move(t);
+            return std::move(u);
         }
     };
 
     template <typename T>
-    struct move_if_no_ref<T &, false>
+    struct make_temporary_impl<T&>
     {
-        template <typename A>
-        static T & call(BOOST_FWD_REF(A) t)
+        typedef T type;
+
+        BOOST_FORCEINLINE static T call(T& u)
         {
-            return t;
+            return u;
         }
     };
 
     template <typename T>
-    struct move_if_no_ref<T const &, false>
+    struct make_temporary_impl<T const&>
     {
-        template <typename A>
-        static T const & call(BOOST_FWD_REF(A) t)
+        typedef T type;
+
+        BOOST_FORCEINLINE static T call(T const& u)
         {
-            return t;
-        }
-    };
-    
-    template <typename T, int N>
-    struct move_if_no_ref<T[N], false>
-    {
-        template <typename A>
-        static T * call(A * t)
-        {
-            return t;
-        }
-    };
-    
-    template <typename T, int N>
-    struct move_if_no_ref<const T[N], false>
-    {
-        template <typename A>
-        static const T * call(const A * t)
-        {
-            return t;
+            return u;
         }
     };
 
     template <typename T>
-    struct move_if_no_ref<T, true>
+    BOOST_FORCEINLINE typename detail::make_temporary_impl<T>::type
+    make_temporary(typename std::remove_reference<T>::type& v)
     {
-        template <typename A>
-        static BOOST_RV_REF(
-            typename hpx::util::detail::remove_reference<T>::type)
-        call(BOOST_FWD_REF(A) t)
-        {
-            return boost::move(t);
-        }
-    };
+        return detail::make_temporary_impl<T>::call(v);
+    }
+
+    template <typename T>
+    BOOST_FORCEINLINE typename detail::make_temporary_impl<T>::type
+    make_temporary(typename std::remove_reference<T>::type&& v)
+    {
+        return detail::make_temporary_impl<T>::call(v);
+    }
 }}}
 
 #endif

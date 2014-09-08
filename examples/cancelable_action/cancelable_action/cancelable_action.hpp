@@ -33,19 +33,19 @@ namespace examples
         /// Create a client side representation of an object which is newly
         /// created on the given locality
         cancelable_action(hpx::naming::id_type const& target_gid)
-          : base_type(base_type::stub_type::create(target_gid))
+          : base_type(stub_type::create_async(target_gid))
         {}
 
         ///////////////////////////////////////////////////////////////////////
         void do_it(hpx::error_code& ec = hpx::throws)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             this->base_type::do_it(this->get_gid(), ec);
         }
 
         void cancel_it()
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             this->base_type::cancel_it(this->get_gid());
         }
     };

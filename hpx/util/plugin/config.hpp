@@ -1,4 +1,4 @@
-// Copyright (c) 2005-2013 Hartmut Kaiser
+// Copyright (c) 2005-2014 Hartmut Kaiser
 // Distributed under the Boost Software License, Version 1.0.
 // (See accompanying file LICENSE_1_0.txt
 // or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -7,6 +7,7 @@
 #define HPX_PLUGIN_CONFIG_HPP_HK_2005_11_07
 
 #include <boost/config.hpp>
+#include <hpx/config.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 #ifdef BOOST_NO_STRINGSTREAM
@@ -56,7 +57,7 @@ inline std::string HPX_PLUGIN_OSSTREAM_GETSTRING(std::ostrstream& ss)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-//  The HPX_PLUGIN_ARGUMENT_LIMIT defines the upper limit of possible arguments 
+//  The HPX_PLUGIN_ARGUMENT_LIMIT defines the upper limit of possible arguments
 //  to the virtual constructors.
 //
 ///////////////////////////////////////////////////////////////////////////////
@@ -71,9 +72,21 @@ inline std::string HPX_PLUGIN_OSSTREAM_GETSTRING(std::ostrstream& ss)
 //
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_PLUGIN_SYMBOLS_PREFIX)
-#define HPX_PLUGIN_SYMBOLS_PREFIX hpx
+# if defined(HPX_DEBUG)
+#   define HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC hpxd
+#   define HPX_PLUGIN_SYMBOLS_PREFIX         hpxd
+# else
+#   define HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC hpx
+#   define HPX_PLUGIN_SYMBOLS_PREFIX         hpx
+# endif
 #endif
 
-#define HPX_PLUGIN_SYMBOLS_PREFIX_STR BOOST_PP_STRINGIZE(HPX_PLUGIN_SYMBOLS_PREFIX)
+#define HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC_STR                                 \
+    BOOST_PP_STRINGIZE(HPX_PLUGIN_SYMBOLS_PREFIX_DYNAMIC)                     \
+/**/
+
+#define HPX_PLUGIN_SYMBOLS_PREFIX_STR                                         \
+    BOOST_PP_STRINGIZE(HPX_PLUGIN_SYMBOLS_PREFIX)                             \
+/**/
 
 #endif // HPX_PLUGIN_CONFIG_HPP_HK_2005_11_07

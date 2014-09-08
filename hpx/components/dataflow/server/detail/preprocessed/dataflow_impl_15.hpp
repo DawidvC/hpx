@@ -21,18 +21,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -88,23 +88,24 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -112,14 +113,14 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -136,7 +137,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -155,16 +156,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -176,10 +178,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -191,16 +194,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -222,18 +225,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -294,24 +297,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -319,11 +323,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -331,7 +335,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -348,7 +352,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -367,16 +371,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -386,14 +391,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -401,7 +402,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -413,14 +414,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -431,7 +432,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -476,10 +477,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -491,16 +493,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -525,18 +527,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -597,24 +599,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -622,11 +625,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -634,7 +637,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -651,7 +654,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -670,16 +673,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -689,14 +693,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -704,7 +704,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -716,14 +716,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -734,7 +734,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -779,10 +779,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -794,16 +795,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -828,18 +829,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -900,24 +901,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -925,11 +927,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -937,7 +939,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -954,7 +956,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -973,16 +975,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -992,14 +995,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -1007,7 +1006,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -1019,14 +1018,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -1037,7 +1036,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -1082,10 +1081,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -1097,16 +1097,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -1131,18 +1131,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -1203,24 +1203,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -1228,11 +1229,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -1240,7 +1241,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -1257,7 +1258,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -1276,16 +1277,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -1295,14 +1297,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -1310,7 +1308,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -1322,14 +1320,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -1340,7 +1338,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -1385,10 +1383,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -1400,16 +1399,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -1434,18 +1433,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -1506,24 +1505,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -1531,11 +1531,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -1543,7 +1543,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -1560,7 +1560,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -1579,16 +1579,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -1598,14 +1599,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -1613,7 +1610,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -1625,14 +1622,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -1643,7 +1640,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -1688,10 +1685,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -1703,16 +1701,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -1737,18 +1735,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -1809,24 +1807,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -1834,11 +1833,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -1846,7 +1845,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -1863,7 +1862,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -1882,16 +1881,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -1901,14 +1901,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -1916,7 +1912,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -1928,14 +1924,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -1946,7 +1942,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -1991,10 +1987,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -2006,16 +2003,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -2040,18 +2037,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -2112,24 +2109,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -2137,11 +2135,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -2149,7 +2147,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -2166,7 +2164,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -2185,16 +2183,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -2204,14 +2203,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -2219,7 +2214,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -2231,14 +2226,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -2249,7 +2244,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -2294,10 +2289,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -2309,16 +2305,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -2343,18 +2339,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -2415,24 +2411,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -2440,11 +2437,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -2452,7 +2449,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -2469,7 +2466,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -2488,16 +2485,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -2507,14 +2505,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -2522,7 +2516,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -2534,14 +2528,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -2552,7 +2546,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -2597,10 +2591,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -2612,16 +2607,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -2646,18 +2641,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -2718,24 +2713,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -2743,11 +2739,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -2755,7 +2751,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -2772,7 +2768,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -2791,16 +2787,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -2810,14 +2807,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -2825,7 +2818,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -2837,14 +2830,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -2855,7 +2848,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -2900,10 +2893,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -2915,16 +2909,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -2949,18 +2943,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -3021,24 +3015,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -3046,11 +3041,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -3058,7 +3053,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -3075,7 +3070,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -3094,16 +3089,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -3113,14 +3109,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -3128,7 +3120,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -3140,14 +3132,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -3158,7 +3150,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -3203,10 +3195,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -3218,16 +3211,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -3252,18 +3245,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -3324,24 +3317,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -3349,11 +3343,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -3361,7 +3355,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -3378,7 +3372,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -3397,16 +3391,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -3416,14 +3411,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -3431,7 +3422,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -3443,14 +3434,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -3461,7 +3452,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -3506,10 +3497,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -3521,16 +3513,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -3555,18 +3547,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -3627,24 +3619,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -3652,11 +3645,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -3664,7 +3657,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -3681,7 +3674,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -3700,16 +3693,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -3719,14 +3713,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -3734,7 +3724,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -3746,14 +3736,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -3764,7 +3754,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -3809,10 +3799,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -3824,16 +3815,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -3858,18 +3849,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -3930,24 +3921,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -3955,11 +3947,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -3967,7 +3959,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -3984,7 +3976,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -4003,16 +3995,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -4022,14 +4015,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -4037,7 +4026,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -4049,14 +4038,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -4067,7 +4056,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -4112,10 +4101,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -4127,16 +4117,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -4161,18 +4151,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -4233,24 +4223,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -4258,11 +4249,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -4270,7 +4261,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -4287,7 +4278,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -4306,16 +4297,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -4325,14 +4317,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -4340,7 +4328,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -4352,14 +4340,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -4370,7 +4358,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -4415,10 +4403,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -4430,16 +4419,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;
@@ -4464,18 +4453,18 @@
       , Result
     >
         : ::hpx::lcos::base_lco_with_value<
-              typename traits::promise_remote_result<Result>::type
-            , typename Action::result_type
+              typename Action::result_type
+            , typename Action::remote_result_type
           >
     {
         typedef
             typename traits::promise_remote_result<Result>::type
             result_type;
-        typedef util::value_or_error<result_type> data_type;
+        typedef util::detail::value_or_error<result_type> data_type;
         typedef
             hpx::lcos::base_lco_with_value<
-                result_type
-              , typename Action::result_type
+                typename Action::result_type
+              , typename Action::remote_result_type
             >
             lco_type;
         typedef
@@ -4536,24 +4525,25 @@
             }
             for (std::size_t i = 0; i < t.size(); ++i)
             {
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(t[i], d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(t[i], boost::move(r));
+                    hpx::apply<action_type>(t[i], std::move(r));
                 }
             }
         }
         ~dataflow_impl()
         {
-            BOOST_ASSERT(!result.is_empty());
-            BOOST_ASSERT(targets.empty());
-            BOOST_ASSERT(slots_set == slots_completed);
+            HPX_ASSERT(!result.is_empty());
+            HPX_ASSERT(targets.empty());
+            HPX_ASSERT(slots_set == slots_completed);
             LLCO_(info)
                 << "~dataflow_impl<"
                 << hpx::actions::detail::get_action_name<Action>()
@@ -4561,11 +4551,11 @@
                 << get_gid()
                 ;
         }
-        typedef typename Action::result_type remote_result;
+        typedef typename Action::remote_result_type remote_result;
         
         
         
-        void set_value(BOOST_RV_REF(remote_result) r)
+        void set_value(remote_result && r)
         {
             BOOST_FOREACH(detail::component_wrapper_base *p, future_slots)
             {
@@ -4573,7 +4563,7 @@
             }
             future_slots.clear();
             remote_result tmp(r);
-            result.set(boost::move(r));
+            result.set(std::move(r));
             forward_results(tmp);
         }
         void forward_results(remote_result & r)
@@ -4590,7 +4580,7 @@
             {
                 typedef typename lco_type::set_value_action action_type;
                 result_type tmp = r;
-                hpx::apply<action_type>(t[i], boost::move(tmp));
+                hpx::apply<action_type>(t[i], std::move(tmp));
             }
         }
         
@@ -4609,16 +4599,17 @@
                 data_type d;
                 result.read(d);
                 l.unlock();
-                if(!d.stores_value())
+                if(d.stores_error())
                 {
                     typedef typename lco_type::set_exception_action action_type;
                     hpx::apply<action_type>(target, d.get_error());
                 }
                 else
                 {
+                    HPX_ASSERT(d.stores_value()); 
                     typedef typename lco_type::set_value_action action_type;
                     result_type r = d.get_value();
-                    hpx::apply<action_type>(target, boost::move(r));
+                    hpx::apply<action_type>(target, std::move(r));
                 }
             }
             else
@@ -4628,14 +4619,10 @@
         }
         
         template <int Slot, typename A>
-        void set_slot(BOOST_FWD_REF(A) a, boost::mpl::true_)
+        void set_slot(A && a, boost::mpl::true_)
         {
             typedef
-                typename boost::remove_const<
-                    typename util::detail::remove_reference<
-                        A
-                    >::type
-                >::type
+                typename util::decay<A>::type
                 dataflow_type;
             typedef
                 dataflow_slot<dataflow_type, Slot, dataflow_impl>
@@ -4643,7 +4630,7 @@
             typedef
                 detail::component_wrapper<dataflow_slot_type>
                 component_type;
-            component_type * c = new component_type(this, boost::forward<A>(a));
+            component_type * c = new component_type(this, std::forward<A>(a));
             future_slots.push_back(c);
             (*c)->connect_();
         };
@@ -4655,14 +4642,14 @@
         typename boost::enable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A) a, boost::mpl::false_)
+        set_slot(A && a, boost::mpl::false_)
         {
             boost::fusion::at<
                 typename boost::mpl::at<
                     slot_to_args_map
                   , boost::mpl::int_<Slot>
                 >::type
-            >(slots) = boost::forward<A>(a);
+            >(slots) = std::forward<A>(a);
             maybe_apply<Slot>();
         };
         
@@ -4673,7 +4660,7 @@
         typename boost::disable_if<
             typename boost::mpl::has_key<slot_to_args_map, boost::mpl::int_<Slot> >::type
         >::type
-        set_slot(BOOST_FWD_REF(A), boost::mpl::false_)
+        set_slot(A &&, boost::mpl::false_)
         {
             maybe_apply<Slot>();
         };
@@ -4718,10 +4705,11 @@
         {
             this->set_value_nonvirt(remote_result());
         }
-        result_type get_value()
+        result_type const& get_value(error_code& ec = throws)
         {
-            BOOST_ASSERT(false);
-            return result_type();
+            HPX_ASSERT(false);
+            static result_type default_;
+            return default_;
         }
         naming::id_type get_gid() const
         {
@@ -4733,16 +4721,16 @@
         }
         naming::gid_type get_base_gid() const
         {
-            BOOST_ASSERT(back_ptr_);
+            HPX_ASSERT(back_ptr_);
             return back_ptr_->get_base_gid();
         }
     private:
-        template <typename, typename>
-        friend class components::managed_component;
+        template <typename>
+        friend struct components::detail_adl_barrier::init;
         void set_back_ptr(components::managed_component<dataflow_impl>* bp)
         {
-            BOOST_ASSERT(0 == back_ptr_);
-            BOOST_ASSERT(bp);
+            HPX_ASSERT(0 == back_ptr_);
+            HPX_ASSERT(bp);
             back_ptr_ = bp;
         }
         components::managed_component<dataflow_impl>* back_ptr_;

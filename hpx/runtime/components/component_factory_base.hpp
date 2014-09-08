@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -12,6 +12,10 @@
 #include <hpx/runtime/components/component_registry_base.hpp>
 #include <hpx/util/plugin.hpp>
 #include <hpx/util/plugin/export_plugin.hpp>
+
+#if defined(HPX_HAVE_SECURITY)
+#include <hpx/components/security/capability.hpp>
+#endif
 
 #include <boost/mpl/list.hpp>
 
@@ -77,11 +81,28 @@ namespace hpx { namespace components
         virtual naming::gid_type create_with_args(
             HPX_STD_FUNCTION<void(void*)> const&) = 0;
 
+        /// \brief Create one new component instance and initialize it using
+        ///        the using the given constructor function. Assign the give
+        ///        GID to the new object.
+        ///
+        /// \param assign_gid [in] The GID to assign to the newly created object.
+        /// \param f  [in] The constructor function to call in order to
+        ///           initialize the newly allocated object.
+        ///
+        /// \return   Returns the GID of the first newly created component
+        ///           instance (this is the same as assign_gid, if successful).
+        virtual naming::gid_type create_with_args(
+            naming::gid_type const& assign_gid,
+            HPX_STD_FUNCTION<void(void*)> const& f) = 0;
+
         /// \brief Destroy one or more component instances
         ///
         /// \param gid    [in] The gid of the first component instance to
         ///               destroy.
-        virtual void destroy(naming::gid_type const&) = 0;
+        /// \param addr   [in] The resolved address of the first component
+        ///               instance to destroy.
+        virtual void destroy(naming::gid_type const&,
+            naming::address const& addr) = 0;
 
         /// \brief Ask whether this factory can be unloaded
         ///
@@ -100,6 +121,16 @@ namespace hpx { namespace components
         /// \return Returns the number of instances of the managed object type
         ///         which are currently alive.
         virtual long instance_count() const = 0;
+
+#if defined(HPX_HAVE_SECURITY)
+        /// \brief Return the required capabilities necessary to create an
+        ///        instance of a component using this factory instance.
+        ///
+        /// \return Returns required capabilities necessary to create a new
+        ///         instance of a component using this factory instance.
+        virtual components::security::capability
+            get_required_capabilities() const = 0;
+#endif
     };
 }}
 
@@ -140,21 +171,41 @@ namespace hpx { namespace util { namespace plugin
 #define HPX_REGISTER_COMPONENT_FACTORY(FactoryType, componentname)            \
     HPX_PLUGIN_EXPORT(HPX_PLUGIN_COMPONENT_PREFIX,                            \
         hpx::components::component_factory_base, FactoryType,                 \
+        componentname, factory);                                              \
+    HPX_INIT_REGISTRY_FACTORY_STATIC(HPX_PLUGIN_COMPONENT_PREFIX,             \
+        componentname, factory)                                               \
+/**/
+
+#define HPX_REGISTER_COMPONENT_FACTORY_DYNAMIC(FactoryType, componentname)    \
+    HPX_PLUGIN_EXPORT_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX,                    \
+        hpx::components::component_factory_base, FactoryType,                 \
         componentname, factory)                                               \
 /**/
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_APPLICATION_NAME)
+#if !defined(HPX_APPLICATION_NAME) && !defined(HPX_STATIC_LINKING)
 /// This macro is used to define the required Hpx.Plugin entry points. This
 /// macro has to be used in exactly one compilation unit of a component module.
 #define HPX_REGISTER_COMPONENT_MODULE()                                       \
     HPX_PLUGIN_EXPORT_LIST(HPX_PLUGIN_COMPONENT_PREFIX, factory)              \
     HPX_REGISTER_REGISTRY_MODULE()                                            \
 /**/
+#define HPX_REGISTER_COMPONENT_MODULE_DYNAMIC()                               \
+    HPX_PLUGIN_EXPORT_LIST_DYNAMIC(HPX_PLUGIN_COMPONENT_PREFIX, factory)      \
+    HPX_REGISTER_REGISTRY_MODULE_DYNAMIC()                                    \
+/**/
 #else
 // in executables (when HPX_APPLICATION_NAME is defined) this needs to expand
 // to nothing
+#if defined(HPX_STATIC_LINKING)
+#define HPX_REGISTER_COMPONENT_MODULE()                                       \
+    HPX_PLUGIN_EXPORT_LIST(HPX_PLUGIN_COMPONENT_PREFIX, factory)              \
+    HPX_REGISTER_REGISTRY_MODULE()                                            \
+/**/
+#else
 #define HPX_REGISTER_COMPONENT_MODULE()
+#endif
+#define HPX_REGISTER_COMPONENT_MODULE_DYNAMIC()
 #endif
 
 #endif

@@ -1,4 +1,4 @@
-#   Copyright (c) 2001-2013 Hartmut Kaiser
+#   Copyright (c) 2001-2014 Hartmut Kaiser
 #
 #   Distributed under the Boost Software License, Version 1.0. (See accompanying
 #   file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -14,6 +14,7 @@ async_continue                        "" "hpx\.manual\.applying_actions\.action_
 
 # hpx/hpx_fwd.hpp
 find_here                             "" "hpx\.find_here.*"
+find_root_locality                    "" "hpx\.find_root_locality.*"
 find_all_localities                   "" "hpx\.find_all_localities.*"
 find_remote_localities                "" "hpx\.find_remote_localities.*"
 find_locality                         "" "hpx\.find_locality.*"
@@ -27,15 +28,124 @@ get_worker_thread_num                 "" "hpx\.get_worker_thread_num.*"
 get_locality_id                       "" "hpx\.get_locality_id.*"
 is_running                            "" "hpx\.is_running.*"
 get_thread_name                       "" "hpx\.get_thread_name.*"
+get_locality_name                     "" "hpx\.get_locality_name.*"
+get_num_worker_threads                "" "hpx\.get_num_worker_threads.*"
 get_system_uptime                     "" "hpx\.get_system_uptime.*"
 get_colocation_id                     "" "hpx\.get_colocation_id.*"
 get_colocation_id_async               "" "hpx\.get_colocation_id_async.*"
+trigger_lco_event                     "" "hpx\.trigger_lco_event.*"
 set_lco_event                         "" "hpx\.set_lco_event.*"
 set_lco_value                         "" "hpx\.set_lco_value.*"
 set_lco_error                         "" "hpx\.set_lco_error.*"
+start_active_counters                 "" "hpx\.start_active_counters.*"
+reset_active_counters                 "" "hpx\.reset_active_counters.*"
+stop_active_counters                  "" "hpx\.stop_active_counters.*"
+evaluate_active_counters              "" "hpx\.evaluate_active_counters.*"
+find_all_ids_from_basename            "" "hpx\.find_all_ids_from_basename.*"
+find_ids_from_basename                "" "hpx\.find_ids_from_basename.*"
+register_id_with_basename             "" "hpx\.register_id_with_basename.*"
+unregister_id_with_basename           "" "hpx\.unregister_id_with_basename.*"
+
+# hpx/parallel/execution_policy.hpp
+execution_policy                      "" "hpx\.parallel\.v1\.execution_policy.*"
+parallel_execution_policy             "" "hpx\.parallel\.v1\.parallel_exec.*"
+task_execution_policy                 "" "hpx\.parallel\.v1\.task_exec.*"
+sequential_execution_policy           "" "hpx\.parallel\.v1\.sequential_exec.*"
+vector_execution_policy               "" "hpx\.parallel\.v1\.vector_exec.*"
+is_execution_policy                   "" "hpx\.parallel\.v1\.is_execution_policy.*"
+is_parallel_execution_policy          "" "hpx\.parallel\.v1\.is_parallel_execution_policy.*"
+is_sequential_execution_policy        "" "hpx\.parallel\.v1\.is_sequential_execution_policy.*"
+
+
+# hpx/parallel/detail/all_any_none.hpp
+parallel::all_of                      "all_of" "hpx\.parallel\.v1\.all_of.*"
+parallel::any_of                      "any_of" "hpx\.parallel\.v1\.any_of.*"
+parallel::none_of                     "none_of" "hpx\.parallel\.v1\.none_of.*"
+
+# hpx/parallel/detail/copy.hpp
+parallel::copy                        "copy" "hpx\.parallel\.v1\.copy_id.*"
+parallel::copy_n                      "copy_n" "hpx\.parallel\.v1\.copy_n.*"
+
+# hpx/parallel/detail/count.hpp
+parallel::count                       "count" "hpx\.parallel\.v1\.count$.*"
+parallel::count_if                    "count_if" "hpx\.parallel\.v1\.count_if.*"
+
+# hpx/parallel/detail/equal.hpp
+parallel::equal                       "equal" "hpx\.parallel\.v1\.equal_id.*"
+
+# hpx/parallel/detail/fill.hpp
+parallel::fill                        "fill" "hpx\.parallel\.v1\.fill$"
+parallel::fill_n                      "fill_n" "hpx\.parallel\.v1\.fill_n.*"
+
+# hpx/parallel/detail/find.hpp
+parallel::find                        "find" "hpx\.parallel\.v1\.find$"
+parallel::find_if                     "find_if" "hpx\.parallel\.v1\.find_if$"
+parallel::find_if_not                 "find_if_not" "hpx\.parallel\.v1\.find_if_not.*"
+parallel::find_end                    "find_end" "hpx\.parallel\.v1\.find_end.*"
+parallel::find_first_of               "find_first_of" "hpx\.parallel\.v1\.find_first_of.*"
+parallel::adjacent_find               "adjacent_find" "hpx\.parallel\.v1\.adjacent_find.*"
+
+# hpx/parallel/detail/for_each.hpp
+parallel::for_each                    "for_each" "hpx\.parallel\.v1\.for_each$"
+parallel::for_each_n                  "for_each_n" "hpx\.parallel\.v1\.for_each_n.*"
+
+# hpx/parallel/detail/generate.hpp
+parallel::generate                    "generate" "hpx\.parallel\.v1\.generate$"
+parallel::generate_n                  "generate_n" "hpx\.parallel\.v1\.generate_n.*"
+
+# hpx/parallel/detail/minmax.hpp
+parallel::max_element                 "max_element" "hpx\.parallel\.v1\.max_element.*"
+parallel::min_element                 "min_element" "hpx\.parallel\.v1\.min_element.*"
+parallel::minmax_element              "minmax_element" "hpx\.parallel\.v1\.minmax_element.*"
+
+# hpx/parallel/detail/mismatch.hpp
+parallel::mismatch                    "mismatch" "hpx\.parallel\.v1\.mismatch_id.*"
+
+# hpx/parallel/detail/move.hpp
+parallel::move                        "move" "hpx\.parallel\.v1\.move$"
+
+# hpx/parallel/detail/reduce.hpp
+parallel::reduce                      "reduce" "hpx\.parallel\.v1\.reduce.*"
+
+# hpx/parallel/detail/replace.hpp
+parallel::replace                     "replace" "hpx\.parallel\.v1\.replace$"
+parallel::replace_if                  "replace_if" "hpx\.parallel\.v1\.replace_if.*"
+parallel::replace_copy                "replace_copy" "hpx\.parallel\.v1\.replace_copy$"
+parallel::replace_copy_if             "replace_copy_if" "hpx\.parallel\.v1\.replace_copy_if.*"
+
+# hpx/parallel/detail/reverse.hpp
+parallel::reverse                     "reverse" "hpx\.parallel\.v1\.reverse$"
+parallel::reverse_copy                "reverse_copy" "hpx\.parallel\.v1\.reverse_copy.*"
+
+# hpx/parallel/detail/rotate.hpp
+parallel::rotate                      "rotate" "hpx\.parallel\.v1\.rotate"
+parallel::rotate_copy                 "rotate_copy" "hpx\.parallel\.v1\.rotate_copy.*"
+
+# hpx/parallel/detail/swap_ranges.hpp
+parallel::swap_ranges                 "swap_ranges" "hpx\.parallel\.v1\.swap_ranges.*"
+
+# hpx/parallel/detail/task_region.hpp
+parallel::task_region                 "task_region" "hpx\.parallel\.v2\.task_region_id.*"
+parallel::task_region_final           "task_region_final" "hpx\.parallel\.v2\.task_region_final.*"
+parallel::task_region_handle          "task_region_handle" "hpx\.parallel\.v2\.task_region_handle.*"
+parallel::task_canceled_exception     "task_canceled_exception" "hpx\.parallel\.v2\.task_canceled_exception.*"
+
+# hpx/parallel/detail/transform.hpp
+parallel::transform                   "transform" "hpx\.parallel\.v1\.transform.*"
+
+# hpx/parallel/detail/transform_reduce.hpp
+parallel::transform_reduce            "transform_reduce" "hpx\.parallel\.v1\.transform_reduce.*"
+
 
 # hpx/runtime/components/new.hpp
 new_                                  "" "hpx\.components\.new_.*"
+new_colocated                         "" "hpx\.components\.new_colocated.*"
+
+# hpx/runtime/components/copy_component.hpp
+copy                                  "" "hpx\.components\.copy.*"
+
+# hpx/runtime/components/migrate_component.hpp
+migrate                               "" "hpx\.components\.migrate.*"
 
 # hpx/exception.hpp
 HPX_THROW_EXCEPTION                   "" "HPX_THROW_EXCEPTION"
@@ -43,7 +153,33 @@ HPX_THROWS_IF                         "" "HPX_THROWS_IF"
 
 error_code                            "" "hpx\.error_code"
 exception                             "" "hpx\.exception"
+thread_interrupted                    "" "hpx\.thread_interrupted"
 
+throwmode                             "" "header\.hpx\.exception_hpp"
+throws                                "" "header\.hpx\.exception_hpp"
+
+make_error_code                       "" "header\.hpx\.exception_hpp"
+make_success_code                     "" "header\.hpx\.exception_hpp"
+
+diagnostic_information                "" "hpx\.diagnostic_inform.*"
+get_error_locality_id                 "" "hpx\.get_error_localit.*"
+get_error                             "" "hpx\.get_error_id.*"
+get_error_host_name                   "" "hpx\.get_error_ho.*"
+get_error_process_id                  "" "hpx\.get_error_process.*"
+get_error_function_name               "" "hpx\.get_error_functio.*"
+get_error_file_name                   "" "hpx\.get_error_file_na.*"
+get_error_line_number                 "" "hpx\.get_error_line_nu.*"
+get_error_os_thread                   "" "hpx\.get_error_os_thre.*"
+get_error_thread_id                   "" "hpx\.get_error_thread_.*"
+get_error_thread_description          "" "hpx\.get_error_thread_.*"
+get_error_backtrace                   "" "hpx\.get_error_backtra.*"
+get_error_what                        "" "hpx\.get_error_what.*"
+get_error_env                         "" "hpx\.get_error_env.*"
+get_error_config                      "" "hpx\.get_error_config.*"
+get_error_state                       "" "hpx\.get_error_state.*"
+
+
+# hpx/error.hpp
 error                                 "" "hpx\.error"
 success                               "" "hpx\.error"
 no_success                            "" "hpx\.error"
@@ -83,37 +219,47 @@ broken_task                           "" "hpx\.error"
 task_moved                            "" "hpx\.error"
 task_already_started                  "" "hpx\.error"
 future_already_retrieved              "" "hpx\.error"
-future_already_satisfied              "" "hpx\.error"
+promise_already_satisfied             "" "hpx\.error"
 future_does_not_support_cancellation  "" "hpx\.error"
 future_can_not_be_cancelled           "" "hpx\.error"
-future_uninitialized                  "" "hpx\.error"
+no_state                              "" "hpx\.error"
 broken_promise                        "" "hpx\.error"
 thread_resource_error                 "" "hpx\.error"
 thread_interrupted                    "" "hpx\.error"
 thread_not_interruptable              "" "hpx\.error"
 duplicate_component_id                "" "hpx\.error"
+duplicate_component_id                "" "hpx\.error"
 unknown_error                         "" "hpx\.error"
+bad_plugin_type                       "" "hpx\.error"
+filesystem_error                      "" "hpx\.error"
+bad_function_call                     "" "hpx\.error"
+security_error                        "" "hpx\.error"
+filesystem_error                      "" "hpx\.error"
+bad_function_call                     "" "hpx\.error"
+task_canceled_exception               "" "hpx\.error"
+task_region_not_active                "" "hpx\.error"
 
-throwmode                             "" "header\.hpx\.exception_hpp"
-throws                                "" "header\.hpx\.exception_hpp"
+# hpx/runtime/naming/unmanaged.hpp
+unmanaged                             "" "header\.hpx\.runtime\.naming\.unmanaged.*"
 
-make_error_code                       "" "header\.hpx\.exception_hpp"
-make_success_code                     "" "header\.hpx\.exception_hpp"
+# hpx/runtime/get_ptr.hpp
+get_ptr                               "" "hpx\.get_ptr.*"
 
-diagnostic_information                "" "hpx\.diagnostic_information.*"
-get_error_locality_id                 "" "hpx\.get_error_locality_id.*"
-get_error_error                       "" "hpx\.get_error_error.*"
-get_error_host_name                   "" "hpx\.get_error_host_name.*"
-get_error_process_id                  "" "hpx\.get_error_process_id.*"
-get_error_function_name               "" "hpx\.get_error_function_name.*"
-get_error_file_name                   "" "hpx\.get_error_file_name.*"
-get_error_line_number                 "" "hpx\.get_error_line_number.*"
-get_error_os_thread                   "" "hpx\.get_error_os_thread.*"
-get_error_thread_id                   "" "hpx\.get_error_thread_id.*"
-get_error_thread_description          "" "hpx\.get_error_thread_description.*"
-get_error_backtrace                   "" "hpx\.get_error_backtrace.*"
-get_error_what                        "" "hpx\.get_error_what.*"
-get_error_env                         "" "hpx\.get_error_env.*"
+# hpx/lcos/broadcast.hpp
+broadcast                             "" "header\.hpx\.lcos\.broadcast.*"
+broadcast_with_index                  "" "header\.hpx\.lcos\.broadcast.*"
+broadcast_apply                       "" "header\.hpx\.lcos\.broadcast.*"
+broadcast_apply_with_index            "" "header\.hpx\.lcos\.broadcast.*"
+
+# hpx/lcos/reduce.hpp
+reduce                                "" "header\.hpx\.lcos\.reduce.*"
+reduce_with_index                     "" "header\.hpx\.lcos\.reduce.*"
+
+# hpx/lcos/fold.hpp
+fold                                  "" "header\.hpx\.lcos\.fold.*"
+fold_with_index                       "" "header\.hpx\.lcos\.fold.*"
+inverse_fold                          "" "header\.hpx\.lcos\.fold.*"
+inverse_fold_with_index               "" "header\.hpx\.lcos\.fold.*"
 
 # hpx/hpx_finalize.hpp
 finalize                              "" "hpx\.finalize.*"

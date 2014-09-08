@@ -1,190 +1,244 @@
 //  Copyright (c) 2011 Thomas Heller
+//  Copyright (c) 2013 Hartmut Kaiser
+//  Copyright (c) 2014 Agustin Berge
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#ifndef HPX_UTIL_DETAIL_FUNCTION_TEMPLATE_HPP
+#define HPX_UTIL_DETAIL_FUNCTION_TEMPLATE_HPP
 
-#if !BOOST_PP_IS_ITERATING
-
-#ifndef HPX_UTIL_FUNCTION_TEMPLATE_HPP
-#define HPX_UTIL_FUNCTION_TEMPLATE_HPP
-
-#include <hpx/config/forceinline.hpp>
-
-#include <boost/preprocessor/iteration/iterate.hpp>
-#include <boost/preprocessor/repetition/enum_params.hpp>
-#include <boost/preprocessor/repetition/enum_binary_params.hpp>
+#include <hpx/config.hpp>
+#include <hpx/traits/is_callable.hpp>
+#include <hpx/util/detail/basic_function.hpp>
+#include <hpx/util/detail/function_registration.hpp>
+#include <hpx/util/detail/vtable/callable_vtable.hpp>
+#include <hpx/util/detail/vtable/copyable_vtable.hpp>
+#include <hpx/util/detail/vtable/serializable_vtable.hpp>
+#include <hpx/util/detail/vtable/vtable.hpp>
+#include <hpx/util/portable_binary_iarchive.hpp>
+#include <hpx/util/portable_binary_oarchive.hpp>
 
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/tracking.hpp>
-#include <boost/type_traits/decay.hpp>
-#include <boost/scoped_ptr.hpp>
-
-#include <hpx/util/portable_binary_iarchive.hpp>
-#include <hpx/util/portable_binary_oarchive.hpp>
-#include <hpx/util/detail/remove_reference.hpp>
-#include <hpx/util/detail/vtable_ptr_base_fwd.hpp>
-#include <hpx/util/detail/vtable_ptr_fwd.hpp>
-#include <hpx/util/detail/serialization_registration.hpp>
-#include <hpx/util/safe_bool.hpp>
-#include <hpx/util/move.hpp>
-#include <hpx/util/serialize_empty_type.hpp>
-
+#include <boost/type_traits/is_same.hpp>
 #include <boost/utility/enable_if.hpp>
-#include <boost/type_traits/is_pointer.hpp>
-#include <boost/type_traits/is_member_pointer.hpp>
-#include <boost/mpl/bool.hpp>
-#include <boost/mpl/or.hpp>
 
-#ifndef HPX_FUNCTION_VERSION
-#define HPX_FUNCTION_VERSION 0x10
-#endif
+#include <utility>
+
+namespace hpx { namespace util { namespace detail
+{
+    template <typename Function>
+    struct init_registration;
+
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename Sig, typename IAr, typename OAr>
+    struct function_vtable_ptr;
+
+    template <typename Sig>
+    struct function_vtable_ptr<Sig, void, void>
+    {
+        typename callable_vtable<Sig>::invoke_t invoke;
+        copyable_vtable::copy_t copy;
+        vtable::get_type_t get_type;
+        vtable::destruct_t destruct;
+        vtable::delete_t delete_;
+        bool empty;
+
+        template <typename T>
+        function_vtable_ptr(boost::mpl::identity<T>) BOOST_NOEXCEPT
+          : invoke(&callable_vtable<Sig>::template invoke<T>)
+          , copy(&copyable_vtable::template copy<T>)
+          , get_type(&vtable::template get_type<T>)
+          , destruct(&vtable::template destruct<T>)
+          , delete_(&vtable::template delete_<T>)
+          , empty(boost::is_same<T, empty_function<Sig> >::value)
+        {}
+
+        template <typename T, typename Arg>
+        BOOST_FORCEINLINE static void construct(void** v, Arg&& arg)
+        {
+            vtable::construct<T>(v, std::forward<Arg>(arg));
+        }
+
+        template <typename T, typename Arg>
+        BOOST_FORCEINLINE static void reconstruct(void** v, Arg&& arg)
+        {
+            vtable::reconstruct<T>(v, std::forward<Arg>(arg));
+        }
+    };
+
+    template <typename Sig, typename IAr, typename OAr>
+    struct function_vtable_ptr
+      : function_vtable_ptr<Sig, void, void>
+    {
+        char const* name;
+        typename serializable_vtable<IAr, OAr>::save_object_t save_object;
+        typename serializable_vtable<IAr, OAr>::load_object_t load_object;
+
+        template <typename T>
+        function_vtable_ptr(boost::mpl::identity<T>) BOOST_NOEXCEPT
+          : function_vtable_ptr<Sig, void, void>(boost::mpl::identity<T>())
+          , name(get_function_name<std::pair<function_vtable_ptr, T> >())
+          , save_object(&serializable_vtable<IAr, OAr>::template save_object<T>)
+          , load_object(&serializable_vtable<IAr, OAr>::template load_object<T>)
+        {
+            init_registration<
+                std::pair<function_vtable_ptr, T>
+            >::g.register_function();
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // registration code for serialization
+    template <typename Sig, typename IAr, typename OAr, typename T>
+    struct init_registration<
+        std::pair<function_vtable_ptr<Sig, IAr, OAr>, T>
+    >
+    {
+        typedef std::pair<function_vtable_ptr<Sig, IAr, OAr>, T> vtable_ptr;
+
+        static automatic_function_registration<vtable_ptr> g;
+    };
+
+    template <typename Sig, typename IAr, typename OAr, typename T>
+    automatic_function_registration<
+        std::pair<function_vtable_ptr<Sig, IAr, OAr>, T>
+    > init_registration<
+        std::pair<function_vtable_ptr<Sig, IAr, OAr>, T>
+    >::g =  automatic_function_registration<
+                std::pair<function_vtable_ptr<Sig, IAr, OAr>, T>
+            >();
+}}}
+
+namespace boost { namespace serialization
+{
+    template <typename Sig, typename IArchive, typename OArchive>
+    struct tracking_level< ::hpx::util::detail::function_vtable_ptr<
+        Sig, IArchive, OArchive
+    > > : boost::mpl::int_<boost::serialization::track_never>
+    {};
+}}
 
 namespace hpx { namespace util
 {
-    namespace detail
-    {
-        ///////////////////////////////////////////////////////////////////////
-        template <
-            typename Functor
-          , typename Sig
-        >
-        struct get_table;
-
-        template <bool>
-        struct vtable;
-
-        ///////////////////////////////////////////////////////////////////////
-        template <typename Functor>
-        struct is_empty_function_impl
-        {
-            // in the general case the functor is not empty
-            static bool call(Functor const&, boost::mpl::false_)
-            {
-                return false;
-            }
-
-            static bool call(Functor const& f, boost::mpl::true_)
-            {
-                return f == 0;
-            }
-
-            static bool call(Functor const& f)
-            {
-                return call(f
-                    , boost::mpl::or_<
-                          boost::is_pointer<Functor>
-                        , boost::is_member_pointer<Functor>
-                      >()
-                );
-            }
-        };
-
-        template <typename Functor>
-        bool is_empty_function(Functor const& f)
-        {
-            return is_empty_function_impl<Functor>::call(f);
-        }
-    }
-
-    template <
-        typename Sig
-      , typename IArchive = void
-      , typename OArchive = void
-    >
-    struct function_base;
-
+    ///////////////////////////////////////////////////////////////////////////
     template <
         typename Sig
       , typename IArchive = portable_binary_iarchive
       , typename OArchive = portable_binary_oarchive
     >
-    struct function : function_base<Sig, IArchive, OArchive>
+    class function
+      : public detail::basic_function<
+            detail::function_vtable_ptr<Sig, IArchive, OArchive>
+          , Sig
+        >
     {
-        typedef typename function_base<Sig, IArchive, OArchive>::result_type 
-            result_type;
+        typedef detail::function_vtable_ptr<Sig, IArchive, OArchive> vtable_ptr;
+        typedef detail::basic_function<vtable_ptr, Sig> base_type;
 
-        using function_base<Sig, IArchive, OArchive>::reset;
+    public:
+        typedef typename base_type::result_type result_type;
 
-        typedef function_base<Sig, IArchive, OArchive> base_type;
-        function() : base_type() {}
-
-        template <typename Functor>
-        function(
-            BOOST_FWD_REF(Functor) f
-          , typename ::boost::disable_if<
-                typename boost::is_same<
-                    function
-                  , typename boost::remove_const<
-                        typename hpx::util::detail::remove_reference<
-                            Functor
-                        >::type
-                    >::type
-                >::type
-            >::type * = 0
-        )
-            : base_type(boost::forward<Functor>(f))
+        function() BOOST_NOEXCEPT
+          : base_type()
         {}
 
-        function(function const & other)
-            : base_type(static_cast<base_type const &>(other))
-        {}
-
-        function(BOOST_RV_REF(function) other)
-            : base_type(boost::move(static_cast<BOOST_RV_REF(base_type)>(other)))
-        {}
-
-        function& operator=(BOOST_COPY_ASSIGN_REF(function) t)
+        function(function const& other)
+          : base_type()
         {
-            this->base_type::operator=(t);
+            detail::vtable::destruct<detail::empty_function<Sig> >(&this->object);
+
+            this->vptr = other.vptr;
+            if (!this->vptr->empty)
+            {
+                this->vptr->copy(&this->object, &other.object);
+            }
+        }
+
+        function(function&& other) BOOST_NOEXCEPT
+          : base_type(static_cast<base_type&&>(other))
+        {}
+
+        template <typename F>
+        function(F&& f,
+            typename boost::disable_if<
+                boost::is_same<function, typename util::decay<F>::type>
+            >::type* = 0
+        ) : base_type()
+        {
+            assign(std::forward<F>(f));
+        }
+
+        function& operator=(function const& other)
+        {
+            if (this != &other)
+            {
+                reset();
+                detail::vtable::destruct<detail::empty_function<Sig> >(&this->object);
+
+                this->vptr = other.vptr;
+                if (!this->vptr->empty)
+                {
+                    this->vptr->copy(&this->object, &other.object);
+                }
+            }
             return *this;
         }
 
-        function& operator=(BOOST_RV_REF(function) t)
+        function& operator=(function&& other) BOOST_NOEXCEPT
         {
-            this->base_type::operator=(boost::move(static_cast<BOOST_RV_REF(base_type)>(t)));
+            base_type::operator=(static_cast<base_type&&>(other));
             return *this;
         }
 
-        void clear() { reset(); }
+        template <typename F>
+        typename boost::disable_if<
+            boost::is_same<function, typename util::decay<F>::type>
+          , function&
+        >::type operator=(F&& f)
+        {
+            assign(std::forward<F>(f));
+            return *this;
+        }
+
+        using base_type::operator();
+        using base_type::assign;
+        using base_type::reset;
+        using base_type::empty;
+        using base_type::target_type;
+        using base_type::target;
 
     private:
-        BOOST_COPYABLE_AND_MOVABLE(function)
-
         friend class boost::serialization::access;
 
-        void load(IArchive &ar, const unsigned version)
+        void load(IArchive& ar, const unsigned version)
         {
-            bool is_empty;
-            ar & is_empty;
+            reset();
 
-            if(is_empty)
+            bool is_empty = false;
+            ar.load(is_empty);
+            if (!is_empty)
             {
-                this->reset();
-            }
-            else
-            {
-                typedef typename base_type::vtable_ptr_type vtable_ptr_type;
+                std::string name;
+                ar.load(name);
 
-                vtable_ptr_type* ptr = 0;
-                ar >> ptr;
-
-                boost::scoped_ptr<vtable_ptr_type> p(ptr);
-                this->vptr = ptr->get_ptr();
+                this->vptr = detail::get_table_ptr<vtable_ptr>(name);
                 this->vptr->load_object(&this->object, ar, version);
             }
         }
 
-        void save(OArchive &ar, const unsigned version) const
+        void save(OArchive& ar, const unsigned version) const
         {
-            bool is_empty = this->empty();
-            ar & is_empty;
-
-            if(!this->empty())
+            bool is_empty = empty();
+            ar.save(is_empty);
+            if (!is_empty)
             {
-                ar << this->vptr;
+                std::string function_name = this->vptr->name;
+                ar.save(function_name);
+
                 this->vptr->save_object(&this->object, ar, version);
             }
         }
@@ -192,403 +246,161 @@ namespace hpx { namespace util
         BOOST_SERIALIZATION_SPLIT_MEMBER()
     };
 
-    template <
-        typename Sig
-    >
-    struct function<Sig, void, void> : function_base<Sig, void, void>
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename Sig>
+    class function<Sig, void, void>
+      : public detail::basic_function<
+            detail::function_vtable_ptr<Sig, void, void>
+          , Sig
+        >
     {
-        typedef typename function_base<Sig, void, void>::result_type result_type;
+        typedef detail::function_vtable_ptr<Sig, void, void> vtable_ptr;
+        typedef detail::basic_function<vtable_ptr, Sig> base_type;
 
-        using function_base<Sig, void, void>::reset;
+    public:
+        typedef typename base_type::result_type result_type;
 
-        typedef function_base<Sig, void, void> base_type;
-        function() : base_type() {}
-
-        template <typename Functor>
-        function(
-            BOOST_FWD_REF(Functor) f
-          , typename ::boost::disable_if<
-                typename boost::is_same<
-                    function
-                  , typename boost::remove_const<
-                        typename hpx::util::detail::remove_reference<
-                            Functor
-                        >::type
-                    >::type
-                >::type
-            >::type * = 0
-        )
-            : base_type(boost::forward<Functor>(f))
+        function() BOOST_NOEXCEPT
+          : base_type()
         {}
 
-        function(function const & other)
-            : base_type(static_cast<BOOST_COPY_ASSIGN_REF(base_type)>(other))
-        {}
-
-        function(BOOST_RV_REF(function) other)
-            : base_type(boost::move(static_cast<BOOST_RV_REF(base_type)>(other)))
-        {}
-
-        function& operator=(BOOST_COPY_ASSIGN_REF(function) t)
+        function(function const& other)
+          : base_type()
         {
-            this->base_type::operator=(t);
-            return *this;
-        }
+            detail::vtable::destruct<detail::empty_function<Sig> >(&this->object);
 
-        function& operator=(BOOST_RV_REF(function) t)
-        {
-            this->base_type::operator=(boost::move(static_cast<BOOST_RV_REF(base_type)>(t)));
-            return *this;
-        }
-
-        void clear() { reset(); }
-
-    private:
-        BOOST_COPYABLE_AND_MOVABLE(function)
-    };
-
-
-    template <
-        typename Sig
-    >
-    struct function_nonser : function_base<Sig, void, void>
-    {
-        using function_base<Sig, void, void>::reset;
-
-        typedef function_base<Sig, void, void> base_type;
-        function_nonser() : base_type() {}
-
-        template <typename Functor>
-        function_nonser(
-            BOOST_FWD_REF(Functor) f
-          , typename ::boost::disable_if<
-                typename boost::is_same<
-                    function_nonser
-                  , typename boost::remove_const<
-                        typename hpx::util::detail::remove_reference<
-                            Functor
-                        >::type
-                    >::type
-                >::type
-            >::type * = 0
-        )
-            : base_type(boost::forward<Functor>(f))
-        {}
-
-        function_nonser(function_nonser const & other)
-            : base_type(static_cast<BOOST_COPY_ASSIGN_REF(base_type)>(other))
-        {}
-
-        function_nonser(BOOST_RV_REF(function_nonser) other)
-            : base_type(boost::move(static_cast<BOOST_RV_REF(base_type)>(other)))
-        {}
-
-        function_nonser& operator=(BOOST_COPY_ASSIGN_REF(function_nonser) t)
-        {
-            this->base_type::operator=(t);
-            return *this;
-        }
-
-        function_nonser& operator=(BOOST_RV_REF(function_nonser) t)
-        {
-            this->base_type::operator=(boost::move(static_cast<BOOST_RV_REF(base_type)>(t)));
-            return *this;
-        }
-
-        void clear() { reset(); }
-
-    private:
-        BOOST_COPYABLE_AND_MOVABLE(function_nonser)
-    };
-}}
-
-#if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  include <hpx/util/detail/preprocessed/function_template.hpp>
-#else
-
-#if defined(__WAVE__) && defined(HPX_CREATE_PREPROCESSED_FILES)
-#  pragma wave option(preserve: 1, line: 0, output: "preprocessed/function_template_" HPX_LIMIT_STR ".hpp")
-#endif
-
-#define BOOST_PP_ITERATION_PARAMS_1                                             \
-    (                                                                           \
-        3                                                                       \
-      , (                                                                       \
-            0                                                                   \
-          , HPX_FUNCTION_ARGUMENT_LIMIT                                         \
-          , <hpx/util/detail/function_template.hpp>                             \
-        )                                                                       \
-    )                                                                           \
-/**/
-#include BOOST_PP_ITERATE()
-
-#if defined(__WAVE__) && defined (HPX_CREATE_PREPROCESSED_FILES)
-#  pragma wave option(output: null)
-#endif
-
-#endif // !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-
-#endif
-
-#else
-
-#define N BOOST_PP_ITERATION()
-
-namespace hpx { namespace util {
-
-    template <
-        typename R
-      BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, typename A)
-      , typename IArchive
-      , typename OArchive
-    >
-    struct function_base<
-        R(BOOST_PP_ENUM_PARAMS(N, A))
-      , IArchive
-      , OArchive
-    >
-    {
-        function_base()
-            : vptr(0)
-            , object(0)
-        {}
-
-        ~function_base()
-        {
-            if(object)
+            this->vptr = other.vptr;
+            if (!this->vptr->empty)
             {
-                vptr->static_delete(&object);
+                this->vptr->copy(&this->object, &other.object);
             }
         }
 
-        typedef R result_type;
+        function(function&& other) BOOST_NOEXCEPT
+          : base_type(static_cast<base_type&&>(other))
+        {}
 
-        typedef
-            detail::vtable_ptr_base<
-                R(BOOST_PP_ENUM_PARAMS(N, A))
-              , IArchive
-              , OArchive
-            > vtable_ptr_type;
-
-        template <typename Functor>
-        explicit function_base(
-            BOOST_FWD_REF(Functor) f
-          , typename ::boost::disable_if<
-                typename boost::is_same<
-                    function_base
-                  , typename boost::remove_const<
-                        typename hpx::util::detail::remove_reference<
-                            Functor
-                        >::type
-                    >::type
-                >::type
-            >::type * dummy = 0
-        )
-            : vptr(0)
-            , object(0)
+        template <typename F>
+        function(F&& f,
+            typename boost::disable_if<
+                boost::is_same<function, typename util::decay<F>::type>
+            >::type* = 0
+        ) : base_type()
         {
-            if (!detail::is_empty_function(f))
-            {
-                typedef
-                    typename boost::remove_const<
-                        typename boost::decay<
-                            typename hpx::util::detail::remove_reference<Functor>::type
-                        >::type
-                    >::type
-                    functor_type;
-
-                vptr = detail::get_table<
-                            functor_type
-                          , R(BOOST_PP_ENUM_PARAMS(N, A))
-                        >::template get<
-                            IArchive
-                          , OArchive
-                        >();
-
-                const bool is_small = sizeof(functor_type) <= sizeof(void *);
-                if(is_small)
-                {
-                    new (&object) functor_type(boost::forward<Functor>(f));
-                }
-                else
-                {
-                    object = new functor_type(boost::forward<Functor>(f));
-                }
-            }
+            assign(std::forward<F>(f));
         }
 
-        function_base(function_base const & other)
-            : vptr(0)
-            , object(0)
+        function& operator=(function const& other)
         {
-            assign(other);
-        }
-
-        function_base(BOOST_RV_REF(function_base) other)
-            : vptr(other.vptr)
-            , object(other.object)
-        {
-            other.vptr = 0;
-            other.object = 0;
-        }
-
-        function_base &assign(function_base const & other)
-        {
-            if(&other != this)
-            {
-                if(vptr == other.vptr && !empty())
-                {
-                    vptr->copy(&other.object, &object);
-                }
-                else
-                {
-                    reset();
-                    if(!other.empty())
-                    {
-                        other.vptr->clone(&other.object, &object);
-                        vptr = other.vptr;
-                    }
-                }
-            }
-            return *this;
-        }
-
-        template <typename Functor>
-        function_base & assign(BOOST_FWD_REF(Functor) f)
-        {
-            typedef
-                typename boost::remove_const<
-                    typename boost::decay<
-                        typename hpx::util::detail::remove_reference<Functor>::type
-                    >::type
-                >::type
-                functor_type;
-
-            vtable_ptr_type * f_vptr
-                = detail::get_table<
-                      functor_type
-                    , R(BOOST_PP_ENUM_PARAMS(N, A))
-                  >::template get<
-                      IArchive
-                    , OArchive
-                  >();
-
-            const bool is_small = sizeof(functor_type) <= sizeof(void *);
-            if(vptr == f_vptr && !empty())
-            {
-                vptr->destruct(&object);
-                if(is_small)
-                {
-                    new (&object) functor_type(boost::forward<Functor>(f));
-                }
-                else
-                {
-                    object = new functor_type(boost::forward<Functor>(f));
-                }
-            }
-            else
-            {
-                if(!empty())
-                {
-                    vptr->destruct(&object);
-                    vptr = 0;
-                    object = 0;
-                }
-
-                if (!detail::is_empty_function(f))
-                {
-                    if(is_small)
-                    {
-                        new (&object) functor_type(boost::forward<Functor>(f));
-                    }
-                    else
-                    {
-                        object = new functor_type(boost::forward<Functor>(f));
-                    }
-                    vptr = f_vptr;
-                }
-            }
-            return *this;
-        }
-
-        template <typename T>
-        function_base & operator=(BOOST_FWD_REF(T) t)
-        {
-            return assign(boost::forward<T>(t));
-        }
-
-        function_base & operator=(BOOST_COPY_ASSIGN_REF(function_base) t)
-        {
-            return assign(t);
-        }
-
-        function_base & operator=(BOOST_RV_REF(function_base) t)
-        {
-            if(this != &t)
+            if (this != &other)
             {
                 reset();
-                vptr = t.vptr;
-                object = t.object;
-                t.vptr = 0;
-                t.object = 0;
-            }
+                detail::vtable::destruct<detail::empty_function<Sig> >(&this->object);
 
+                this->vptr = other.vptr;
+                if (!this->vptr->empty)
+                {
+                    this->vptr->copy(&this->object, &other.object);
+                }
+            }
             return *this;
         }
 
-        function_base &swap(function_base& f)
+        function& operator=(function&& other) BOOST_NOEXCEPT
         {
-            std::swap(vptr, f.vptr);
-            std::swap(object, f.object);
+            base_type::operator=(static_cast<base_type&&>(other));
             return *this;
         }
 
-        bool empty() const
+        template <typename F>
+        typename boost::disable_if<
+            boost::is_same<function, typename util::decay<F>::type>
+          , function&
+        >::type operator=(F&& f)
         {
-            return (vptr == 0) && (object == 0);
+            assign(std::forward<F>(f));
+            return *this;
         }
 
-        operator typename util::safe_bool<function_base>::result_type() const
-        {
-            return util::safe_bool<function_base>()(!empty());
-        }
-
-        bool operator!() const
-        {
-            return empty();
-        }
-
-        void reset()
-        {
-            if (!empty())
-            {
-                vptr->static_delete(&object);
-                vptr = 0;
-                object = 0;
-            }
-        }
-
-        BOOST_FORCEINLINE R operator()(BOOST_PP_ENUM_BINARY_PARAMS(N, A, a)) const
-        {
-            BOOST_ASSERT(!empty());
-            return vptr->invoke(&object BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, a));
-        }
-
-        BOOST_FORCEINLINE R operator()(BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))
-        {
-            BOOST_ASSERT(!empty());
-            return vptr->invoke(&object BOOST_PP_COMMA_IF(N) BOOST_PP_ENUM_PARAMS(N, a));
-        }
-
-    private:
-        BOOST_COPYABLE_AND_MOVABLE(function_base);
-
-    protected:
-        vtable_ptr_type *vptr;
-        mutable void *object;
+        using base_type::operator();
+        using base_type::assign;
+        using base_type::reset;
+        using base_type::empty;
+        using base_type::target_type;
+        using base_type::target;
     };
+
+    template <typename Sig, typename IArchive, typename OArchive>
+    static bool is_empty_function(function<Sig, IArchive, OArchive> const& f) BOOST_NOEXCEPT
+    {
+        return f.empty();
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+#   ifndef BOOST_NO_CXX11_TEMPLATE_ALIASES
+
+    template <typename Sig>
+    using function_nonser = function<Sig, void, void>;
+
+#   else
+
+    template <typename Sig>
+    class function_nonser
+      : public function<Sig, void, void>
+    {
+        typedef function<Sig, void, void> base_type;
+
+    public:
+        function_nonser() BOOST_NOEXCEPT
+          : base_type()
+        {}
+
+        function_nonser(function_nonser const& other)
+          : base_type(static_cast<base_type const&>(other))
+        {}
+
+        function_nonser(function_nonser&& other) BOOST_NOEXCEPT
+          : base_type(static_cast<base_type&&>(other))
+        {}
+
+        template <typename F>
+        function_nonser(F&& f,
+            typename boost::disable_if<
+                boost::is_same<function_nonser, typename util::decay<F>::type>
+            >::type* = 0
+        ) : base_type(std::forward<F>(f))
+        {}
+
+        function_nonser& operator=(function_nonser const& other)
+        {
+            base_type::operator=(static_cast<base_type const&>(other));
+            return *this;
+        }
+
+        function_nonser& operator=(function_nonser&& other) BOOST_NOEXCEPT
+        {
+            base_type::operator=(static_cast<base_type&&>(other));
+            return *this;
+        }
+
+        template <typename F>
+        typename boost::disable_if<
+            boost::is_same<function_nonser, typename util::decay<F>::type>
+          , function_nonser&
+        >::type operator=(F&& f)
+        {
+            base_type::operator=(std::forward<F>(f));
+            return *this;
+        }
+    };
+
+    template <typename Sig>
+    static bool is_empty_function(function_nonser<Sig> const& f) BOOST_NOEXCEPT
+    {
+        return f.empty();
+    }
+
+#   endif /*BOOST_NO_CXX11_TEMPLATE_ALIASES*/
 }}
 
-#undef N
 #endif
-

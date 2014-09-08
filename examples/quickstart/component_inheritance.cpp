@@ -55,7 +55,7 @@ struct client : hpx::components::client_base<client, A>
 {
     typedef hpx::components::client_base<client, A> base_type;
 
-    client(hpx::future<hpx::id_type> const& gid)
+    client(hpx::shared_future<hpx::id_type> const& gid)
       : base_type(gid)
     {}
 
@@ -69,7 +69,7 @@ struct client : hpx::components::client_base<client, A>
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
-    // Use the client class to invoke the print functionality of the compound
+    // Use the client class to invoke the print functionality of the derived
     // component 'B'.
     client hw(hpx::components::new_<B>(hpx::find_here()));
     hw.print();

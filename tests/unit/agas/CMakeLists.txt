@@ -6,24 +6,32 @@
 add_subdirectory(components)
 
 set(tests
+    credit_exhaustion
+    find_ids_from_prefix
+    get_colocation_id
+    gid_type
     local_address_rebind
-    scoped_ref_to_local_object
-    scoped_ref_to_remote_object
     local_embedded_ref_to_local_object
     local_embedded_ref_to_remote_object
     remote_embedded_ref_to_local_object
     remote_embedded_ref_to_remote_object
     refcnted_symbol_to_local_object
     refcnted_symbol_to_remote_object
+    scoped_ref_to_local_object
+    scoped_ref_to_remote_object
+    split_credit
     uncounted_symbol_to_local_object
     uncounted_symbol_to_remote_object
-    gid_type
-    credit_exhaustion
-    split_credit
    )
 
+set(find_ids_from_prefix_PARAMETERS
+    LOCALITIES 2)
+
+set(get_colocation_id_PARAMETERS
+    LOCALITIES 2)
+
 set(local_address_rebind_FLAGS
-    DEPENDENCIES simple_mobile_object_component)
+    DEPENDENCIES iostreams_component simple_mobile_object_component)
 set(local_address_rebind_PARAMETERS
     THREADS_PER_LOCALITY 4)
 
@@ -117,9 +125,11 @@ foreach(test ${tests})
   add_hpx_executable(${test}_test
                      SOURCES ${sources}
                      ${${test}_FLAGS}
+                     EXCLUDE_FROM_ALL
+                     HPX_PREFIX ${HPX_BUILD_PREFIX}
                      FOLDER "Tests/Unit/AGAS")
 
-  add_hpx_unit_test(${test} ${${test}_PARAMETERS})  
+  add_hpx_unit_test("agas" ${test} ${${test}_PARAMETERS})
 
   # add a custom target for this example
   add_hpx_pseudo_target(tests.unit.agas.${test})

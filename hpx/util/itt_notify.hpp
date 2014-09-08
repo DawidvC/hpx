@@ -72,7 +72,7 @@ typedef void* __itt_heap_function;
 ///////////////////////////////////////////////////////////////////////////////
 // decide whether to use the ITT notify API if it's available
 
-#if HPX_USE_ITTNOTIFY != 0
+#if HPX_HAVE_ITTNOTIFY != 0
 extern bool use_ittnotify_api;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -392,7 +392,7 @@ namespace hpx { namespace util { namespace itt
 
     struct id
     {
-        id (domain const& domain, void* addr, unsigned long extra = 0) {}
+        id (domain const& /*domain*/, void* /*addr*/, unsigned long /*extra*/ = 0) {}
         ~id() {}
     };
 
@@ -439,13 +439,13 @@ namespace hpx { namespace util { namespace itt
     struct heap_allocate
     {
         template <typename T>
-        heap_allocate(heap_function& heap_function, T**, std::size_t, int) {}
+        heap_allocate(heap_function& /*heap_function*/, T**, std::size_t, int) {}
         ~heap_allocate() {}
     };
 
     struct heap_free
     {
-        heap_free(heap_function& heap_function, void*) {}
+        heap_free(heap_function& /*heap_function*/, void*) {}
         ~heap_free() {}
     };
 
@@ -456,6 +456,6 @@ namespace hpx { namespace util { namespace itt
     };
 }}}
 
-#endif // HPX_USE_ITTNOTIFY
+#endif // HPX_HAVE_ITTNOTIFY
 
 #endif

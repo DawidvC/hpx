@@ -21,7 +21,9 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/convenience.hpp>
 #include <boost/throw_exception.hpp>
+#include <utility>
 
+#include <hpx/exception.hpp>
 #include <hpx/util/plugin/config.hpp>
 
 #if !defined(__ANDROID__) && !defined(ANDROID) && !defined(__APPLE__)
@@ -58,7 +60,7 @@ namespace hpx { namespace util { namespace plugin {
 
     namespace very_detail
     {
-        template <typename TO, typename FROM> 
+        template <typename TO, typename FROM>
         TO nasty_cast(FROM f)
         {
             union {
@@ -124,15 +126,11 @@ namespace hpx { namespace util { namespace plugin {
     public:
         dll()
         :   dll_handle (NULL)
-        {
-            LoadLibrary();
-        }
+        {}
 
         dll(dll const& rhs)
         :   dll_name(rhs.dll_name), map_name(rhs.map_name), dll_handle(NULL)
-        {
-            LoadLibrary();
-        }
+        {}
 
         dll(std::string const& name)
         :   dll_name(name), map_name(""), dll_handle(NULL)
@@ -146,17 +144,26 @@ namespace hpx { namespace util { namespace plugin {
             fs::path dll_path(dll_name);
 #endif
             map_name = fs::basename(dll_path);
+        }
 
-            LoadLibrary();
+        void load_library(error_code& ec = throws)
+        {
+            LoadLibrary(ec);
         }
 
         dll(std::string const& libname, std::string const& mapname)
         :   dll_name(libname), map_name(mapname), dll_handle(NULL)
+        {}
+
+        dll(dll && rhs)
+          : dll_name(std::move(rhs.dll_name))
+          , map_name(std::move(rhs.map_name))
+          , dll_handle(rhs.dll_handle)
         {
-            LoadLibrary();
+            rhs.dll_handle = NULL;
         }
 
-        dll &operator=(dll const& rhs)
+        dll &operator=(dll const & rhs)
         {
             if (this != &rhs) {
             //  free any existing dll_handle
@@ -166,6 +173,17 @@ namespace hpx { namespace util { namespace plugin {
                 dll_name = rhs.dll_name;
                 map_name = rhs.map_name;
                 LoadLibrary();
+            }
+            return *this;
+        }
+
+        dll &operator=(dll && rhs)
+        {
+            if (&rhs != this) {
+                dll_name = std::move(rhs.dll_name);
+                map_name = std::move(rhs.map_name);
+                dll_handle = rhs.dll_handle;
+                rhs.dll_handle = NULL;
             }
             return *this;
         }
@@ -180,12 +198,32 @@ namespace hpx { namespace util { namespace plugin {
 
         template<typename SymbolType, typename Deleter>
         std::pair<SymbolType, Deleter>
-        get(std::string const& symbol_name) const
+        get(std::string const& symbol_name, error_code& ec = throws) const
         {
+            const_cast<dll&>(*this).LoadLibrary(ec);      // make sure everything is initialized
+            if (ec) return std::pair<SymbolType, Deleter>();
+
             initialize_mutex();
             boost::mutex::scoped_lock lock(mutex_instance());
 
             BOOST_STATIC_ASSERT(boost::is_pointer<SymbolType>::value);
+
+            SymbolType address = very_detail::nasty_cast<SymbolType>(
+                MyGetProcAddress(dll_handle, symbol_name.c_str()));
+            if (NULL == address)
+            {
+                HPX_PLUGIN_OSSTREAM str;
+                str << "Hpx.Plugin: Unable to locate the exported symbol name '"
+                    << symbol_name << "' in the shared library '"
+                    << dll_name << "' (dlerror: " << dlerror () << ")";
+
+                dlerror();
+
+                // report error
+                HPX_THROWS_IF(ec, dynamic_link_failure,
+                    "plugin::get", HPX_PLUGIN_OSSTREAM_GETSTRING(str));
+                return std::pair<SymbolType, Deleter>();
+            }
 
             // Open the library. Yes, we do it on every access to
             // a symbol, the LoadLibrary function increases the refcnt of the dll
@@ -199,14 +237,16 @@ namespace hpx { namespace util { namespace plugin {
                 str << "Hpx.Plugin: Could not open shared library '"
                     << dll_name << "' (dlerror: " << dlerror() << ")";
 
-                boost::throw_exception(
-                    std::logic_error(HPX_PLUGIN_OSSTREAM_GETSTRING(str)));
+                // report error
+                HPX_THROWS_IF(ec, filesystem_error,
+                    "plugin::get", HPX_PLUGIN_OSSTREAM_GETSTRING(str));
+                return std::pair<SymbolType, Deleter>();
             }
 
 #if !defined(__AIX__)
             // AIX seems to return different handle values for the second and
             // any following call
-            BOOST_ASSERT(handle == dll_handle);
+            HPX_ASSERT(handle == dll_handle);
 #endif
 
             init_library(handle);   // initialize library
@@ -214,66 +254,67 @@ namespace hpx { namespace util { namespace plugin {
             // Cast to the right type.
             dlerror();              // Clear the error state.
 
-            SymbolType address = very_detail::nasty_cast<SymbolType>(
-                MyGetProcAddress(dll_handle, symbol_name.c_str()));
-            if (NULL == address)
-            {
-                HPX_PLUGIN_OSSTREAM str;
-                str << "Hpx.Plugin: Unable to locate the exported symbol name '"
-                    << symbol_name << "' in the shared library '"
-                    << dll_name << "' (dlerror: " << dlerror () << ")";
-
-                dlerror();
-                MyFreeLibrary(handle);
-                boost::throw_exception(
-                    std::logic_error(HPX_PLUGIN_OSSTREAM_GETSTRING(str)));
-            }
             return std::make_pair(address, free_dll<SymbolType>(handle));
         }
 
-        void keep_alive()
+        void keep_alive(error_code& ec = throws)
         {
-            LoadLibrary();
+            LoadLibrary(ec, true);
         }
 
     protected:
-        void LoadLibrary()
+        void LoadLibrary(error_code& ec = throws, bool force = false)
         {
-            initialize_mutex();
-            boost::mutex::scoped_lock lock(mutex_instance());
+            if (!dll_handle || force) {
+                initialize_mutex();
+                boost::mutex::scoped_lock lock(mutex_instance());
 
-            ::dlerror();                // Clear the error state.
-            dll_handle = MyLoadLibrary((dll_name.empty() ? NULL : dll_name.c_str()));
-            // std::cout << "open\n";
-            if (!dll_handle) {
-                HPX_PLUGIN_OSSTREAM str;
-                str << "Hpx.Plugin: Could not open shared library '"
-                    << dll_name << "' (dlerror: " << dlerror() << ")";
-                boost::throw_exception(
-                    std::logic_error(HPX_PLUGIN_OSSTREAM_GETSTRING(str)));
+                ::dlerror();                // Clear the error state.
+                dll_handle = MyLoadLibrary((dll_name.empty() ? NULL : dll_name.c_str()));
+                // std::cout << "open\n";
+                if (!dll_handle) {
+                    HPX_PLUGIN_OSSTREAM str;
+                    str << "Hpx.Plugin: Could not open shared library '"
+                        << dll_name << "' (dlerror: " << dlerror() << ")";
+
+                    HPX_THROWS_IF(ec, filesystem_error,
+                        "plugin::LoadLibrary", HPX_PLUGIN_OSSTREAM_GETSTRING(str));
+                    return;
+                }
+
+                init_library(dll_handle);   // initialize library
             }
 
-            init_library(dll_handle);   // initialize library
+            if (&ec != &throws)
+                ec = make_success_code();
         }
 
     public:
-#if !defined(__ANDROID__) && !defined(ANDROID) && !defined(__APPLE__)
-        std::string get_directory() const
+        std::string get_directory(error_code& ec = throws) const
         {
             // now find the full path of the loaded library
-            char directory[PATH_MAX];
-            if (::dlinfo(dll_handle, RTLD_DI_ORIGIN, directory) < 0) {
+            char directory[PATH_MAX] = { '\0' };
+
+#if !defined(__ANDROID__) && !defined(ANDROID) && !defined(__APPLE__)
+            const_cast<dll&>(*this).LoadLibrary(ec);
+            if (!ec && ::dlinfo(dll_handle, RTLD_DI_ORIGIN, directory) < 0) {
                 HPX_PLUGIN_OSSTREAM str;
                 str << "Hpx.Plugin: Could not extract path the shared "
                        "library '" << dll_name << "' has been loaded from "
                        "(dlerror: " << dlerror() << ")";
-                boost::throw_exception(
-                    std::logic_error(HPX_PLUGIN_OSSTREAM_GETSTRING(str)));
+
+                HPX_THROWS_IF(ec, filesystem_error,
+                    "plugin::get_directory",
+                    HPX_PLUGIN_OSSTREAM_GETSTRING(str));
             }
             ::dlerror();                // Clear the error state.
+#endif
+
+            if (&ec != &throws)
+                ec = make_success_code();
+
             return directory;
         }
-#endif
 
     protected:
         void FreeLibrary()

@@ -2,6 +2,7 @@
 // portable_binary_oarchive.cpp
 
 // (C) Copyright 2002-7 Robert Ramey - http://www.rrsd.com .
+// Copyright (c) 2007-2013 Hartmut Kaiser
 // Use, modification and distribution is subject to the Boost Software
 // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
@@ -11,7 +12,7 @@
 #include <boost/version.hpp>
 #include <hpx/config.hpp>
 
-#if BOOST_VERSION >= 103700 && HPX_USE_PORTABLE_ARCHIVES != 0
+#if BOOST_VERSION >= 103700
 
 // export the defined functions
 #define BOOST_ARCHIVE_SOURCE
@@ -47,7 +48,7 @@ namespace hpx { namespace util
 {
 
 void portable_binary_oarchive::save_impl(
-    const boost::int64_t l, const char maxsize)
+    boost::int64_t const l, char const maxsize)
 {
     char size = 0;
     if (l == 0) {
@@ -65,7 +66,7 @@ void portable_binary_oarchive::save_impl(
     do {
         ll >>= CHAR_BIT;
         ++size;
-    } while(ll != 0);
+    } while (ll != 0);
 
     this->primitive_base_t::save(size);
     this->primitive_base_t::save(negative);
@@ -78,12 +79,45 @@ void portable_binary_oarchive::save_impl(
     char* cptr = reinterpret_cast<char *>(& ll);
 #ifdef BOOST_BIG_ENDIAN
     cptr += (sizeof(boost::int64_t) - size);
-    if(m_flags & endian_little)
+    if(this->flags() & endian_little)
         reverse_bytes(size, cptr);
 #else
-    if(m_flags & endian_big)
+    if(this->flags() & endian_big)
         reverse_bytes(size, cptr);
 #endif
+
+    this->primitive_base_t::save_binary(cptr, static_cast<std::size_t>(size));
+}
+
+void portable_binary_oarchive::save_impl(
+    boost::uint64_t const ul, char const maxsize)
+{
+    char size = 0;
+    if (ul == 0) {
+        this->primitive_base_t::save(size);
+        return;
+    }
+
+    boost::uint64_t ll = ul;
+    do {
+        ll >>= CHAR_BIT;
+        ++size;
+    } while (ll != 0);
+
+    this->primitive_base_t::save(size);
+
+    ll = ul;
+    char* cptr = reinterpret_cast<char*>(&ll);
+
+#ifdef BOOST_BIG_ENDIAN
+    cptr += (sizeof(boost::uint64_t) - size);
+    if(this->flags() & endian_little)
+        reverse_bytes(size, cptr);
+#else
+    if(this->flags() & endian_big)
+        reverse_bytes(size, cptr);
+#endif
+
     this->primitive_base_t::save_binary(cptr, static_cast<std::size_t>(size));
 }
 
@@ -93,16 +127,16 @@ void portable_binary_oarchive::save_impl(
 #   endif
 #   pragma GCC diagnostic ignored "-Wconversion"
 #endif
-void portable_binary_oarchive::init(util::binary_filter* filter, unsigned int flags)
+void portable_binary_oarchive::init(util::binary_filter* filter, unsigned int flags_)
 {
-    if ((m_flags & (endian_big | endian_little)) == (endian_big | endian_little))
+    if ((this->flags() & (endian_big | endian_little)) == (endian_big | endian_little))
     {
         // bail out if both flags are specified
         BOOST_THROW_EXCEPTION(
             portable_binary_oarchive_exception());
     }
 
-    if (!(flags & boost::archive::no_header)) {
+    if (!(flags_ & boost::archive::no_header)) {
         // write signature in an archive version independent manner
         const std::string file_signature(
             boost::archive::BOOST_ARCHIVE_SIGNATURE());
@@ -114,16 +148,15 @@ void portable_binary_oarchive::init(util::binary_filter* filter, unsigned int fl
         *this << v;
     }
 
-    save(static_cast<unsigned char>(m_flags >> CHAR_BIT));
+    save(static_cast<boost::uint16_t>(this->flags() >> CHAR_BIT));
 
     // handle filter and compression in the archive separately
-    bool has_filter = filter ? true : false;
-    *this << has_filter;
+    bool has_filter = filter != 0;
+    save(has_filter);
 
-    if (has_filter) {
+    if (has_filter && (this->flags() & enable_compression)) {
         *this << filter;
-        if (m_flags & enable_compression)
-            this->set_filter(filter);
+        this->set_filter(filter);
     }
 }
 #if defined(__GNUG__) && !defined(__INTEL_COMPILER)
@@ -173,4 +206,4 @@ namespace hpx { namespace util
     >;
 }}
 
-#endif // BOOST_VERSION >= 103700 && HPX_USE_PORTABLE_ARCHIVES != 0
+#endif // BOOST_VERSION >= 103700

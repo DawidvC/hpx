@@ -11,6 +11,7 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/lcos/promise.hpp>
 #include <hpx/include/client.hpp>
+#include <hpx/runtime/threads/thread_data.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
 
 #include <tests/unit/agas/components/stubs/managed_refcnt_checker.hpp>
@@ -45,7 +46,7 @@ struct managed_refcnt_monitor
       : locality_(naming::get_locality_from_gid(locality)
                 , naming::id_type::unmanaged)
     {
-        this->base_type::create(locality_, flag_.get_gid());
+        gid_ = stub_type::create_async(locality_, flag_.get_gid());
     }
 
     /// Create a new component on the target locality.
@@ -54,7 +55,7 @@ struct managed_refcnt_monitor
         )
       : locality_(naming::get_locality_from_id(locality))
     {
-        this->base_type::create(locality_, flag_.get_gid());
+        gid_ = stub_type::create_async(locality_, flag_.get_gid());
     }
 
     lcos::future<void> take_reference_async(
@@ -71,18 +72,18 @@ struct managed_refcnt_monitor
         return this->base_type::take_reference(get_gid(), gid);
     }
 
-    bool ready()
+    bool is_ready()
     {
         // Flush pending reference counting operations on the target locality.
         agas::garbage_collect(locality_);
 
-        return flag_.ready();
+        return flag_.is_ready();
     }
 
     template <
         typename Duration
     >
-    bool ready(
+    bool is_ready(
         Duration const& d
         )
     {
@@ -95,7 +96,7 @@ struct managed_refcnt_monitor
         // Suspend this pxthread.
         threads::get_self().yield(threads::suspended);
 
-        return flag_.ready();
+        return flag_.is_ready();
     }
 };
 
@@ -121,7 +122,7 @@ struct managed_object
         naming::gid_type const& locality
         )
     {
-        this->base_type::create(
+        gid_ = stub_type::create_async(
             naming::id_type(locality, naming::id_type::unmanaged),
             naming::invalid_id);
     }
@@ -131,7 +132,7 @@ struct managed_object
         naming::id_type const& locality
         )
     {
-        this->base_type::create(locality, naming::invalid_id);
+        gid_ = stub_type::create_async(locality, naming::invalid_id);
     }
 };
 

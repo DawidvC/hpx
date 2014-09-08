@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2013 Hartmut Kaiser
+//  Copyright (c) 2012-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -12,6 +12,7 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/config.hpp>
 #include <hpx/exception.hpp>
+#include <hpx/traits/action_may_require_id_splitting.hpp>
 #include <hpx/runtime/agas/request.hpp>
 #include <hpx/runtime/agas/response.hpp>
 #include <hpx/runtime/agas/namespace_action_code.hpp>
@@ -28,6 +29,7 @@
 
 #include <boost/format.hpp>
 #include <boost/fusion/include/vector.hpp>
+#include <boost/fusion/include/at_c.hpp>
 
 namespace hpx { namespace agas
 {
@@ -39,7 +41,7 @@ namespace server
 {
 
 // Base name used to register the component
-char const* const primary_namespace_service_name = "primary_namespace/";
+char const* const primary_namespace_service_name = "primary/";
 
 /// \brief AGAS's primary namespace maps 128-bit global identifiers (GIDs) to
 /// resolved addresses.
@@ -60,20 +62,25 @@ char const* const primary_namespace_service_name = "primary_namespace/";
 ///     prefix     - Highest 32 bits (bit 96 to bit 127) of the MSB. Each
 ///                  locality is assigned a prefix. This creates a 96-bit
 ///                  address space for each locality.
-///     RC         - Bit 80 to bit 95 of the MSB. This is the number of
-///                  reference counting credits on the GID.
-///     identifier - Bit 64 to bit 80 of the MSB, and the entire LSB. The
+///     RC         - Bit 88 to bit 92 of the MSB. This is the log2 of the number
+///                  of reference counting credits on the GID.
+///                  Bit 93 is used by the locking scheme for gid_types.
+///                  Bit 94 is a flag which is set if the credit value is valid.
+///                  Bit 95 is a flag that is set if a GID's credit count is
+///                  ever split (e.g. if the GID is ever passed to another
+///                  locality).
+///     identifier - Bit 64 to bit 87 of the MSB, and the entire LSB. The
 ///                  content of these bits depends on the component type of
 ///                  the underlying object. For all user-defined components,
-///                  these bits contain a unique 80-bit number which is
+///                  these bits contain a unique 88-bit number which is
 ///                  assigned sequentially for each locality. For
 ///                  \a hpx#components#component_runtime_support and
-///                  \a hpx#components#component_memory, the high 16 bits are
+///                  \a hpx#components#component_memory, the high 24 bits are
 ///                  zeroed and the low 64 bits hold the LVA of the component.
 ///
 /// The following address ranges are reserved. Some are either explicitly or
 /// implicitly protected by AGAS. The letter x represents a single-byte
-/// wildcard.
+/// wild card.
 ///
 ///     00000000xxxxxxxxxxxxxxxxxxxxxxxx
 ///         Historically unused address space reserved for future use.
@@ -90,6 +97,14 @@ char const* const primary_namespace_service_name = "primary_namespace/";
 ///     00000001000000010000000000000003
 ///         Address of the symbol_namespace component on the bootstrap AGAS
 ///         locality.
+///     00000001000000010000000000000004
+///         Address of the locality_namespace component on the bootstrap AGAS
+///         locality.
+///     00000001000000010000000000000005
+///         Address of the root-CA component
+///     xxxxxxxx000000010000000000000006
+///         Address of the locality based sub-CA, xxxxxxxx is replaced with the
+///         correct locality id
 ///
 struct HPX_EXPORT primary_namespace
   : components::fixed_component_base<primary_namespace>
@@ -100,11 +115,14 @@ struct HPX_EXPORT primary_namespace
 
     typedef boost::int32_t component_type;
 
-    typedef std::map<naming::gid_type, gva>
-        gva_table_type;
+    typedef std::pair<gva, boost::uint32_t> gva_table_data_type;
+    typedef std::map<naming::gid_type, gva_table_data_type> gva_table_type;
 
     typedef util::merging_map<naming::gid_type, boost::int64_t>
         refcnt_table_type;
+
+    typedef std::pair<refcnt_table_type::iterator, refcnt_table_type::iterator>
+        refcnt_match;
     // }}}
 
   private:
@@ -115,6 +133,8 @@ struct HPX_EXPORT primary_namespace
     refcnt_table_type refcnts_;
     std::string instance_name_;
     naming::locality locality_;
+    naming::gid_type next_id_;      // next available gid
+    boost::uint32_t locality_id_;   // our locality id
 
     struct update_time_on_exit;
 
@@ -143,20 +163,28 @@ struct HPX_EXPORT primary_namespace
         boost::int64_t get_bind_gid_count(bool);
         boost::int64_t get_resolve_gid_count(bool);
         boost::int64_t get_unbind_gid_count(bool);
-        boost::int64_t get_change_credit_count(bool);
+        boost::int64_t get_increment_credit_count(bool);
+        boost::int64_t get_decrement_credit_count(bool);
+        boost::int64_t get_allocate_count(bool);
+        boost::int64_t get_overall_count(bool);
 
         boost::int64_t get_route_time(bool);
         boost::int64_t get_bind_gid_time(bool);
         boost::int64_t get_resolve_gid_time(bool);
         boost::int64_t get_unbind_gid_time(bool);
-        boost::int64_t get_change_credit_time(bool);
+        boost::int64_t get_increment_credit_time(bool);
+        boost::int64_t get_decrement_credit_time(bool);
+        boost::int64_t get_allocate_time(bool);
+        boost::int64_t get_overall_time(bool);
 
         // increment counter values
         void increment_route_count();
         void increment_bind_gid_count();
         void increment_resolve_gid_count();
         void increment_unbind_gid_count();
-        void increment_change_credit_count();
+        void increment_increment_credit_count();
+        void increment_decrement_credit_count();
+        void increment_allocate_count();
 
     private:
         friend struct update_time_on_exit;
@@ -167,8 +195,9 @@ struct HPX_EXPORT primary_namespace
         api_counter_data bind_gid_;             // primary_ns_bind_gid
         api_counter_data resolve_gid_;          // primary_ns_resolve_gid
         api_counter_data unbind_gid_;           // primary_ns_unbind_gid
-        api_counter_data change_credit_;        // primary_ns_change_credit_non_blocking
-                                                // primary_ns_change_credit_sync
+        api_counter_data increment_credit_;     // primary_ns_increment_credit
+        api_counter_data decrement_credit_;     // primary_ns_decrement_credit
+        api_counter_data allocate_;             // primary_ns_allocate
     };
     counter_data counter_data_;
 
@@ -191,12 +220,31 @@ struct HPX_EXPORT primary_namespace
         boost::int64_t& t_;
     };
 
+#if defined(HPX_AGAS_DUMP_REFCNT_ENTRIES)
+    /// Dump the credit counts of all matching ranges. Expects that \p l
+    /// is locked.
+    void dump_refcnt_matches(
+        refcnt_match match
+      , naming::gid_type const& lower
+      , naming::gid_type const& upper
+      , mutex_type::scoped_lock& l
+      , const char* func_name
+        );
+#endif
+
   public:
     primary_namespace()
       : base_type(HPX_AGAS_PRIMARY_NS_MSB, HPX_AGAS_PRIMARY_NS_LSB)
+      , locality_id_(naming::invalid_locality_id)
     {}
 
     void finalize();
+
+    void set_local_locality(naming::gid_type const& g)
+    {
+        locality_id_ = naming::get_locality_id_from_gid(g);
+        next_id_ = naming::gid_type(g.get_msb() + 1, 0x1000);
+    }
 
     response remote_service(
         request const& req
@@ -224,7 +272,7 @@ struct HPX_EXPORT primary_namespace
       , error_code& ec
         );
 
-    // register all performance counter types exposed by this component
+    /// Register all performance counter types exposed by this component.
     static void register_counter_types(
         error_code& ec = throws
         );
@@ -259,12 +307,17 @@ struct HPX_EXPORT primary_namespace
       , error_code& ec = throws
         );
 
-    response change_credit_non_blocking(
+    response increment_credit(
         request const& req
       , error_code& ec = throws
         );
 
-    response change_credit_sync(
+    response decrement_credit(
+        request const& req
+      , error_code& ec = throws
+        );
+
+    response allocate(
         request const& req
       , error_code& ec = throws
         );
@@ -275,7 +328,8 @@ struct HPX_EXPORT primary_namespace
         );
 
   private:
-    boost::fusion::vector2<naming::gid_type, gva> resolve_gid_locked(
+    boost::fusion::vector3<naming::gid_type, gva, boost::uint32_t>
+    resolve_gid_locked(
         naming::gid_type const& gid
       , error_code& ec
         );
@@ -283,7 +337,7 @@ struct HPX_EXPORT primary_namespace
     void increment(
         naming::gid_type const& lower
       , naming::gid_type const& upper
-      , boost::int64_t credits
+      , boost::int64_t& credits
       , error_code& ec
         );
 
@@ -301,11 +355,21 @@ struct HPX_EXPORT primary_namespace
     ///        matches) and remove them from the reference counting table.
     ///    3.) Kill the dead objects (fire-and-forget semantics).
 
-    typedef boost::fusion::vector3<
+    typedef boost::fusion::vector4<
         gva                 // gva
       , naming::gid_type    // gid
       , naming::gid_type    // count
+      , boost::uint32_t     // locality_id
     > free_entry;
+
+    void resolve_free_list(
+        mutex_type::scoped_lock& l
+      , std::list<refcnt_table_type::iterator> const& free_list
+      , std::list<free_entry>& free_entry_list
+      , naming::gid_type const& lower
+      , naming::gid_type const& upper
+      , error_code& ec
+        );
 
     void decrement_sweep(
         std::list<free_entry>& free_list
@@ -315,14 +379,7 @@ struct HPX_EXPORT primary_namespace
       , error_code& ec
         );
 
-    void kill_non_blocking(
-        std::list<free_entry>& free_list
-      , naming::gid_type const& lower
-      , naming::gid_type const& upper
-      , error_code& ec
-        );
-
-    void kill_sync(
+    void free_components_sync(
         std::list<free_entry>& free_list
       , naming::gid_type const& lower
       , naming::gid_type const& upper
@@ -341,22 +398,14 @@ struct HPX_EXPORT primary_namespace
       , namespace_bind_gid                      = primary_ns_bind_gid
       , namespace_resolve_gid                   = primary_ns_resolve_gid
       , namespace_unbind_gid                    = primary_ns_unbind_gid
-      , namespace_change_credit_non_blocking    = primary_ns_change_credit_non_blocking
-      , namespace_change_credit_sync            = primary_ns_change_credit_sync
+      , namespace_increment_credit              = primary_ns_increment_credit
+      , namespace_decrement_credit              = primary_ns_decrement_credit
+      , namespace_allocate                      = primary_ns_allocate
       , namespace_statistics_counter            = primary_ns_statistics_counter
     }; // }}}
 
     HPX_DEFINE_COMPONENT_ACTION(primary_namespace, remote_service, service_action);
     HPX_DEFINE_COMPONENT_ACTION(primary_namespace, remote_bulk_service, bulk_service_action);
-
-    /// This is the default hook implementation for decorate_action which
-    /// does no hooking at all.
-    static HPX_STD_FUNCTION<threads::thread_function_type>
-    wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-        naming::address::address_type)
-    {
-        return boost::move(f);
-    }
 
     static parcelset::policies::message_handler* get_message_handler(
         parcelset::parcelhandler* ph
@@ -400,11 +449,29 @@ namespace hpx { namespace traits
 
     // Parcel routing forwards the binary filter request to the routed action
     template <>
-    struct action_serialization_filter<agas::server::primary_namespace::service_action>
+    struct action_serialization_filter<
+        agas::server::primary_namespace::service_action>
     {
         static util::binary_filter* call(parcelset::parcel const& p)
         {
             return agas::server::primary_namespace::get_serialization_filter(p);
+        }
+    };
+
+    // id-splitting does not happen for incref operations
+    template <>
+    struct action_may_require_id_splitting<
+        agas::server::primary_namespace::service_action>
+    {
+        template <typename Arguments>
+        static bool call(Arguments const& args)
+        {
+            if (boost::fusion::at_c<0>(args).get_action_code() ==
+                agas::primary_ns_increment_credit)
+            {
+                return false;
+            }
+            return true;
         }
     };
 }}

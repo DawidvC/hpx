@@ -14,6 +14,7 @@
 #include <hpx/runtime/naming/address.hpp>
 
 #include <boost/thread.hpp>
+#include <boost/variant.hpp>
 #include <boost/dynamic_bitset.hpp>
 
 #include <string>
@@ -24,33 +25,19 @@
 namespace hpx { namespace threads
 {
     /// \cond NOINTERNAL
-#if !defined(HPX_HAVE_MORE_THAN_64_THREADS)
+#if !defined(HPX_HAVE_MORE_THAN_64_THREADS) || (defined(HPX_MAX_CPU_COUNT) && HPX_MAX_CPU_COUNT <= 64)
     typedef boost::uint64_t mask_type;
     typedef boost::uint64_t mask_cref_type;
 
-    static boost::uint64_t const bits[] =
+    inline boost::uint64_t bits(std::size_t idx)
     {
-        0x0000000000000001ull, 0x0000000000000002ull, 0x0000000000000004ull, 0x0000000000000008ull,
-        0x0000000000000010ull, 0x0000000000000020ull, 0x0000000000000040ull, 0x0000000000000080ull,
-        0x0000000000000100ull, 0x0000000000000200ull, 0x0000000000000400ull, 0x0000000000000800ull,
-        0x0000000000001000ull, 0x0000000000002000ull, 0x0000000000004000ull, 0x0000000000008000ull,
-        0x0000000000010000ull, 0x0000000000020000ull, 0x0000000000040000ull, 0x0000000000080000ull,
-        0x0000000000100000ull, 0x0000000000200000ull, 0x0000000000400000ull, 0x0000000000800000ull,
-        0x0000000001000000ull, 0x0000000002000000ull, 0x0000000004000000ull, 0x0000000008000000ull,
-        0x0000000010000000ull, 0x0000000020000000ull, 0x0000000040000000ull, 0x0000000080000000ull,
-        0x0000000100000000ull, 0x0000000200000000ull, 0x0000000400000000ull, 0x0000000800000000ull,
-        0x0000001000000000ull, 0x0000002000000000ull, 0x0000004000000000ull, 0x0000008000000000ull,
-        0x0000010000000000ull, 0x0000020000000000ull, 0x0000040000000000ull, 0x0000080000000000ull,
-        0x0000100000000000ull, 0x0000200000000000ull, 0x0000400000000000ull, 0x0000800000000000ull,
-        0x0001000000000000ull, 0x0002000000000000ull, 0x0004000000000000ull, 0x0008000000000000ull,
-        0x0010000000000000ull, 0x0020000000000000ull, 0x0040000000000000ull, 0x0080000000000000ull,
-        0x0100000000000000ull, 0x0200000000000000ull, 0x0400000000000000ull, 0x0800000000000000ull,
-        0x1000000000000000ull, 0x2000000000000000ull, 0x4000000000000000ull, 0x8000000000000000ull
-    };
+       HPX_ASSERT(idx < CHAR_BIT * sizeof(mask_type));
+       return boost::uint64_t(1) << idx;
+    }
 
     inline bool any(mask_cref_type mask)
     {
-        return (mask != 0) ? true : false;
+        return mask != 0;
     }
 
     inline mask_type not_(mask_cref_type mask)
@@ -60,24 +47,24 @@ namespace hpx { namespace threads
 
     inline bool test(mask_cref_type mask, std::size_t idx)
     {
-        BOOST_ASSERT(idx < sizeof(bits)/sizeof(bits[0]));
-        return (bits[idx] & mask) ? true : false;
+        HPX_ASSERT(idx < CHAR_BIT * sizeof(mask_type));
+        return (bits(idx) & mask) != 0;
     }
 
     inline void set(mask_type& mask, std::size_t idx)
     {
-        BOOST_ASSERT(idx < sizeof(bits)/sizeof(bits[0]));
-        mask |= bits[idx];
+        HPX_ASSERT(idx < CHAR_BIT * sizeof(mask_type));
+        mask |= bits(idx);
     }
 
     inline std::size_t mask_size(mask_cref_type mask)
     {
-        return sizeof(bits)/sizeof(bits[0]);
+        return CHAR_BIT * sizeof(mask_type);
     }
 
     inline void resize(mask_type& mask, std::size_t s)
     {
-        BOOST_ASSERT(s <= sizeof(bits)/sizeof(bits[0]));
+        HPX_ASSERT(s <= CHAR_BIT * sizeof(mask_type));
     }
 
     inline std::size_t find_first(mask_cref_type mask)
@@ -92,11 +79,21 @@ namespace hpx { namespace threads
 
             return c;
         }
-        return std::size_t(-1);
+        return ~std::size_t(0);
+    }
+
+    inline bool equal(mask_cref_type lhs, mask_cref_type rhs, std::size_t)
+    {
+        return lhs == rhs;
     }
 #else
+# if defined(HPX_MAX_CPU_COUNT)
+    typedef std::bitset<HPX_MAX_CPU_COUNT> mask_type;
+    typedef std::bitset<HPX_MAX_CPU_COUNT> const& mask_cref_type;
+# else
     typedef boost::dynamic_bitset<boost::uint64_t> mask_type;
     typedef boost::dynamic_bitset<boost::uint64_t> const& mask_cref_type;
+# endif
 
     inline bool any(mask_cref_type mask)
     {
@@ -125,12 +122,40 @@ namespace hpx { namespace threads
 
     inline void resize(mask_type& mask, std::size_t s)
     {
+# if defined(HPX_MAX_CPU_COUNT)
+        HPX_ASSERT(s <= mask.size());
+# else
         return mask.resize(s);
+# endif
     }
 
     inline std::size_t find_first(mask_cref_type mask)
     {
+# if defined(HPX_MAX_CPU_COUNT)
+        if (mask.any())
+        {
+            for (std::size_t i = 0; i != HPX_MAX_CPU_COUNT; ++i)
+            {
+                if (mask[i])
+                    return i;
+            }
+        }
+        return ~std::size_t(0);
+# else
         return mask.find_first();
+# endif
+    }
+
+    inline bool equal(mask_cref_type lhs, mask_cref_type rhs, std::size_t numbits)
+    {
+        for (std::size_t j = 0; j != numbits; ++j)
+        {
+            if (test(lhs, j) != test(rhs, j))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 #endif
     /// \endcond
@@ -138,6 +163,11 @@ namespace hpx { namespace threads
     struct topology
     {
         virtual ~topology() {}
+
+        virtual std::size_t get_pu_number(
+            std::size_t num_thread
+          , error_code& ec = throws
+            ) const = 0;
 
         /// \brief Return the NUMA node number of the processing unit the
         ///        given thread is running on.
@@ -244,12 +274,29 @@ namespace hpx { namespace threads
         virtual mask_cref_type get_thread_affinity_mask_from_lva(
             naming::address::address_type, error_code& ec = throws) const = 0;
 
+        /// \brief Prints the \param m to os in a human readable form
+        virtual void print_affinity_mask(std::ostream& os, std::size_t num_thread, mask_type const& m) const = 0;
+
         /// \brief Reduce thread priority of the current thread.
         ///
         /// \param ec         [in,out] this represents the error status on exit,
         ///                   if this is pre-initialized to \a hpx#throws
         ///                   the function will throw on error instead.
         virtual bool reduce_thread_priority(error_code& ec = throws) const;
+
+        /// \brief Return the number of available cores
+        virtual std::size_t get_number_of_cores() const = 0;
+
+        /// \brief Return the number of available hardware processing units
+        virtual std::size_t get_number_of_pus() const = 0;
+
+        /// \brief Return number of processing units in given core
+        virtual std::size_t get_number_of_core_pus(std::size_t core) const = 0;
+
+        virtual std::size_t get_core_number(std::size_t num_thread,
+            error_code& ec = throws) const = 0;
+
+        virtual mask_type get_cpubind_mask(error_code& ec = throws) const = 0;
     };
 
     HPX_API_EXPORT std::size_t hardware_concurrency();
@@ -261,6 +308,13 @@ namespace hpx { namespace threads
     namespace detail
     {
         typedef std::vector<boost::int64_t> bounds_type;
+
+        enum distribution_type
+        {
+            compact  = 0x01,
+            scatter  = 0x02,
+            balanced = 0x04
+        };
 
         struct spec_type
         {
@@ -283,7 +337,7 @@ namespace hpx { namespace threads
                     }
                     else if (min != all_entities()) {
                         // all entities between min and -max, or just min,max
-                        BOOST_ASSERT(min >= 0);
+                        HPX_ASSERT(min >= 0);
                         index_bounds_.push_back(min);
                         index_bounds_.push_back(max);
                     }
@@ -310,7 +364,8 @@ namespace hpx { namespace threads
 
         typedef std::vector<spec_type> mapping_type;
         typedef std::pair<spec_type, mapping_type> full_mapping_type;
-        typedef std::vector<full_mapping_type> mappings_type;
+        typedef std::vector<full_mapping_type> mappings_spec_type;
+        typedef boost::variant<distribution_type, mappings_spec_type> mappings_type;
 
         HPX_API_EXPORT bounds_type extract_bounds(spec_type& m,
             std::size_t default_last, error_code& ec);
@@ -320,11 +375,20 @@ namespace hpx { namespace threads
     }
 
     HPX_API_EXPORT void parse_affinity_options(std::string const& spec,
-        std::vector<mask_type>& affinities, error_code& ec = throws);
-
-    HPX_API_EXPORT void print_affinity_options(std::ostream& s,
-        std::size_t num_threads, std::string const& affinity_options,
+        std::vector<mask_type>& affinities,
+        std::size_t used_cores,
+        std::size_t max_cores,
+        std::vector<std::size_t>& num_pus,
         error_code& ec = throws);
+
+    // backwards compatibility helper
+    inline void parse_affinity_options(std::string const& spec,
+        std::vector<mask_type>& affinities,
+        error_code& ec = throws)
+    {
+        std::vector<std::size_t> num_pus;
+        parse_affinity_options(spec, affinities, 1, 1, num_pus, ec);
+    }
 #endif
 
     /// \endcond

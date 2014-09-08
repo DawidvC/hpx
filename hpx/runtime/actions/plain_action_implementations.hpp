@@ -48,13 +48,11 @@
 
 #define HPX_ACTION_DIRECT_ARGUMENT(z, n, data)                                \
     BOOST_PP_COMMA_IF(n)                                                      \
-    util::detail::move_if_no_ref<                                             \
-        typename util::detail::remove_reference<Arguments>::type::            \
-            BOOST_PP_CAT(member_type, n)>::call(data. BOOST_PP_CAT(a, n))     \
+    util::get<n>(std::forward<Arguments>(data))                             \
     /**/
 #define HPX_REMOVE_QUALIFIERS(z, n, data)                                     \
         BOOST_PP_COMMA_IF(n)                                                  \
-        typename detail::remove_qualifiers<BOOST_PP_CAT(T, n)>::type          \
+        typename util::decay<BOOST_PP_CAT(T, n)>::type                        \
     /**/
 
 namespace hpx { namespace actions
@@ -69,16 +67,25 @@ namespace hpx { namespace actions
       : public action<
             components::server::plain_function<Derived>,
             Result,
-            BOOST_PP_CAT(hpx::util::tuple, N)<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>,
+            hpx::util::tuple<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>,
             Derived>
     {
     public:
         typedef Result result_type;
-        typedef BOOST_PP_CAT(hpx::util::tuple, N)<
+        typedef typename detail::remote_action_result<Result>::type
+            remote_result_type;
+
+        typedef hpx::util::tuple<
             BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)> arguments_type;
         typedef action<
             components::server::plain_function<Derived>, result_type,
             arguments_type, Derived> base_type;
+
+        // Only localities are valid targets for a plain action
+        static bool is_target_valid(naming::id_type const& id)
+        {
+            return naming::is_locality(id);
+        }
 
     protected:
         /// The \a thread_function will be registered as the thread
@@ -97,24 +104,28 @@ namespace hpx { namespace actions
                                 << detail::get_action_name<Derived>()
                                 << ").";
 
-                    // The arguments are moved here. This function is called from a
-                    // bound functor. In order to do true perfect forwarding in an
-                    // asynchronous operation. These bound variables must be moved
-                    // out of the bound object.
-
                     // call the function, ignoring the return value
-                    F(HPX_ENUM_MOVE_ARGS(N, arg));
+                    F(HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
+                }
+                catch (hpx::thread_interrupted const&) {
+                    /* swallow this exception */
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing plain action("
-                            << detail::get_action_name<Derived>()
-                            << "): " << e.what();
+                    LTM_(error)
+                        << "Unhandled exception while executing plain action("
+                        << detail::get_action_name<Derived>()
+                        << "): " << e.what();
 
-                        // report this error to the console in any case
-                        hpx::report_error(boost::current_exception());
-                    }
+                    // report this error to the console in any case
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing plain action("
+                        << detail::get_action_name<Derived>() << ")";
+
+                    // report this error to the console in any case
+                    hpx::report_error(boost::current_exception());
                 }
 
                 // Verify that there are no more registered locks for this
@@ -131,13 +142,13 @@ namespace hpx { namespace actions
         // instantiate the base_result_actionN type. This is used by the applier in
         // case no continuation has been supplied.
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()),
+                    BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args)));
         }
 
         // This static construct_thread_function allows to construct
@@ -145,13 +156,27 @@ namespace hpx { namespace actions
         // instantiate the base_result_actionN type. This is used by the applier in
         // case a continuation has been supplied
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
+            return traits::action_decorate_function<Derived>::call(lva,
                 base_type::construct_continuation_thread_function(
-                    cont, F, boost::forward<Arguments>(args)), lva));
+                    cont, F, std::forward<Arguments>(args)));
+        }
+
+        // direct execution
+        template <typename Arguments>
+        BOOST_FORCEINLINE static Result
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "plain_base_result_action" << N
+                << "::execute_function name("
+                << detail::get_action_name<Derived>() << ")";
+
+            return F(BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args));
         }
     };
 
@@ -207,19 +232,6 @@ namespace hpx { namespace actions
 
         typedef boost::mpl::true_ direct_execution;
 
-        template <typename Arguments>
-        BOOST_FORCEINLINE static Result
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "plain_direct_result_action" << N
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>() << ")";
-
-            return F(BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args));
-        }
-
         /// The function \a get_action_type returns whether this action needs
         /// to be executed in a new thread or directly.
         static base_action::action_type get_action_type()
@@ -248,17 +260,25 @@ namespace hpx { namespace actions
       : public action<
             components::server::plain_function<Derived>,
             util::unused_type,
-            BOOST_PP_CAT(hpx::util::tuple, N)<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>,
+            hpx::util::tuple<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>,
             Derived>
     {
     public:
-        typedef util::unused_type result_type;
+        typedef void result_type;
+        typedef util::unused_type remote_result_type;
+
         typedef
-            BOOST_PP_CAT(hpx::util::tuple, N)<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>
+            hpx::util::tuple<BOOST_PP_REPEAT(N, HPX_REMOVE_QUALIFIERS, _)>
         arguments_type;
         typedef action<
             components::server::plain_function<Derived>, result_type,
             arguments_type, Derived> base_type;
+
+        // Only localities are valid targets for a plain action
+        static bool is_target_valid(naming::id_type const& id)
+        {
+            return naming::is_locality(id);
+        }
 
     protected:
         /// The \a thread_function will be registered as the thread
@@ -277,24 +297,28 @@ namespace hpx { namespace actions
                                 << detail::get_action_name<Derived>()
                                 << ").";
 
-                    // The arguments are moved here. This function is called from a
-                    // bound functor. In order to do true perfect forwarding in an
-                    // asynchronous operation. These bound variables must be moved
-                    // out of the bound object.
-
                     // call the function, ignoring the return value
-                    F(HPX_ENUM_MOVE_ARGS(N, arg));
+                    F(HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
+                }
+                catch (hpx::thread_interrupted const&) {
+                    /* swallow this exception */
                 }
                 catch (hpx::exception const& e) {
-                    if (e.get_error() != hpx::thread_interrupted) {
-                        LTM_(error)
-                            << "Unhandled exception while executing plain action("
-                            << detail::get_action_name<Derived>()
-                            << "): " << e.what();
+                    LTM_(error)
+                        << "Unhandled exception while executing plain action("
+                        << detail::get_action_name<Derived>()
+                        << "): " << e.what();
 
-                        // report this error to the console in any case
-                        hpx::report_error(boost::current_exception());
-                    }
+                    // report this error to the console in any case
+                    hpx::report_error(boost::current_exception());
+                }
+                catch (...) {
+                    LTM_(error)
+                        << "Unhandled exception while executing plain action("
+                        << detail::get_action_name<Derived>() << ")";
+
+                    // report this error to the console in any case
+                    hpx::report_error(boost::current_exception());
                 }
 
                 // Verify that there are no more registered locks for this
@@ -311,13 +335,13 @@ namespace hpx { namespace actions
         // instantiate the base_actionN type. This is used by the applier in
         // case no continuation has been supplied.
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
-                HPX_STD_BIND(typename Derived::thread_function(),
-                    BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args)), lva));
+            return traits::action_decorate_function<Derived>::call(lva,
+                util::bind(util::one_shot(typename Derived::thread_function()),
+                    BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args)));
         }
 
         // This static construct_thread_function allows to construct
@@ -325,13 +349,28 @@ namespace hpx { namespace actions
         // instantiate the base_actionN type. This is used by the applier in
         // case a continuation has been supplied
         template <typename Arguments>
-        static HPX_STD_FUNCTION<threads::thread_function_type>
+        static threads::thread_function_type
         construct_thread_function(continuation_type& cont,
-            naming::address::address_type lva, BOOST_FWD_REF(Arguments) args)
+            naming::address::address_type lva, Arguments && args)
         {
-            return boost::move(Derived::decorate_action(
+            return traits::action_decorate_function<Derived>::call(lva,
                 base_type::construct_continuation_thread_function_void(
-                    cont, F, boost::forward<Arguments>(args)), lva));
+                    cont, F, std::forward<Arguments>(args)));
+        }
+
+        //  direct execution
+        template <typename Arguments>
+        BOOST_FORCEINLINE static util::unused_type
+        execute_function(naming::address::address_type lva,
+            Arguments && args)
+        {
+            LTM_(debug)
+                << "plain_base_action" << N
+                << "::execute_function name("
+                << detail::get_action_name<Derived>() << ")";
+
+            F(BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args));
+            return util::unused;
         }
     };
 
@@ -384,20 +423,6 @@ namespace hpx { namespace actions
         >::type derived_type;
 
         typedef boost::mpl::true_ direct_execution;
-
-        template <typename Arguments>
-        BOOST_FORCEINLINE static util::unused_type
-        execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
-        {
-            LTM_(debug)
-                << "plain_direct_action" << N
-                << "::execute_function name("
-                << detail::get_action_name<derived_type>() << ")";
-
-            F(BOOST_PP_REPEAT(N, HPX_ACTION_DIRECT_ARGUMENT, args));
-            return util::unused;
-        }
 
         /// The function \a get_action_type returns whether this action needs
         /// to be executed in a new thread or directly.

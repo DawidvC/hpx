@@ -1,11 +1,12 @@
-
-//  Copyright (c) 2012 Thomas Heller
+//  Copyright (c) 2012-2014 Thomas Heller
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
+#include <hpx/apply.hpp>
+
 #include "widget.hpp"
-#include "hpx_qt.hpp"
 
 #include <QtGui/QLabel>
 #include <QtGui/QHBoxLayout>
@@ -44,7 +45,7 @@ widget::widget(boost::function<void(widget *, std::size_t)> callback, QWidget *p
 
 void widget::add_label(std::size_t i, double t)
 {
-    QMutexLocker lk(&mutex);
+    hpx::lcos::local::spinlock::scoped_lock l(mutex);
     QString txt("Thread ");
     txt.append(QString::number(i))
        .append(" finished in ")
@@ -55,7 +56,9 @@ void widget::add_label(std::size_t i, double t)
 
 void widget::run_finished()
 {
-    run_button->setEnabled(true);
+  bool value = true;
+  QGenericArgument arg("bool",&value);  
+  QMetaObject::invokeMethod(run_button, "setEnabled", arg);
 }
 
 void widget::set_threads(int no)
@@ -65,10 +68,7 @@ void widget::set_threads(int no)
 
 void widget::run_clicked(bool)
 {
-    {
-        run_button->setEnabled(false);
-        list->clear();
-    }
-    
-    hpx::qt::runtime::apply(boost::bind(callback_, this, no_threads));
+    run_button->setEnabled(false);
+    list->clear();
+    hpx::apply(callback_, this, no_threads);   
 }

@@ -1,427 +1,102 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
+//  Copyright (c) 2013 Agustin Berge
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #if !BOOST_PP_IS_ITERATING
 
-#if !defined(HPX_LCOS_WHEN_ANY_APR_17_2012_1143AM)
-#define HPX_LCOS_WHEN_ANY_APR_17_2012_1143AM
+#if !defined(HPX_LCOS_WAIT_ANY_APR_17_2012_1143AM)
+#define HPX_LCOS_WAIT_ANY_APR_17_2012_1143AM
 
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/util/move.hpp>
-#include <hpx/runtime/threads/thread.hpp>
 #include <hpx/lcos/future.hpp>
+#include <hpx/lcos/wait_some.hpp>
 #include <hpx/lcos/local/packaged_task.hpp>
 #include <hpx/lcos/local/packaged_continuation.hpp>
+#include <hpx/runtime/threads/thread.hpp>
+#include <hpx/util/always_void.hpp>
 #include <hpx/util/bind.hpp>
+#include <hpx/util/decay.hpp>
+#include <hpx/util/move.hpp>
 #include <hpx/util/tuple.hpp>
 #include <hpx/util/detail/pp_strip_parens.hpp>
 
-#include <vector>
-
-#include <boost/assert.hpp>
 #include <boost/preprocessor/cat.hpp>
-#include <boost/preprocessor/repeat.hpp>
 #include <boost/preprocessor/enum.hpp>
 #include <boost/preprocessor/iterate.hpp>
+#include <boost/utility/swap.hpp>
 
-#include <boost/fusion/include/for_each.hpp>
-#include <boost/fusion/include/accumulate.hpp>
-#include <boost/fusion/include/size.hpp>
-#include <boost/fusion/include/tuple.hpp>
-
-#include <boost/atomic.hpp>
+#include <algorithm>
+#include <iterator>
+#include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx
+namespace hpx { namespace lcos
 {
-    namespace detail
-    {
-        ///////////////////////////////////////////////////////////////////////
-        template <typename T>
-        struct when_any
-        {
-        private:
-            BOOST_MOVABLE_BUT_NOT_COPYABLE(when_any)
-
-            enum { index_error = -1 };
-
-            void on_future_ready(std::size_t idx, threads::thread_id_type id)
-            {
-                std::size_t index_not_initialized = 
-                    static_cast<std::size_t>(index_error);
-                if (index_.compare_exchange_strong(index_not_initialized, idx)) 
-                {
-                    // reactivate waiting thread only if it's not us
-                    if (id != threads::get_self_id())
-                        threads::set_thread_state(id, threads::pending);
-                }
-            }
-
-        public:
-            typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-            typedef std::vector<lcos::future<T> > argument_type;
-
-            when_any(argument_type const& lazy_values)
-              : lazy_values_(lazy_values), 
-                index_(static_cast<std::size_t>(index_error))
-            {}
-
-            when_any(BOOST_RV_REF(argument_type) lazy_values)
-              : lazy_values_(boost::move(lazy_values)), 
-                index_(static_cast<std::size_t>(index_error))
-            {}
-
-            when_any(BOOST_RV_REF(when_any) rhs)
-              : lazy_values_(boost::move(rhs.lazy_values_)),
-                index_(rhs.index_.load())
-            {
-                rhs.index_.store(static_cast<std::size_t>(index_error));
-            }
-
-            when_any& operator= (BOOST_RV_REF(when_any) rhs)
-            {
-                if (this != &rhs) {
-                    lazy_values_ = boost::move(rhs.lazy_values_);
-                    index_ = rhs.index_;
-                    rhs.index_.store(static_cast<std::size_t>(index_error));
-                }
-                return *this;
-            }
-
-            result_type operator()()
-            {
-                using lcos::detail::get_future_data;
-
-                index_.store(static_cast<std::size_t>(index_error));
-
-                std::size_t size = lazy_values_.size();
-
-                {
-                    // set callback functions to execute when future is ready
-                    threads::thread_id_type id = threads::get_self_id();
-                    for (std::size_t i = 0; i != size; ++i)
-                    {
-                        get_future_data(lazy_values_[i])->set_on_completed(
-                            util::bind(&when_any::on_future_ready, this, i, id));
-                    }
-                }
-
-                // If one of the futures is already set, our callback above has
-                // already been called, otherwise we suspend ourselves
-                if (index_.load() == static_cast<std::size_t>(index_error))
-                {
-                    // wait for any of the futures to return to become ready
-                    this_thread::suspend(threads::suspended);
-                }
-
-                BOOST_ASSERT(index_.load() != static_cast<std::size_t>(index_error));       // that should not happen
-
-                // reset all pending callback functions
-                for (std::size_t i = 0; i < size; ++i)
-                    get_future_data(lazy_values_[i])->reset_on_completed();
-
-                return result_type(static_cast<int>(index_), lazy_values_[index_]);
-            }
-
-            std::vector<lcos::future<T> > lazy_values_;
-            boost::atomic<std::size_t> index_;
-        };
-
-        ///////////////////////////////////////////////////////////////////////
-        template <typename Tuple, typename T>
-        struct when_any_tuple
-        {
-        private:
-            BOOST_MOVABLE_BUT_NOT_COPYABLE(when_any_tuple)
-
-            struct init_when
-            {
-                init_when(when_any_tuple& outer, threads::thread_id_type id)
-                  : outer_(&outer), id_(id)
-                {}
-
-                typedef std::size_t result_type;
-
-                result_type operator()(std::size_t i, lcos::future<T> f) const
-                {
-                    lcos::detail::get_future_data(f)->set_on_completed(
-                        util::bind(&when_any_tuple::on_future_ready,
-                            outer_, i++, id_));
-                    return i;
-                };
-
-                when_any_tuple* outer_;
-                threads::thread_id_type id_;
-            };
-            friend struct init_when;
-
-            struct reset_when
-            {
-                typedef void result_type;
-
-                result_type operator()(lcos::future<T> f) const
-                {
-                    lcos::detail::get_future_data(f)->reset_on_completed();
-                };
-            };
-
-            enum { index_error = -1 };
-
-            void on_future_ready(std::size_t idx, threads::thread_id_type id)
-            {
-                std::size_t index_not_initialized = 
-                    static_cast<std::size_t>(index_error);
-                if (index_.compare_exchange_strong(index_not_initialized, idx)) 
-                {
-                    // reactivate waiting thread only if it's not us
-                    if (id != threads::get_self_id())
-                        threads::set_thread_state(id, threads::pending);
-                }
-            }
-
-            // extract element idx from given tuple
-            template <typename First, typename Last>
-            static lcos::future<T> const&
-            get_element(First const& first, Last const& last, std::size_t idx,
-                boost::mpl::false_)
-            {
-                if (idx == 0)
-                    return boost::fusion::deref(first);
-
-                return get_element(boost::fusion::next(first), last, --idx,
-                    boost::fusion::result_of::equal_to<
-                        typename boost::fusion::result_of::next<First>::type,
-                        Last
-                    >());
-            }
-
-            template <typename First, typename Last>
-            static lcos::future<T> const&
-            get_element(First const&, Last const&, std::size_t,
-                boost::mpl::true_)
-            {
-                static lcos::future<T> f;
-                return f;   // shouldn't ever be called
-            }
-
-            static lcos::future<T> const&
-            get_element(Tuple const& t, std::size_t idx)
-            {
-                BOOST_ASSERT(idx <
-                    static_cast<std::size_t>(boost::fusion::result_of::size<Tuple>::value));
-                return get_element(
-                    boost::fusion::begin(t), boost::fusion::end(t), idx,
-                    boost::fusion::result_of::equal_to<
-                        typename boost::fusion::result_of::begin<Tuple>::type,
-                        typename boost::fusion::result_of::end<Tuple>::type>());
-            }
-
-        public:
-            typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-            typedef Tuple argument_type;
-
-            when_any_tuple(argument_type const& lazy_values)
-              : lazy_values_(lazy_values), 
-                index_(static_cast<std::size_t>(index_error))
-            {}
-
-            when_any_tuple(BOOST_RV_REF(argument_type) lazy_values)
-              : lazy_values_(boost::move(lazy_values)), 
-                index_(static_cast<std::size_t>(index_error))
-            {}
-
-            when_any_tuple(BOOST_RV_REF(when_any_tuple) rhs)
-              : lazy_values_(boost::move(rhs.lazy_values_)),
-                index_(rhs.index_.load())
-            {
-                rhs.index_.store(static_cast<std::size_t>(index_error));
-            }
-
-            when_any_tuple& operator= (BOOST_RV_REF(when_any_tuple) rhs)
-            {
-                if (this != &rhs) {
-                    lazy_values_ = boost::move(rhs.lazy_values_);
-                    index_ = rhs.index_;
-                    rhs.index_.store(static_cast<std::size_t>(index_error));
-                }
-                return *this;
-            }
-
-        public:
-            result_type operator()()
-            {
-                index_.store(static_cast<std::size_t>(index_error));
-
-                // set callback functions to execute when future is ready
-                boost::fusion::accumulate(lazy_values_, std::size_t(0),
-                    init_when(*this, threads::get_self_id()));
-
-                // If one of the futures is already set then our callback above 
-                // has already been called, otherwise we suspend ourselves.
-                if (index_.load() == static_cast<std::size_t>(index_error))
-                {
-                    // wait for any of the futures to return to become ready
-                    this_thread::suspend(threads::suspended);
-                }
-
-                BOOST_ASSERT(index_.load() != static_cast<std::size_t>(index_error));       // that should not happen
-
-                // reset all pending callback functions
-                boost::fusion::for_each(lazy_values_, reset_when());
-
-                return result_type(static_cast<int>(index_),
-                    get_element(lazy_values_, index_));
-            }
-
-            Tuple lazy_values_;
-            boost::atomic<std::size_t> index_;
-        };
-    }
-
-    /// The function \a when_any is a non-deterministic choice operator. It
-    /// OR-composes all future objects stored in the given vector and returns
-    /// a new future object representing the first future from that list which
-    /// finishes execution.
-    ///
-    /// \return   The returned future holds a pair of values, the first value
-    ///           is the index of the future which returned first and the second
-    ///           value represents the actual future which returned first.
-
-    template <typename Iterator>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<
-        typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-    > > >
-    when_any(Iterator begin, Iterator end)
-    {
-        typedef typename lcos::future_iterator_traits<
-            Iterator>::traits_type::value_type value_type;
-        typedef HPX_STD_TUPLE<int, lcos::future<value_type> > return_type;
-
-        std::vector<lcos::future<value_type> > lazy_values;
-        std::copy(begin, end, std::back_inserter(lazy_values));
-
-        if (lazy_values.empty()) {
-            HPX_THROW_EXCEPTION(hpx::bad_parameter,
-                "hpx::lcos::when_any",
-                "empty container passed to when_any");
-            return lcos::make_ready_future(return_type());
-        }
-
-        lcos::local::futures_factory<return_type()> p(
-            detail::when_any<value_type>(boost::move(lazy_values)));
-
-        p.apply();
-        return p.get_future();
-    }
-
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any(BOOST_RV_REF(HPX_UTIL_STRIP((
-        std::vector<lcos::future<T> >))) lazy_values)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-
-        if (lazy_values.empty()) {
-            HPX_THROW_EXCEPTION(hpx::bad_parameter,
-                "hpx::lcos::when_any",
-                "empty container passed to when_any");
-            return lcos::make_ready_future(return_type());
-        }
-
-        lcos::local::futures_factory<return_type()> p(
-            detail::when_any<T>(boost::move(lazy_values)));
-
-        p.apply();
-        return p.get_future();
-    }
-
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > > //-V659
-    when_any(std::vector<lcos::future<T> > const& lazy_values)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-
-        if (lazy_values.empty()) {
-            HPX_THROW_EXCEPTION(hpx::bad_parameter,
-                "hpx::lcos::when_any",
-                "empty container passed to when_any");
-            return lcos::make_ready_future(return_type());
-        }
-
-        lcos::local::futures_factory<return_type()> p =
-            lcos::local::futures_factory<return_type()>(
-                detail::when_any<T>(lazy_values));
-
-        p.apply();
-        return p.get_future();
-    }
-
     /// The function \a wait_any is a non-deterministic choice operator. It
-    /// OR-composes all future objects stored in the given vector and returns
-    /// a new future object representing the first future from that list which
-    /// finishes execution.
+    /// OR-composes all future objects given and returns the same list of
+    /// futures after one future of that list finishes execution.
     ///
-    /// \return   The returned tuple holds a pair of values, the first value
-    ///           is the index of the future which returned first and the second
-    ///           value represents the actual future which returned first.
+    /// \a wait_any returns after one future has been triggered.
+    ///
+    /// \note There are three variations of wait_any. The first takes a pair
+    ///       of InputIterators. The second takes an std::vector of future<R>.
+    ///       The third takes any arbitrary number of future<R>, where R need
+    ///       not be the same type.
+    ///
+    /// \return   The same list of futures as has been passed to wait_any.
+    ///           - future<vector<future<R>>>: If the input cardinality is
+    ///             unknown at compile time and the futures are all of the
+    ///             same type.
+    ///           - future<tuple<future<R0>, future<R1>, future<R2>...>>: If
+    ///             inputs are fixed in number and are of heterogeneous types.
+    ///             The inputs can be any arbitrary number of future objects.
+
+    template <typename Future>
+    void wait_any(std::vector<Future> const& lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_some(1, lazy_values, ec);
+    }
+
+    template <typename Future>
+    void wait_any(std::vector<Future>& lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_any(
+            const_cast<std::vector<Future> const&>(lazy_values), ec);
+    }
+
+    template <typename Future>
+    void wait_any(std::vector<Future> && lazy_values,
+        error_code& ec = throws)
+    {
+        return lcos::wait_any(
+            const_cast<std::vector<Future> const&>(lazy_values), ec);
+    }
 
     template <typename Iterator>
-    HPX_STD_TUPLE<int, lcos::future<
-        typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-    > >
-    wait_any(Iterator begin, Iterator end, error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<
-            typename lcos::future_iterator_traits<Iterator>::traits_type::value_type
-        > > result_type;
-
-        lcos::future<result_type> f = when_any(begin, end);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
-    }
-
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any(BOOST_RV_REF(HPX_UTIL_STRIP((
-        std::vector<lcos::future<T> >))) lazy_values,
+    typename util::always_void<
+        typename lcos::detail::future_iterator_traits<Iterator>::type
+    >::type wait_any(Iterator begin, Iterator end,
         error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-
-        lcos::future<result_type> f = when_any(lazy_values);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
+        return lcos::wait_some(1, begin, end, ec);
     }
 
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any(std::vector<lcos::future<T> > const& lazy_values,
+    template <typename Iterator>
+    Iterator wait_any_n(Iterator begin, std::size_t count,
         error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-
-        lcos::future<result_type> f = when_any(lazy_values);
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
+        return wait_some_n(1, begin, count, ec);
     }
-}
+
+    inline void wait_any(error_code& ec = throws)
+    {
+        return lcos::wait_some(1, ec);
+    }
+}}
 
 #if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #  include <hpx/lcos/preprocessed/wait_any.hpp>
@@ -442,6 +117,12 @@ namespace hpx
 
 #endif // !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 
+namespace hpx
+{
+    using lcos::wait_any;
+    using lcos::wait_any_n;
+}
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -449,57 +130,16 @@ namespace hpx
 
 #define N BOOST_PP_ITERATION()
 
-#define HPX_WHEN_ANY_FUTURE_ARG(z, n, _)                                      \
-        lcos::future<T> BOOST_PP_CAT(f, n)                                    \
-    /**/
-#define HPX_WHEN_ANY_FUTURE_TYPE(z, n, _)                                     \
-        lcos::future<T>                                                       \
-    /**/
-#define HPX_WHEN_ANY_FUTURE_VAR(z, n, _) BOOST_PP_CAT(f, n)                   \
-    /**/
-
-namespace hpx
+namespace hpx { namespace lcos
 {
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
-    lcos::future<HPX_STD_TUPLE<int, lcos::future<T> > >
-    when_any (BOOST_PP_ENUM(N, HPX_WHEN_ANY_FUTURE_ARG, _))
+    template <BOOST_PP_ENUM_PARAMS(N, typename T)>
+    void wait_any(HPX_ENUM_FWD_ARGS(N, T, f), error_code& ec = throws)
     {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > return_type;
-        typedef boost::fusion::tuple<
-            BOOST_PP_ENUM(N, HPX_WHEN_ANY_FUTURE_TYPE, _)
-        > argument_type;
-
-        lcos::local::futures_factory<return_type()> p((
-            detail::when_any_tuple<argument_type, T>(
-                argument_type(BOOST_PP_ENUM(N, HPX_WHEN_ANY_FUTURE_VAR, _)))));
-
-        p.apply();
-        return p.get_future();
+        return lcos::wait_some(1, HPX_ENUM_FORWARD_ARGS(N, T, f), ec);
     }
+}}
 
-    template <typename T>
-    HPX_STD_TUPLE<int, lcos::future<T> >
-    wait_any (BOOST_PP_ENUM(N, HPX_WHEN_ANY_FUTURE_ARG, _),
-        error_code& ec = throws)
-    {
-        typedef HPX_STD_TUPLE<int, lcos::future<T> > result_type;
-
-        lcos::future<result_type> f = when_any(
-            BOOST_PP_ENUM(N, HPX_WHEN_ANY_FUTURE_VAR, _));
-        if (!f.valid()) {
-            HPX_THROWS_IF(ec, uninitialized_value, "lcos::wait_any", 
-                "lcos::when_any didn't return a valid future");
-            return result_type();
-        }
-
-        return f.get(ec);
-    }
-}
-
-#undef HPX_WHEN_ANY_FUTURE_ARG
-#undef HPX_WHEN_ANY_FUTURE_TYPE
-#undef HPX_WHEN_ANY_FUTURE_VAR
 #undef N
 
 #endif

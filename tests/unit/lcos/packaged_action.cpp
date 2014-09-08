@@ -13,6 +13,8 @@
 using boost::program_options::variables_map;
 using boost::program_options::options_description;
 
+using hpx::lcos::future;
+
 ///////////////////////////////////////////////////////////////////////////////
 bool null_thread_executed = false;
 
@@ -57,12 +59,12 @@ int hpx_main(variables_map&)
         // create an implicit future
         null_thread_executed = false;
         {
-            HPX_TEST(hpx::lcos::wait(async<null_action>(hpx::find_here())));
+            HPX_TEST(async<null_action>(hpx::find_here()).get());
         }
         HPX_TEST(null_thread_executed);
 
         //test two successive 'get' from a promise
-        hpx::lcos::future<int> int_promise(async<int_action>(hpx::find_here()));
+        hpx::lcos::shared_future<int> int_promise(async<int_action>(hpx::find_here()));
         HPX_TEST(int_promise.get() == int_promise.get());
     }
 
@@ -80,13 +82,13 @@ int hpx_main(variables_map&)
         // create an implicit future
         null_thread_executed = false;
         {
-            HPX_TEST(hpx::lcos::wait(async(do_null, hpx::find_here())));
+            HPX_TEST(async(do_null, hpx::find_here()).get());
         }
         HPX_TEST(null_thread_executed);
 
         //test two successive 'get' from a promise
         int_action do_int;
-        hpx::lcos::future<int> int_promise(async(do_int, hpx::find_here()));
+        hpx::lcos::shared_future<int> int_promise(async(do_int, hpx::find_here()));
         HPX_TEST(int_promise.get() == int_promise.get());
     }
 

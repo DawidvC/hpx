@@ -8,13 +8,13 @@
 #if !defined(HPX_05A1C29B_DB73_463A_8C9D_B8EDC3B69F5E)
 #define HPX_05A1C29B_DB73_463A_8C9D_B8EDC3B69F5E
 
-#include <boost/config.hpp>
-#include <boost/assert.hpp>
-#include <boost/cstdint.hpp>
-
 #include <hpx/performance_counters/parcels/data_point.hpp>
-#include <hpx/util/spinlock.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/get_and_reset_value.hpp>
+#include <hpx/util/spinlock.hpp>
+
+#include <boost/config.hpp>
+#include <boost/cstdint.hpp>
 
 namespace hpx { namespace performance_counters { namespace parcels
 {
@@ -28,6 +28,9 @@ namespace hpx { namespace performance_counters { namespace parcels
           : overall_bytes_(0),
             overall_time_(0),
             serialization_time_(0),
+#if defined(HPX_HAVE_SECURITY)
+            security_time_(0),
+#endif
             num_parcels_(0),
             num_messages_(0),
             overall_raw_bytes_(0)
@@ -41,14 +44,23 @@ namespace hpx { namespace performance_counters { namespace parcels
         boost::int64_t total_raw_bytes(bool reset);
         boost::int64_t total_time(bool reset);
         boost::int64_t total_serialization_time(bool reset);
+#if defined(HPX_HAVE_SECURITY)
+        boost::int64_t total_security_time(bool reset);
+#endif
+        boost::int64_t total_buffer_allocate_time(bool reset);
 
     private:
         boost::int64_t overall_bytes_;
         boost::int64_t overall_time_;
         boost::int64_t serialization_time_;
+#if defined(HPX_HAVE_SECURITY)
+        boost::int64_t security_time_;
+#endif
         boost::int64_t num_parcels_;
         boost::int64_t num_messages_;
         boost::int64_t overall_raw_bytes_;
+
+        boost::int64_t buffer_allocate_time_;
 
         // Create mutex for accumulator functions.
         mutable mutex_type acc_mtx;
@@ -61,9 +73,13 @@ namespace hpx { namespace performance_counters { namespace parcels
         overall_bytes_ += x.bytes_;
         overall_time_ += x.time_;
         serialization_time_ += x.serialization_time_;
+#if defined(HPX_HAVE_SECURITY)
+        security_time_ += x.security_time_;
+#endif
         num_parcels_ += x.num_parcels_;
         overall_raw_bytes_ += x.raw_bytes_;
         ++num_messages_;
+        buffer_allocate_time_ += x.buffer_allocate_time_;
     }
 
     inline boost::int64_t gatherer::num_parcels(bool reset)
@@ -90,6 +106,14 @@ namespace hpx { namespace performance_counters { namespace parcels
         return util::get_and_reset_value(serialization_time_, reset);
     }
 
+#if defined(HPX_HAVE_SECURITY)
+    inline boost::int64_t gatherer::total_security_time(bool reset)
+    {
+        mutex_type::scoped_lock mtx(acc_mtx);
+        return util::get_and_reset_value(security_time_, reset);
+    }
+#endif
+
     inline boost::int64_t gatherer::total_bytes(bool reset)
     {
         mutex_type::scoped_lock mtx(acc_mtx);
@@ -100,6 +124,12 @@ namespace hpx { namespace performance_counters { namespace parcels
     {
         mutex_type::scoped_lock mtx(acc_mtx);
         return util::get_and_reset_value(overall_raw_bytes_, reset);
+    }
+
+    inline boost::int64_t gatherer::total_buffer_allocate_time(bool reset)
+    {
+        mutex_type::scoped_lock mtx(acc_mtx);
+        return util::get_and_reset_value(buffer_allocate_time_, reset);
     }
 }}}
 

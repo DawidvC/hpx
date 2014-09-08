@@ -2,17 +2,18 @@
 // portable_binary_iarchive.cpp
 
 // (C) Copyright 2002 Robert Ramey - http://www.rrsd.com .
+// Copyright (c) 2007-2013 Hartmut Kaiser
 // Use, modification and distribution is subject to the Boost Software
 // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
 //  See http://www.boost.org for updates, documentation, and revision history.
 
+#include <hpx/config.hpp>
 #include <boost/version.hpp>
 #include <boost/config.hpp>
-#include <hpx/config.hpp>
 
-#if BOOST_VERSION >= 103700 && HPX_USE_PORTABLE_ARCHIVES != 0
+#if BOOST_VERSION >= 103700
 
 // export the defined functions
 #define BOOST_ARCHIVE_SOURCE
@@ -52,7 +53,7 @@
 namespace hpx { namespace util
 {
 
-void portable_binary_iarchive::load_impl(boost::int64_t& l, char maxsize)
+void portable_binary_iarchive::load_impl(boost::int64_t& l, char const maxsize)
 {
     l = 0;
 
@@ -75,15 +76,43 @@ void portable_binary_iarchive::load_impl(boost::int64_t& l, char maxsize)
     this->primitive_base_t::load_binary(cptr, static_cast<std::size_t>(size));
 
 #ifdef BOOST_BIG_ENDIAN
-    if(m_flags & endian_little)
-          reverse_bytes(size, cptr);
+    if (this->flags() & endian_little)
+        reverse_bytes(size, cptr);
 #else
-    if(m_flags & endian_big)
-          reverse_bytes(size, cptr);
+    if (this->flags() & endian_big)
+        reverse_bytes(size, cptr);
 #endif
 
     if(negative)
         l = -l;
+}
+
+void portable_binary_iarchive::load_impl(boost::uint64_t& ul, char const maxsize)
+{
+    ul = 0;
+
+    char size;
+    this->primitive_base_t::load(size);
+    if (0 == size)
+        return;
+
+    if (size > maxsize) {
+        BOOST_THROW_EXCEPTION(portable_binary_iarchive_exception());
+    }
+
+    char* cptr = reinterpret_cast<char *>(&ul);
+#ifdef BOOST_BIG_ENDIAN
+    cptr += (sizeof(boost::uint64_t) - size);
+#endif
+    this->primitive_base_t::load_binary(cptr, static_cast<std::size_t>(size));
+
+#ifdef BOOST_BIG_ENDIAN
+    if (this->flags() & endian_little)
+        reverse_bytes(size, cptr);
+#else
+    if (this->flags() & endian_big)
+        reverse_bytes(size, cptr);
+#endif
 }
 
 void portable_binary_iarchive::load_override(
@@ -110,7 +139,7 @@ void portable_binary_iarchive::load_override(
 #pragma GCC diagnostic ignored "-Wconversion"
 #endif
 
-void portable_binary_iarchive::init(unsigned int flags)
+boost::uint32_t portable_binary_iarchive::init(boost::uint32_t flags)
 {
     if (!(flags & boost::archive::no_header))
     {
@@ -142,20 +171,21 @@ void portable_binary_iarchive::init(unsigned int flags)
 #endif
     }
 
-    unsigned char x;
+    boost::uint16_t x;
     load(x);
-    m_flags = static_cast<unsigned int>(x << CHAR_BIT);
+    boost::uint32_t custom_flags = static_cast<boost::uint32_t>(x << CHAR_BIT);
 
     // handle filter and compression in the archive separately
     bool has_filter = false;
-    *this >> has_filter;
+    load(has_filter);
 
-    if (has_filter) {
+    if (has_filter && (custom_flags & enable_compression)) {
         util::binary_filter* filter = 0;
         *this >> filter;
-        if (m_flags & enable_compression)
-            this->set_filter(filter);
+        this->set_filter(filter);
     }
+
+    return custom_flags | flags;
 }
 
 #if defined(__GNUG__) && !defined(__INTEL_COMPILER)
@@ -203,4 +233,4 @@ namespace hpx { namespace util
     >;
 }}
 
-#endif // BOOST_VERSION >= 103700 && HPX_USE_PORTABLE_ARCHIVES != 0
+#endif // BOOST_VERSION >= 103700

@@ -1,4 +1,4 @@
-//  Copyright (c) 2005-2012 Hartmut Kaiser
+//  Copyright (c) 2005-2014 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,6 +10,8 @@
 #include <string>
 
 #include <hpx/hpx_fwd.hpp>
+#include <hpx/util/plugin/dll.hpp>
+#include <hpx/util/plugin/virtual_constructors.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace util
@@ -24,7 +26,13 @@ namespace hpx { namespace util
     //
     // returns true if at least one alternative location has been read
     // successfully
-    bool init_ini_data_base(section& ini, std::string const& hpx_ini_file = "");
+    bool init_ini_data_base(section& ini, std::string& hpx_ini_file);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // load registry information for all statically registered modules
+    void load_component_factory_static(util::section& ini, std::string name,
+        hpx::util::plugin::get_plugins_list_type get_factory,
+        error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     // global function to read component ini information
@@ -33,7 +41,9 @@ namespace hpx { namespace util
     ///////////////////////////////////////////////////////////////////////////
     // iterate over all shared libraries in the given directory and construct
     // default ini settings assuming all of those are components
-    void init_ini_data_default(std::string const& libs, section& ini);
+    void init_ini_data_default(std::string const& libs, section& ini,
+        std::map<std::string, boost::filesystem::path>& basenames,
+        std::map<std::string, hpx::util::plugin::dll>& modules);
 
 }}
 

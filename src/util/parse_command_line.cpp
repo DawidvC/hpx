@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -53,21 +53,21 @@ namespace hpx { namespace util
 
         ///////////////////////////////////////////////////////////////////////
         // All command line options which are normally formatted as --hpx:foo
-        // should be usable as --hpx:N:foo, where N is the node number this 
+        // should be usable as --hpx:N:foo, where N is the node number this
         // option should be exclusively used for.
-        bool handle_node_specific_option(std::string const& s, std::size_t node, 
+        bool handle_node_specific_option(std::string const& s, std::size_t node,
             std::pair<std::string, std::string>& opt)
         {
             // any option not starting with --hpx: will be handled elsewhere
             char hpx_prefix[] = "--hpx:";
             std::string::size_type const hpx_prefix_len = sizeof(hpx_prefix)-1;
-            if (s.size() < hpx_prefix_len || s.find(hpx_prefix) != 0 || 
+            if (s.size() < hpx_prefix_len || s.find(hpx_prefix) != 0 ||
                 !std::isdigit(s[hpx_prefix_len]))
             {
                 return false;
             }
 
-            // any --hpx: option without a second ':' ishandled elsewhere as well
+            // any --hpx: option without a second ':' is handled elsewhere as well
             std::string::size_type p = s.find_first_of(":", hpx_prefix_len);
             if (p == std::string::npos)
                 return false;
@@ -91,7 +91,7 @@ namespace hpx { namespace util
                 return true;
             }
 
-            // This option is specificly not for us, so we return an option 
+            // This option is specifically not for us, so we return an option
             // which will be silently ignored.
             opt = std::make_pair(std::string("hpx:ignore"), std::string());
             return true;
@@ -109,11 +109,11 @@ namespace hpx { namespace util
             if (opt.size() < 2 || opt[0] != '-')
                 return result;
 
-            util::section const* sec = ini.get_section("hpx.commandline");
+            util::section const* sec = ini.get_section("hpx.commandline.aliases");
             if (NULL == sec)
                 return result;     // no alias mappings are defined
 
-            // we found a shortcut option, try to find mapping
+            // we found shortcut option definitions, try to find mapping
             std::string expand_to;
             std::string::size_type start_at = 2;
             bool long_option = false;
@@ -173,7 +173,7 @@ namespace hpx { namespace util
 
             std::pair<std::string, std::string> operator()(std::string const& s) const
             {
-                // handle special syntax for  configuration files @filename
+                // handle special syntax for configuration files @filename
                 if ('@' == s[0])
                     return std::make_pair(std::string("hpx:options-file"), s.substr(1));
 
@@ -182,8 +182,11 @@ namespace hpx { namespace util
                 if (handle_node_specific_option(s, node_, opt))
                     return opt;
 
-                // handle aliasing
-                return handle_aliasing(ini_, s);
+                // handle aliasing, if enabled
+                if (ini_.get_entry("hpx.commandline.aliasing", "1") == "1")
+                    return handle_aliasing(ini_, s);
+
+                return opt;
             }
 
             util::section const& ini_;
@@ -191,16 +194,27 @@ namespace hpx { namespace util
         };
 
         ///////////////////////////////////////////////////////////////////////
+        boost::program_options::basic_command_line_parser<char>&
+        get_commandline_parser(
+            boost::program_options::basic_command_line_parser<char>& p,
+            int mode)
+        {
+            if ((mode & ~util::report_missing_config_file) == util::allow_unregistered)
+                return p.allow_unregistered();
+            return p;
+        }
+
+        ///////////////////////////////////////////////////////////////////////
         // Read all options from a given config file, parse and add them to the
         // given variables_map
         bool read_config_file_options(std::string const &filename,
             boost::program_options::options_description const &desc,
-            boost::program_options::variables_map &vm, 
-            util::section const& rtcfg, std::size_t node, bool may_fail = false)
+            boost::program_options::variables_map &vm,
+            util::section const& rtcfg, std::size_t node, int error_mode)
         {
             std::ifstream ifs(filename.c_str());
             if (!ifs.is_open()) {
-                if (!may_fail) {
+                if (error_mode & util::report_missing_config_file) {
                     std::cerr << "hpx::init: command line warning: command line "
                           "options file not found (" << filename << ")"
                         << std::endl;
@@ -216,11 +230,11 @@ namespace hpx { namespace util
                 if (pos == std::string::npos)
                     continue;
 
-                // skip comment lines
-                if ('#' != line[pos]) {
-                    // strip leading and trailing whitespace
-                    line = trim_whitespace(line);
+                // strip leading and trailing whitespace
+                line = trim_whitespace(line);
 
+                // skip comment lines
+                if ('#' != line[0]) {
                     std::string::size_type p1 = line.find_first_of(" \t");
                     if (p1 != std::string::npos) {
                         // rebuild the line connecting the parts with a '='
@@ -235,26 +249,29 @@ namespace hpx { namespace util
             if (options.size() > 0) {
                 using boost::program_options::value;
                 using boost::program_options::store;
+                using boost::program_options::basic_command_line_parser;
                 using boost::program_options::command_line_parser;
                 using namespace boost::program_options::command_line_style;
 
-                store(command_line_parser(options)
-                    .options(desc)
-                    .style(unix_style)
-                    .extra_parser(detail::option_parser(rtcfg, node))
-                    .run(), vm);
+                store(detail::get_commandline_parser(
+                        command_line_parser(options)
+                            .options(desc)
+                            .style(unix_style)
+                            .extra_parser(detail::option_parser(rtcfg, node)),
+                        error_mode).run(),
+                    vm);
                 notify(vm);
             }
             return true;
         }
 
         // try to find a config file somewhere up the filesystem hierarchy
-        // starting with the input file path. This allows to use a general wave.cfg
-        // file for all files in a certain project.
+        // starting with the input file path. This allows to use a general
+        // <app_name>.cfg file for all executables in a certain project.
         void handle_generic_config_options(std::string appname,
             boost::program_options::variables_map& vm,
             boost::program_options::options_description const& desc_cfgfile,
-            util::section const& ini, std::size_t node)
+            util::section const& ini, std::size_t node, int error_mode)
         {
             if (appname.empty())
                 return;
@@ -263,10 +280,13 @@ namespace hpx { namespace util
             boost::filesystem::path app (appname);
             appname = boost::filesystem::basename(app.filename());
 
-            // walk up the hierarchy, trying to find a file appname.cfg
+            // walk up the hierarchy, trying to find a file <appname>.cfg
             while (!dir.empty()) {
                 boost::filesystem::path filename = dir / (appname + ".cfg");
-                if (read_config_file_options(filename.string(), desc_cfgfile, vm, ini, node, true))
+                bool result = read_config_file_options(filename.string(),
+                    desc_cfgfile, vm, ini, node,
+                    error_mode & ~util::report_missing_config_file);
+                if (result)
                     break;    // break on the first options file found
 
                 dir = dir.parent_path();    // chop off last directory part
@@ -276,27 +296,20 @@ namespace hpx { namespace util
         // handle all --options-config found on the command line
         void handle_config_options(boost::program_options::variables_map& vm,
             boost::program_options::options_description const& desc_cfgfile,
-            util::section const& ini, std::size_t node)
+            util::section const& ini, std::size_t node, int error_mode)
         {
             using boost::program_options::options_description;
             if (vm.count("hpx:options-file")) {
                 std::vector<std::string> const &cfg_files =
                     vm["hpx:options-file"].as<std::vector<std::string> >();
+
                 BOOST_FOREACH(std::string const& cfg_file, cfg_files)
                 {
                     // parse a single config file and store the results
-                    read_config_file_options(cfg_file, desc_cfgfile, vm, ini, node);
+                    read_config_file_options(cfg_file, desc_cfgfile, vm, ini,
+                        node, error_mode);
                 }
             }
-        }
-
-        ///////////////////////////////////////////////////////////////////////
-        boost::program_options::basic_command_line_parser<char>&
-        get_commandline_parser(
-            boost::program_options::basic_command_line_parser<char>& p,
-            commandline_error_mode mode)
-        {
-            return (mode == allow_unregistered) ? p.allow_unregistered() : p;
         }
     }
 
@@ -305,9 +318,8 @@ namespace hpx { namespace util
     bool parse_commandline(
         util::section const& rtcfg,
         boost::program_options::options_description const& app_options,
-        int argc, char *argv[], boost::program_options::variables_map& vm,
-        std::size_t node, commandline_error_mode error_mode,
-        hpx::runtime_mode mode,
+        int argc, char** argv, boost::program_options::variables_map& vm,
+        std::size_t node, int error_mode, hpx::runtime_mode mode,
         boost::program_options::options_description* visible,
         std::vector<std::string>* unregistered_options)
     {
@@ -328,6 +340,7 @@ namespace hpx { namespace util
                     "print out program usage (default: this message), possible "
                     "values: 'full' (additionally prints options from components)")
                 ("hpx:version", "print out HPX version and copyright information")
+                ("hpx:info", "print out HPX configuration information")
                 ("hpx:options-file", value<std::vector<std::string> >()->composing(),
                     "specify a file containing command line options "
                     "(alternatively: @filepath)")
@@ -406,23 +419,23 @@ namespace hpx { namespace util
                 ("hpx:pu-offset", value<std::size_t>(),
                   "the first processing unit this instance of HPX should be "
                   "run on (default: 0), valid for "
-                  "--hpx:queuing=local and priority_local only")
+                  "--hpx:queuing=local, static and priority_local only")
                 ("hpx:pu-step", value<std::size_t>(),
                   "the step between used processing unit numbers for this "
                   "instance of HPX (default: 1), valid for "
-                  "--hpx:queuing=local and priority_local only")
+                  "--hpx:queuing=local, static and priority_local only")
 #endif
 #if defined(HPX_HAVE_HWLOC)
                 ("hpx:affinity", value<std::string>(),
                   "the affinity domain the OS threads will be confined to, "
                   "possible values: pu, core, numa, machine (default: pu), valid for "
-                  "--hpx:queuing=local and priority_local only")
+                  "--hpx:queuing=local, static and priority_local only")
                 ("hpx:bind", value<std::vector<std::string> >()->composing(),
                   "the detailed affinity description for the OS threads, see "
                   "the documentation for a detailed description of possible "
                   "values. Do not use with --hpx:pu-step, --hpx:pu-offset, or "
                   "--hpx:affinity options. Implies --hpx:numa-sensitive.")
-                ("hpx:print-bind", 
+                ("hpx:print-bind",
                   "print to the console the bit masks calculated from the "
                   "arguments specified to all --hpx:bind options.")
 #endif
@@ -430,20 +443,24 @@ namespace hpx { namespace util
                  "the number of operating system threads to spawn for this HPX "
                  "locality (default: 1, using 'all' will spawn one thread for "
                  "each processing unit")
+                ("hpx:cores", value<std::string>()->default_value("all"),
+                 "the number of cores to utilize for this HPX "
+                 "locality (default: 'all', i.e. the number of cores is based on "
+                 "the number of total cores in the system)")
                 ("hpx:queuing", value<std::string>(),
-                  "the queue scheduling policy to use, options are 'global/g', "
-                  "'local/l', 'priority_local/pr', 'abp/a', 'priority_abp', "
-                  "'hierarchy/h', and 'periodic/pe' (default: priority_local/p)")
+                  "the queue scheduling policy to use, options are "
+                  "'local', 'priority_local', 'priority_abp', "
+                  "'hierarchy', 'static' and 'periodic' (default: 'priority_local'; "
+                  "all option values can be abbreviated)")
                 ("hpx:hierarchy-arity", value<std::size_t>(),
                   "the arity of the of the thread queue tree, valid for "
                    "--hpx:queuing=hierarchy only (default: 2)")
                 ("hpx:high-priority-threads", value<std::size_t>(),
                   "the number of operating system threads maintaining a high "
                   "priority queue (default: number of OS threads), valid for "
-                  "--hpx:queuing=priority_local only")
+                  "--hpx:queuing=priority_local and --hpx:queuing=priority_abp only)")
                 ("hpx:numa-sensitive",
-                  "makes the priority_local scheduler NUMA sensitive, valid for "
-                  "--hpx:queuing=local and priority_local only")
+                  "makes the priority_local scheduler NUMA sensitive")
             ;
 
             options_description config_options("HPX configuration options");
@@ -474,6 +491,10 @@ namespace hpx { namespace util
                   "AGAS logs to the target destination")
                 // enable debug output from command line handling
                 ("hpx:debug-clp", "debug command line processing")
+#if defined(_POSIX_VERSION) || defined(BOOST_MSVC)
+                ("hpx:attach-debugger", "wait for a debugger to be attached")
+#endif
+                ("hpx:list-parcel-ports", "list all available parcel-ports")
             ;
 
             options_description counter_options(
@@ -489,31 +510,26 @@ namespace hpx { namespace util
                 ("hpx:print-counter-destination", value<std::string>(),
                   "print the performance counter(s) specified with --hpx:print-counter "
                   "to the given file (default: console)")
-                ("hpx:list-counters", value<std::string>()->implicit_value("minimal"), 
+                ("hpx:list-counters", value<std::string>()->implicit_value("minimal"),
                   "list the names of all registered performance counters, "
                   "possible values:\n"
                   "   'minimal' (prints counter name skeletons)\n"
                   "   'full' (prints all available counter names)")
-                ("hpx:list-counter-infos", value<std::string>()->implicit_value("minimal"), 
+                ("hpx:list-counter-infos", value<std::string>()->implicit_value("minimal"),
                   "list the description of all registered performance counters, "
                   "possible values:\n"
                   "   'minimal' (prints infos for counter name skeletons)\n"
                   "   'full' (prints all available counter infos)")
             ;
 
-            // move all positional options into the hpx:positional option group
-            positional_options_description pd;
-            pd.add("hpx:positional", -1);
-
             hidden_options.add_options()
-                ("hpx:positional", value<std::vector<std::string> >(),
-                  "positional options")
                 ("hpx:ignore", "this option will be silently ignored")
             ;
 
             // construct the overall options description and parse the
             // command line
             options_description desc_cmdline;
+            options_description positional_options;
             desc_cmdline
                 .add(app_options).add(cmdline_options)
                 .add(hpx_options).add(counter_options)
@@ -521,39 +537,79 @@ namespace hpx { namespace util
                 .add(hidden_options)
             ;
 
-            // parse command line, allow for unregistered options this point
-            parsed_options opts(
-                detail::get_commandline_parser(
-                    command_line_parser(argc, argv)
-                        .options(desc_cmdline)
-                        .positional(pd)
-                        .style(unix_style)
-                        .extra_parser(detail::option_parser(rtcfg, node)),
-                    error_mode
-                ).run()
-            );
-
-            // collect unregistered options, if needed
-            if (unregistered_options) {
-                using boost::program_options::collect_unrecognized;
-                using boost::program_options::exclude_positional;
-                *unregistered_options =
-                    collect_unrecognized(opts.options, exclude_positional);
-            }
-
-            store(opts, vm);
-            notify(vm);
-
             options_description desc_cfgfile;
             desc_cfgfile
                 .add(app_options).add(hpx_options)
                 .add(counter_options).add(config_options)
-                .add(debugging_options).add(hidden_options);
+                .add(debugging_options).add(hidden_options)
+            ;
 
-            detail::handle_generic_config_options(argv[0], vm, desc_cfgfile, rtcfg, node);
-            detail::handle_config_options(vm, desc_cfgfile, rtcfg, node);
+            if (rtcfg.get_entry("hpx.commandline.allow_unknown", "0") == "0")
+            {
+                // move all positional options into the hpx:positional option
+                // group
+                positional_options_description pd;
+                pd.add("hpx:positional", -1);
 
-            // print help screen
+                positional_options.add_options()
+                    ("hpx:positional", value<std::vector<std::string> >(),
+                      "positional options")
+                ;
+                desc_cmdline.add(positional_options);
+                desc_cfgfile.add(positional_options);
+
+                // parse command line, allow for unregistered options this point
+                parsed_options opts(detail::get_commandline_parser(
+                        command_line_parser(argc, argv)
+                            .options(desc_cmdline)
+                            .positional(pd)
+                            .style(unix_style)
+                            .extra_parser(detail::option_parser(rtcfg, node)),
+                        error_mode
+                    ).run()
+                );
+
+                // collect unregistered options, if needed
+                if (unregistered_options) {
+                    using boost::program_options::collect_unrecognized;
+                    using boost::program_options::exclude_positional;
+                    *unregistered_options =
+                        collect_unrecognized(opts.options, exclude_positional);
+                }
+
+                store(opts, vm);
+            }
+            else
+            {
+                // parse command line, allow for unregistered options this point
+                parsed_options opts(detail::get_commandline_parser(
+                        command_line_parser(argc, argv)
+                            .options(desc_cmdline)
+                            .style(unix_style)
+                            .extra_parser(detail::option_parser(rtcfg, node)),
+                        error_mode
+                    ).run()
+                );
+
+                // collect unregistered options, if needed
+                if (unregistered_options) {
+                    using boost::program_options::collect_unrecognized;
+                    using boost::program_options::include_positional;
+                    *unregistered_options =
+                        collect_unrecognized(opts.options, include_positional);
+                }
+
+                store(opts, vm);
+            }
+
+            notify(vm);
+
+            detail::handle_generic_config_options(
+                argv[0], vm, desc_cfgfile, rtcfg, node, error_mode);
+            detail::handle_config_options(
+                vm, desc_cfgfile, rtcfg, node, error_mode);
+
+            // collect help information
             if (visible && vm.count("hpx:help")) {
                 (*visible)
                     .add(app_options).add(cmdline_options)
@@ -578,7 +634,7 @@ namespace hpx { namespace util
         util::section const& rtcfg,
         boost::program_options::options_description const& app_options,
         std::string const& cmdline, boost::program_options::variables_map& vm,
-        std::size_t node, commandline_error_mode error_mode, hpx::runtime_mode mode,
+        std::size_t node, int error_mode, hpx::runtime_mode mode,
         boost::program_options::options_description* visible,
         std::vector<std::string>* unregistered_options)
     {
@@ -589,9 +645,10 @@ namespace hpx { namespace util
         std::vector<std::string> args = split_unix(cmdline);
 #endif
 
-        boost::scoped_array<char*> argv(new char* [args.size()]);
+        boost::scoped_array<char*> argv(new char* [args.size()+1]);
         for (std::size_t i = 0; i < args.size(); ++i)
             argv[i] = const_cast<char*>(args[i].c_str());
+        argv[args.size()] = 0;
 
         return parse_commandline(
             rtcfg, app_options, static_cast<int>(args.size()), argv.get(), vm,
@@ -604,10 +661,6 @@ namespace hpx { namespace util
         boost::program_options::options_description const& app_options,
         boost::program_options::variables_map& vm)
     {
-        // To make this example at least minimally useful we analyze the
-        // command line options the application instance has been started with
-        // on this locality.
-        //
         // The command line for this application instance is available from
         // this configuration section:
         //

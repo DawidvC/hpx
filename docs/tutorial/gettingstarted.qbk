@@ -1,7 +1,8 @@
 [/==============================================================================
-    Copyright (C) 2007-2013 Hartmut Kaiser
+    Copyright (C) 2007-2014 Hartmut Kaiser
     Copyright (C) 2011 Bryce Lelbach
     Copyright (C) 2013 Pyry Jahkola
+    Copyright (C) 2013 Thomas Heller
 
     Distributed under the Boost Software License, Version 1.0. (See accompanying
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -28,379 +29,6 @@ you to resources that can help you pursue these topics further.
 [/Adrian Serio 3-13-12]
 [/Phillip LeBlanc 3-13-12]
 
-[/////////////////////////////////////////////////////////////////////////////]
-[section:prereqs Prerequisites]
-
-[heading Supported Platforms]
-
-At this time, __hpx__ supports only the following platforms. Other platforms may
-work, but we do not test __hpx__ with other platforms, so please be warned.
-
-[table Supported Platforms for __hpx__
-    [[Name   ][Recommended Version][Minimum Version][Architectures ]]
-    [[Linux  ][3.2                ][2.6            ][x86-32, x86-64]]
-    [[Windows][7, Server 2008 R2  ][Any NT system  ][x86-64]        ]
-]
-
-[heading Software and Libraries]
-
-In the simplest case, __hpx__ depends on one set of libraries: __boost__. So,
-before you read further, please make sure you have a recent version of
-__boost__ installed on your target machine. __hpx__ currently requires at least
-Boost V1.47.0 to work properly. It may build and run with older versions, but
-we do not test __hpx__ with those versions, so please be warned.
-
-Installing the Boost libraries is described in detail in Boost's own
-__boost_getting_started__ document. It is often possible to download the Boost
-libraries using the package manager of your distribution. Please refer to the
-corresponding documentation for your system for more information.
-
-The installation of Boost is described in detail in Boost's own
-__boost_getting_started__ document. However, if you've never used the Boost
-libraries (or even if you have), here's a quick primer: __boost_installation__.
-
-Currently, __hpx__ only supports two compilers: GCC and MSVC. __hpx__ uses CMake as
-a build system.
-
-[table Software Prerequisites for __hpx__ on Linux systems
-    [[Name                       ][Recommended Version][Minimum Version ]]
-
-    [[[*Compilers]]]
-    [[__gcc__                    ][4.6.3              ][4.4.5           ]]
-
-    [[[*Build System]]]
-    [[__cmake__                  ][2.8.4              ][2.8.4           ]]
-    [[__gmake__                  ][3.81               ][3.80            ]]
-
-    [[[*Required Libraries]]]
-    [[__boost_libraries__        ][1.48.0 or newer    ][1.47.0          ]]
-    [[__eglibc__ (Debian, Ubuntu)][2.11               ][2.7             ]]
-    [[__glibc__ (Redhat)         ][2.11               ][2.7             ]]
-    [[__libstdcxx__              ][4.6.3              ][4.4.5           ]]
-    [[__hwloc__                  ][1.4                ][1.2             ]
-        [Used for OS-thread pinning and NUMA awareness.]]
-]
-
-[table Software Prerequisites for __hpx__ on Windows systems
-    [[Name                       ][Recommended Version][Minimum Version ]]
-
-    [[[*Compilers]]]
-    [[__visual_cxx__ (x64)       ][2010               ][2010            ]]
-
-    [[[*Build System]]]
-    [[__cmake__                  ][2.8.4              ][2.8.4           ]]
-
-    [[[*Required Libraries]]]
-    [[__boost__                  ][1.48.0 or newer    ][1.43.0          ]]
-    [[__hwloc__                  ][1.5                ][1.5             ]
-        [Used for OS-thread pinning and NUMA awareness.]]
-]
-
-[note You need to build the following Boost libraries for __hpx__: 
-      Boost.DateTime, Boost.Filesystem, Boost.ProgramOptions, Boost.Regex,
-      Boost.Serialization, Boost.System, Boost.Thread, Boost.Chrono (starting 
-      Boost 1.47.0), and Boost.Atomic (starting Boost 1.53.0).]
-
-Depending on the options you chose while building and installing __hpx__,
-you will find that __hpx__ may depend on several other libraries such as those
-listed below.
-
-[table Highly Recommended Optional Software Prerequisites for __hpx__ on Linux systems
-    [[Name                       ][Recommended Version][Minimum Version ][Notes]]
-
-    [[__hdf5__                   ][1.8.7              ][1.6.7           ]
-        [Used for data I/O in the gravity, sheneos, neutron_star, interpolate1d
-         and interpolate3d applications. See important note below.]]
-    [[__google_perftools__       ][1.7.1              ][1.7.1           ]
-        [Used as a replacement for the system allocator, and for allocation
-         diagnostics.]]
-    [[__libunwind__              ][0.99               ][0.97            ]
-        [Dependency of google-perftools on x86-64, used for stack unwinding.]]
-]
-
-[table Optional Software Prerequisites for __hpx__ on Linux systems
-    [[Name                       ][Recommended Version][Minimum Version ][Notes]]
-
-    [[__papi__                   ][                   ][                ]
-        [Used for accessing hardware performance data.]]
-    [[__lapack__                 ][                   ][                ]
-        [Used in the neutron_star application.]]
-    [[__blas__                   ][                   ][                ]
-        [Used in the neutron_star application.]]
-    [[__gsl__                    ][                   ][                ]
-        [Used in the neutron_star application.]]
-    [[__lorene__                 ][                   ][                ]
-        [Used in the neutron_star application.]]
-    [[__rnpl__                   ][1.11               ][1.11            ]
-        [Used for data I/O in the adaptive1d and neutron_star applications.]]
-    [[__jemalloc__               ][2.1.2              ][2.1.0           ]
-        [Used as a replacement for the system allocator.]]
-]
-
-[table Highly Recommended Optional Software Prerequisites for __hpx__ on Windows systems
-    [[Name                       ][Recommended Version][Minimum Version ][Notes]]
-
-    [[__hwloc__                  ][1.4.2              ][1.4.2           ]
-        [Used for OS-thread pinning and NUMA awareness.]]
-    [[__hdf5__                   ][1.8.7              ][1.6.7           ]
-        [Used for data I/O in the gravity, sheneos, neutron_star, interpolate1d
-         and interpolate3d applications. See important note below.]]
-]
-
-[important The C++ HDF5 libraries must be compiled with enabled threadsafety
-           support. This has to be explicitly specified while configuring
-           the HDF5 libraries as it is not the default. Additionally, you must
-           set the following environment variables before configuring the HDF5
-           libraries (this part only needs to be done on Linux):
-
-           [teletype]
-           ``
-               $ export CFLAGS='-DHDatexit=""'
-               $ export CPPFLAGS='-DHDatexit=""'
-           ``
-           ]
-
-[endsect] [/ Prerequisites]
-
-[/////////////////////////////////////////////////////////////////////////////]
-[section:boost_installation Installing Boost Libraries]
-
-The easiest way to create a working Boost installation is to compile Boost from
-sources yourself. This is particularly important as many high performance
-resources, even if they have Boost installed, usually only provide you with an
-older version of Boost. We suggest you download the most recent release of the
-Boost libraries from here: __boost_downloads__. Unpack the downloaded archive
-into a directory of your choosing. We will refer to this directory a `$BOOST`.
-
-Building and installing the Boost binaries is simple, regardless what platform
-you are on:
-
-    cd $BOOST
-    bootstrap --prefix=<where to install boost>
-    ./b2 -j<N>
-    ./b2 install
-
-where: `<where to install boost>` is the directory the built binaries will be
-installed to, and `<N>` is the number of cores to use to build the Boost
-binaries.
-
-After the above sequence of command has been executed (this may take a while!)
-you will need to specify the directory where Boost was installed as `BOOST_ROOT`
-(`<where to install boost>`) while executing cmake for __hpx__ as explained in
-detail in the sections __unix_installation__ and __windows_installation__.
-
-[endsect]
-
-[/////////////////////////////////////////////////////////////////////////////]
-[section:unix_installation How to Install __hpx__ on Unix Variants]
-
-[teletype]
-
-* Create a build directory. __hpx__ requires an out-of-tree build. This means you
-  will be unable to run CMake in the __hpx__ source tree.
-
-``
-    $ cd hpx
-    $ mkdir my_hpx_build
-    $ cd my_hpx_build
-``
-
-* Invoke CMake from your build directory, pointing the CMake driver to the root
-  of your __hpx__ source tree.
-
-``
-    $ cmake [CMake variable definitions] /path/to/source/tree
-``
-
-[:for instance:]
-
-``
-    $ cmake -DBOOST_ROOT=~/packages/boost -DCMAKE_INSTALL_PREFIX=~/packages/hpx ~/downloads/hpx_0.8.0
-``
-
-* Invoke GNU make. If you are on a machine with multiple cores, add the -jN flag to
-  your make invocation, where N is the number of parallel processes __hpx__ gets compiled with.
-
-``
-    $ gmake -j4
-``
-
-[caution Compiling and linking __hpx__ needs a considerable amount of memory. It is advisable that
-    approximately 2 GB of memory per parallel process is available.]
-
-* To complete the build and install __hpx__:
-
-``
-    $ gmake install
-``
-
-[c++]
-
-For more detailed information about using __cmake__ please refer its documentation
-and to the section __cmake_hpx__.
-
-[endsect] [/ How to Install __hpx__ on Unix Variants]
-
-[/////////////////////////////////////////////////////////////////////////////]
-[section:macos_installation How to Install __hpx__ on MacOS]
-
-This section describes how to build__hpx__ for Mac OS X (with recent versions
-of Clang, libc++, and Boost).
-
-[teletype]
-
-[heading Install a recent version of LLVM and Clang]
-
-    In order to build __hpx__ you will need a fairly recent version of Clang
-    (at least version 3.2 of Clang and LLVM). For more instructions please see
-    [link http://clang.llvm.org/get_started.html here].
-
-    If you're using Homebrew, `brew install llvm --with-clang` will do the trick
-    and install 3.2 into `/usr/local/bin`.
-
-    In the guide below, I assume you're either using Clang 3.2 as installed by
-    Homebrew into /usr/local/bin, or that the following symlinks are created and
-    visible in your $PATH:
-``
-        ln -s /path/to/build-llvm/Release/bin/clang++ clang++-3.3
-        ln -s /path/to/build-llvm/Release/bin/clang clang-3.3
-``
-    (Replace `/path/to` here with an absolute path of your liking.)
-
-[heading Visit http://libcxx.llvm.org/ to get the latest version of the "libc++" C++ standard library]
-
-    You need to use the trunk version; what's currently bundled with XCode or
-    OS X aren't quite there yet. You can follow the steps in
-    http://libcxx.llvm.org/ if you choose, but here's briefly how it can be built:
-``
-        cd /path/to
-        git clone http://llvm.org/git/libcxx.git
-        cd libcxx/lib
-        CXX=clang++-3.3 CC=clang-3.3 TRIPLE=-apple- ./buildit
-``
-    or alternatively:
-``
-        CXX=/usr/local/bin/clang++ CC=/usr/local/bin/clang TRIPLE=-apple- \
-            ./buildit
-``
-    The library is then found in `/path/to/libcxx/include` and
-    `/path/to/libcxx/lib`, respectively
-
-[heading Build (and install) a recent version of Boost, using Clang and libc++]
-
-    To build Boost with Clang and make it link to libc++ as standard library,
-    you'll need to set up either of the following in your `~/user-config.jam`
-    file:
-``
-        # user-config.jam (put this file into your home directory)
-        # ...
-
-        # Clang 3.2
-        using clang
-            : 3.2
-            : "/usr/local/bin/clang++"
-            : <cxxflags>"-std=c++11 -stdlib=libc++ -fcolor-diagnostics -isystem /path/to/libcxx/include"
-              <linkflags>"-stdlib=libc++ -L/path/to/libcxx/lib"
-            ;
-
-        # Clang trunk ("3.3" for convenience)
-        using clang
-            : 3.3
-            : "clang++-3.3"
-            : <cxxflags>"-std=c++11 -stdlib=libc++ -fcolor-diagnostics -isystem /path/to/libcxx/include"
-              <linkflags>"-stdlib=libc++ -L/path/to/libcxx/lib"
-            ;
-``
-    (Again, remember to replace `/path/to` with whatever you used earlier.)
-
-    You can then use as build command either:
-``
-        b2 --build-dir=/tmp/build-boost --layout=versioned toolset=clang-3.2 install -j4
-``
-    or
-``
-        b2 --build-dir=/tmp/build-boost --layout=versioned toolset=clang-3.3 install -j4
-``
-    we verifed this using Boost V1.53. If you use a different
-    version, just remember to replace `/usr/local/include/boost-1_53` with
-    whatever include prefix you had in your installation.
-
-[heading Build HPX, finally]
-``
-        cd /path/to
-        git clone https://github.com/STEllAR-GROUP/hpx.git
-        mkdir build-hpx && cd build-hpx
-``
-    To build with Clang 3.2, execute:
-``
-        cmake ../hpx \
-            -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
-            -DCMAKE_C_COMPILER=/usr/local/bin/clang-3.3 \
-            -DBOOST_INCLUDE_DIR=/usr/local/include/boost-1_53 \
-            -DBOOST_LIBRARY_DIR=/usr/local/lib \
-            -DBOOST_SUFFIX=-clang-darwin32-mt-1_53 \
-            -DCMAKE_CXX_FLAGS="-isystem /path/to/libcxx/include" \
-            -DLINK_FLAGS="-L /path/to/libcxx/lib"
-        make
-``
-    To build with Clang 3.3 (trunk), execute:
-``
-        cmake ../hpx \
-            -DCMAKE_CXX_COMPILER=clang++-3.3 \
-            -DCMAKE_C_COMPILER=clang-3.3 \
-            -DBOOST_INCLUDE_DIR=/usr/local/include/boost-1_53 \
-            -DBOOST_LIBRARY_DIR=/usr/local/lib \
-            -DBOOST_SUFFIX=-clang-darwin33-mt-1_53 \
-            -DCMAKE_CXX_FLAGS="-isystem /path/to/libcxx/include" \
-            -DLINK_FLAGS="-L /path/to/libcxx/lib"
-        make
-``
-
-[c++]
-[endsect]
-
-[/////////////////////////////////////////////////////////////////////////////]
-[section:windows_installation How to Install __hpx__ on Windows]
-
-[heading Installation of Required Prerequisites]
-
-* Download the Boost c++ libraries from __boost_downloads__
-* Install the boost library as explained in the section __boost_installation__
-* Download the latest version of __cmake__ binaries, which are located under
-  the platform section of the downloads page at __cmake_download__.
-* Download the latest version of __hpx__ from the __stellar__ website:
-  __stellar_hpx_download__
-
-[heading Installation of the __hpx__ Library]
-
-* Create a build folder. __hpx__ requires an out-of-tree-build. This means that you
-  will be unable to run CMake in the __hpx__ source folder.
-* Open up the CMake GUI. In the input box labelled "Where is the source code:",
-  enter the full path to the source folder. In the input box labelled
-  "Where to build the binaries:", enter the full path to the build folder you
-  created before.
-* Add CMake variable definitions (if any) by clicking the "Add Entry" button.
-  The only required variable you need to define is `BOOST_ROOT`. This (PATH)
-  variable needs to be set to point to the root folder of your Boost
-  installation. It is recommended to set the variable `CMAKE_INSTALL_PREFIX` as
-  well. This allows to control where the built HPX libraries will be installed.
-  If this (PATH) variable is set, it has to refer to the directory where the
-  built __hpx__ files should be installed to.
-* Press the "Configure" button. A window will pop up asking you which compilers
-  to use. Select the Visual Studio 10 (64Bit) compilers (they are usually
-  the default if available).
-* Make sure that the under the `CMAKE` tree that the `CMAKE_BUILD_TYPE` build
-  type is set to Debug or Release, according to what you plain to do.
-* Press "Configure" again. Repeat this step until the "Generate" button becomes
-  clickable (and until no variable definitions are marked red anymore).
-* Press "Generate".
-* Open up the build folder, and double-click hpx.sln.
-* Build the INSTALL target.
-
-For more detailed information about using __cmake__ please refer its documentation
-and to the section __cmake_hpx__.
-
-[endsect] [/ How to Install __hpx__ on Windows]
 
 [/////////////////////////////////////////////////////////////////////////////]
 [section:unix_pbs How to Use __hpx__ Applications with PBS]
@@ -440,15 +68,15 @@ in the section __hello_world_example__.
          have to be placed before the option [hpx_cmdline --hpx:nodes], which
          in this case should be the last option on the command line.
 
-         Alternatively, use the option [hpx_cmdline --hpx:endnodes] to explicitly 
+         Alternatively, use the option [hpx_cmdline --hpx:endnodes] to explicitly
          mark the end of the list of node names:
          ```
-         __pbsdsh__ -u $APP_PATH ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` ``[hpx_cmdline --hpx:endnodes] ``$APP_OPTIONS 
+         __pbsdsh__ -u $APP_PATH ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` ``[hpx_cmdline --hpx:endnodes] ``$APP_OPTIONS
          ```
          ]
 
 The [^#PBS -l nodes=2:ppn=4] directive will cause two compute nodes to be
-allocated for the application, as specified int the option [^nodes]. Each of the
+allocated for the application, as specified in the option [^nodes]. Each of the
 nodes will dedicate four cores to the program, as per the option [^ppn], short
 for "processors per node" (PBS does not distinguish between processors and
 cores). Note that requesting more cores per node than physically available is
@@ -499,7 +127,7 @@ Now, we invoke this script using the __pbsdsh__ tool:
     APP_PATH=~/packages/hpx/bin/hello_world
     APP_OPTIONS=
 
-    __pbsdsh__ -u runme.sh $APP_PATH $APP_OPTIONS ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` 
+    __pbsdsh__ -u runme.sh $APP_PATH $APP_OPTIONS ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE`
 ```
 
 All that remains now is submitting the job to the queuing system. Assuming that
@@ -507,7 +135,7 @@ the contents of the PBS script were saved in file [^pbs_hello_world.sh] in the
 current directory, this is accomplished by typing:
 
 ``
-    $ __qsub__ ./pbs_hello_world_pbs.sh
+    __qsub__ ./pbs_hello_world_pbs.sh
 ``
 
 If the job is accepted, __qsub__ will print out the assigned job ID, which may
@@ -520,7 +148,7 @@ look like:
 To check the status of your job, issue the following command:
 
 ``
-    $ __qstat__ 42.supercomputer.some.university.edu
+    __qstat__ 42.supercomputer.some.university.edu
 ``
 
 and look for a single-letter job status symbol. The common cases include:
@@ -562,6 +190,78 @@ Congratulations! You have just run your first distributed __hpx__ application!
 
 [endsect] [/ How to Use __hpx__ Applications with PBS]
 
+[section:unix_slurm How to Use __hpx__ Applications with SLURM]
+
+Just like PBS (described in section __using_pbs__), __slurm__ is a job management
+system which is widely used on large supercomputing systems. Any __hpx__
+application can easily be run using SLURM. This section describes how this can
+be done.
+
+The easiest way to run an __hpx__ application using SLURM is to utilize the
+command line tool __srun__ which interacts with the SLURM batch scheduling
+system.
+
+```
+    srun -p <partition> -N <number-of-nodes> hpx-application <application-arguments>
+```
+
+Here, `<partition>` is one of the node partitions existing on the target machine
+(consult the machines documentation to get a list of existing partitions) and
+`<number-of-nodes>` is the number of compute nodes you want to use. By default,
+the HPX application is started with one locality per node and uses all available
+cores on a node. You can change the number of localities started per node (for
+example to account for NUMA effects) by specifying the `-n` option of srun. The
+number of cores per locality can be set by `-c`. The `<application-arguments>`
+are any application specific arguments which need to passed on to the
+application.
+
+[note There is no need to use any of the __hpx__ command line options related to
+      the number of localities, number of threads, or related to networking
+      ports. All of this information is automatically extracted from the SLURM
+      environment by the __hpx__ startup code.]
+
+[important The __srun__ documentation explicitly states: "If `-c` is specified
+      without `-n`, as many tasks will be allocated per node as possible while
+      satisfying the `-c` restriction. For instance on a cluster with 8 CPUs per
+      node, a job request for 4 nodes and 3 CPUs per task may be allocated 3 or
+      6 CPUs per node (1 or 2 tasks per node) depending upon resource consumption
+      by other jobs."
+      For this reason, we suggest to always specify `-n <number-of-instances>`,
+      even if `<number-of-instances>` is equal to one (`1`).]
+
+[heading Interactive Shells]
+
+To get an interactive development shell on one of the nodes you can issue the
+following command:
+
+```
+     srun -p <node-type> -N <number-of-nodes> --pty /bin/bash -l
+```
+
+After the shell has been opened, you can run your HPX application. By default,
+it uses all available cores. Note that if you requested one node, you don't
+need to do `srun` again. However, if you requested more than one nodes, and want
+to run your distributed application, you can use `srun` again to start up the
+distributed HPX application. It will use the resources that have been requested
+for the interactive shell.
+
+[heading Scheduling Batch Jobs]
+
+The above mentioned method of running __hpx__ applications is fine for
+development purposes. The disadvantage that comes with `srun` is that it only
+returns once the application is finished. This might not be appropriate for
+longer running applications (for example benchmarks or larger scale simulations).
+In order to cope with that limitation you can use the __sbatch__ command.
+
+The `sbatch` command expects a script that it can run once the requested
+resources are available. In order to request resources you need to add
+`#SBATCH` comments in your script or provide the necessary parameters to
+`sbatch` directly. The parameters are the same as with `srun`. The commands you
+need to execute are the same you would need to start your application as if you
+were in an interactive shell.
+
+[endsect]
+
 [/Proofread by:]
 [/Adrian Serio 3-13-12]
 [/Phillip LeBlanc 3-13-12]
@@ -570,5 +270,6 @@ Congratulations! You have just run your first distributed __hpx__ application!
 
 [/Proofread by:]
 [/Adrian Serio 3-13-12]
+[/Thomas Heller 07-26-13]
 
 

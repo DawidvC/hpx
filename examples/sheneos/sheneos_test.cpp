@@ -7,6 +7,7 @@
 #include <hpx/include/actions.hpp>
 #include <hpx/include/components.hpp>
 #include <hpx/include/lcos.hpp>
+#include <hpx/include/util.hpp>
 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/bind.hpp>
@@ -99,7 +100,7 @@ void test_sheneos(std::size_t num_ye_points, std::size_t num_temp_points,
         }
     }
 
-    hpx::lcos::wait(tests);
+    hpx::wait_all(tests);
 }
 
 HPX_PLAIN_ACTION(test_sheneos, test_action);
@@ -193,7 +194,7 @@ void test_sheneos_one_bulk(std::size_t num_ye_points,
     hpx::lcos::future<std::vector<double> > bulk_one_tests =
         shen.interpolate_one_bulk_async(values, sheneos::server::partition3d::logpress);
 
-    std::vector<double> results = hpx::lcos::wait(bulk_one_tests);
+    std::vector<double> results = hpx::util::unwrapped(bulk_one_tests);
 }
 
 HPX_PLAIN_ACTION(test_sheneos_one_bulk, test_one_bulk_action);
@@ -287,7 +288,7 @@ void test_sheneos_bulk(std::size_t num_ye_points,
     hpx::lcos::future<std::vector<std::vector<double> > > bulk_tests =
         shen.interpolate_bulk_async(values);
 
-    std::vector<std::vector<double> > results = hpx::lcos::wait(bulk_tests);
+    std::vector<std::vector<double> > results = hpx::util::unwrapped(bulk_tests);
 }
 
 HPX_PLAIN_ACTION(test_sheneos_bulk, test_bulk_action);
@@ -303,12 +304,6 @@ void wait_for_task(std::size_t i, hpx::util::high_resolution_timer& t)
 void wait_for_bulk_one_task(std::size_t i, hpx::util::high_resolution_timer& t)
 {
     std::cout << "Finished bulk-one task " << i << ": " << t.elapsed()
-        << " [s]" << std::endl;
-}
-
-void wait_for_bulk_task(std::size_t i, hpx::util::high_resolution_timer& t)
-{
-    std::cout << "Finished bulk task " << i << ": " << t.elapsed()
         << " [s]" << std::endl;
 }
 
@@ -397,20 +392,13 @@ int hpx_main(boost::program_options::variables_map& vm)
         std::vector<hpx::future<void> > bulk_tests;
         BOOST_FOREACH(hpx::naming::id_type const& id, locality_ids)
         {
-            for (std::size_t i = 0; i < num_workers; ++i) 
+            for (std::size_t i = 0; i < num_workers; ++i)
             {
                 bulk_tests.push_back(hpx::async<test_bulk_action>(id,
                     num_ye_points, num_temp_points, num_rho_points, seed));
             }
         }
-
-        std::size_t i = 0;
-        while (!bulk_tests.empty()) 
-        {
-            HPX_STD_TUPLE<int, hpx::future<void> > r = hpx::wait_any(bulk_tests);
-            bulk_tests.erase(bulk_tests.begin() + HPX_STD_GET(0, r));
-            wait_for_bulk_task(i++, t);
-        }
+        hpx::wait_all(bulk_tests);
 
         std::cout << "Completed bulk tests: " << t.elapsed() << " [s]"
             << std::endl;

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,18 +14,23 @@
 #include <iosfwd>
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_fwd.hpp>
+#include <hpx/error.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/logging.hpp>
 #include <hpx/util/filesystem_compatibility.hpp>
 
 #include <boost/cstdint.hpp>
-#include <boost/assert.hpp>
 #include <boost/current_function.hpp>
+#include <boost/exception_ptr.hpp>
 #include <boost/throw_exception.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/system/system_error.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
+
+#if !defined(BOOST_SYSTEM_NOEXCEPT)
+#define BOOST_SYSTEM_NOEXCEPT BOOST_NOEXCEPT
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx
@@ -36,137 +41,18 @@ namespace hpx
     class exception;
     /// \endcond
 
-    ///////////////////////////////////////////////////////////////////////////
-    /// \brief Possible error conditions
-    ///
-    /// This enumeration lists all possible error conditions which can be
-    /// reported from any of the API functions.
-    enum error
-    {
-        success = 0,                                ///< The operation was successful
-        no_success = 1,                             ///< The operation was successful,
-                                                    ///< but additional conditions apply
-        not_implemented = 2,                        ///< The operation is not implemented
-        out_of_memory = 3,                          ///< The operation caused a out of memory condition
-        bad_action_code = 4,                        ///<
-        bad_component_type = 5,                     ///< The specified component type is not known or otherwise invalid
-        network_error = 6,                          ///< A generic network error occurred
-        version_too_new = 7,                        ///< The version of the network representation for this object is too new
-        version_too_old = 8,                        ///< The version of the network representation for this object is too old
-        version_unknown = 9,                        ///< The version of the network representation for this object is unknown
-        unknown_component_address = 10,             ///<
-        duplicate_component_address = 11,           ///< The given global id has already been registered
-        invalid_status = 12,                        ///< The operation was executed in an invalid status
-        bad_parameter = 13,                         ///< One of the supplied parameters is invalid
-        internal_server_error = 14,                 ///<
-        service_unavailable = 15,                   ///<
-        bad_request = 16,                           ///<
-        repeated_request = 17,                      ///<
-        lock_error = 18,                            ///<
-        duplicate_console = 19,                     ///< There is more than one console locality
-        no_registered_console = 20,                 ///< There is no registered console locality available
-        startup_timed_out = 21,                     ///<
-        uninitialized_value = 22,                   ///<
-        bad_response_type = 23,                     ///<
-        deadlock = 24,                              ///<
-        assertion_failure = 25,                     ///<
-        null_thread_id = 26,                        ///< Attempt to invoke a API function from a non-HPX thread
-        invalid_data = 27,                          ///<
-        yield_aborted = 28,                         ///< The yield operation was aborted
-        dynamic_link_failure = 29,                  ///<
-        commandline_option_error = 30,              ///< One of the options given on the command line is erroneous
-        serialization_error = 31,                   ///< There was an error during serialization of this object
-        unhandled_exception = 32,                   ///< An unhandled exception has been caught
-        kernel_error = 33,                          ///< The OS kernel reported an error
-        broken_task = 34,                           ///< The task associated with this future object is not available anymore
-        task_moved = 35,                            ///< The task associated with this future object has been moved
-        task_already_started = 36,                  ///< The task associated with this future object has already been started
-        future_already_retrieved = 37,              ///< The future object has already been retrieved
-        future_already_satisfied = 38,              ///< The value for this future object has already been set
-        future_does_not_support_cancellation = 39,  ///< The future object does not support cancellation
-        future_can_not_be_cancelled = 40,           ///< The future can't be canceled at this time
-        future_uninitialized = 41,                  ///< The future object has not been initialized
-        broken_promise = 42,                        ///< The promise has been deleted
-        thread_resource_error = 43,                 ///<
-        thread_interrupted = 44,                    ///<
-        thread_not_interruptable = 45,              ///<
-        duplicate_component_id = 46,                ///< The component type has already been registered
-        unknown_error = 47,                         ///< An unknown error occurred
-        bad_plugin_type = 48,                       ///< The specified plugin type is not known or otherwise invalid
-
-        /// \cond NOINTERNAL
-        last_error,
-        error_upper_bound = 0x7fffL   // force this enum type to be at least 16 bits.
-        /// \endcond
-    };
-
-    /// \cond NOINTERNAL
-    char const* const error_names[] =
-    {
-        /*  0 */ "success",
-        /*  1 */ "no_success",
-        /*  2 */ "not_implemented",
-        /*  3 */ "out_of_memory",
-        /*  4 */ "bad_action_code",
-        /*  5 */ "bad_component_type",
-        /*  6 */ "network_error",
-        /*  7 */ "version_too_new",
-        /*  8 */ "version_too_old",
-        /*  9 */ "version_unknown",
-        /* 10 */ "unknown_component_address",
-        /* 11 */ "duplicate_component_address",
-        /* 12 */ "invalid_status",
-        /* 13 */ "bad_parameter",
-        /* 14 */ "internal_server_error",
-        /* 15 */ "service_unavailable",
-        /* 16 */ "bad_request",
-        /* 17 */ "repeated_request",
-        /* 18 */ "lock_error",
-        /* 19 */ "duplicate_console",
-        /* 20 */ "no_registered_console",
-        /* 21 */ "startup_timed_out",
-        /* 22 */ "uninitialized_value",
-        /* 23 */ "bad_response_type",
-        /* 24 */ "deadlock",
-        /* 25 */ "assertion_failure",
-        /* 26 */ "null_thread_id",
-        /* 27 */ "invalid_data",
-        /* 28 */ "yield_aborted",
-        /* 29 */ "dynamic_link_failure",
-        /* 30 */ "commandline_option_error",
-        /* 31 */ "serialization_error",
-        /* 32 */ "unhandled_exception",
-        /* 33 */ "kernel_error",
-        /* 34 */ "broken_task",
-        /* 35 */ "task_moved",
-        /* 36 */ "task_already_started",
-        /* 37 */ "future_already_retrieved",
-        /* 38 */ "future_already_satisfied",
-        /* 39 */ "future_does_not_support_cancellation",
-        /* 40 */ "future_can_not_be_cancelled",
-        /* 41 */ "future_uninitialized",
-        /* 42 */ "broken_promise",
-        /* 43 */ "thread_resource_error",
-        /* 44 */ "thread_interrupted",
-        /* 45 */ "thread_not_interruptable",
-        /* 46 */ "duplicate_component_id",
-        /* 47 */ "unknown_error"
-        /*    */ ""
-    };
-    /// \endcond
-
     /// \cond NODETAIL
     namespace detail
     {
         class hpx_category : public boost::system::error_category
         {
         public:
-            const char* name() const BOOST_NOEXCEPT
+            const char* name() const BOOST_SYSTEM_NOEXCEPT
             {
                 return "HPX";
             }
 
-            std::string message(int value) const BOOST_NOEXCEPT
+            std::string message(int value) const
             {
                 if (value >= success && value < last_error)
                     return std::string("HPX(") + error_names[value] + ")";
@@ -181,7 +67,7 @@ namespace hpx
         class hpx_category_rethrow : public boost::system::error_category
         {
         public:
-            const char* name() const BOOST_NOEXCEPT
+            const char* name() const BOOST_SYSTEM_NOEXCEPT
             {
                 return "";
             }
@@ -195,7 +81,7 @@ namespace hpx
         struct lightweight_hpx_category_rethrow : hpx_category_rethrow {};
 
         ///////////////////////////////////////////////////////////////////////
-        boost::exception_ptr access_exception(error_code const&);
+        HPX_EXPORT boost::exception_ptr access_exception(error_code const&);
 
     } // namespace detail
     /// \endcond
@@ -278,7 +164,8 @@ namespace hpx
             get_exception(Exception const& e,
                 std::string const& func = "<unknown>",
                 std::string const& file = "<unknown>",
-                long line = -1);
+                long line = -1,
+                std::string const& auxinfo = "");
     }
     /// \endcond
 
@@ -292,7 +179,7 @@ namespace hpx
     /// \note Class hpx::error_code is an adjunct to error reporting by
     /// exception
     ///
-    class error_code : public boost::system::error_code
+    class error_code : public boost::system::error_code //-V690
     {
     public:
         /// Construct an object of type error_code.
@@ -427,13 +314,19 @@ namespace hpx
             exception_ = boost::exception_ptr();
         }
 
+        /// Assignment operator for error_code
+        ///
+        /// \note This function maintains the error category of the left hand
+        ///       side if the right hand side is a success code.
+        inline error_code& operator=(error_code const& rhs);
+
     private:
         friend boost::exception_ptr detail::access_exception(error_code const&);
         friend class exception;
-        friend error_code make_error_code(boost::exception_ptr);
+        friend error_code make_error_code(boost::exception_ptr const&);
 
         inline error_code(int err, hpx::exception const& e);
-        inline explicit error_code(boost::exception_ptr e);
+        inline explicit error_code(boost::exception_ptr const& e);
 
         boost::exception_ptr exception_;
     };
@@ -500,7 +393,7 @@ namespace hpx
         return error_code(e, msg, func, file, line, mode);
     }
     inline error_code
-    make_error_code(boost::exception_ptr e)
+    make_error_code(boost::exception_ptr const& e)
     {
         return error_code(e);
     }
@@ -532,7 +425,7 @@ namespace hpx
         explicit exception(error e)
           : boost::system::system_error(make_error_code(e, plain))
         {
-            BOOST_ASSERT(e >= success && e < last_error);
+            HPX_ASSERT(e >= success && e < last_error);
             LERR_(error) << "created exception: " << this->what();
         }
 
@@ -557,7 +450,7 @@ namespace hpx
         exception(error e, char const* msg, throwmode mode = plain)
           : boost::system::system_error(make_system_error_code(e, mode), msg)
         {
-            BOOST_ASSERT(e >= success && e < last_error);
+            HPX_ASSERT(e >= success && e < last_error);
             LERR_(error) << "created exception: " << this->what();
         }
 
@@ -575,7 +468,7 @@ namespace hpx
         exception(error e, std::string const& msg, throwmode mode = plain)
           : boost::system::system_error(make_system_error_code(e, mode), msg)
         {
-            BOOST_ASSERT(e >= success && e < last_error);
+            HPX_ASSERT(e >= success && e < last_error);
             LERR_(error) << "created exception: " << this->what();
         }
 
@@ -608,10 +501,78 @@ namespace hpx
         ///               (if mode is \a rethrow).
         error_code get_error_code(throwmode mode = plain) const throw()
         {
+            HPX_UNUSED(mode);
             return error_code(this->boost::system::system_error::code().value(),
                 *this);
         }
     };
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// \brief A hpx::thread_interrupted is the exception type used by HPX to
+    ///        interrupt a running HPX thread.
+    ///
+    /// The \a hpx::thread_interrupted type is the exception type used by HPX to
+    /// interrupt a running thread.
+    ///
+    /// A running thread can be interrupted by invoking the interrupt() member
+    /// function of the corresponding hpx::thread object. When the interrupted
+    /// thread next executes one of the specified interruption points (or if it
+    /// is currently blocked whilst executing one) with interruption enabled,
+    /// then a hpx::thread_interrupted exception will be thrown in the interrupted
+    /// thread. If not caught, this will cause the execution of the interrupted
+    /// thread to terminate. As with any other exception, the stack will be
+    /// unwound, and destructors for objects of automatic storage duration will
+    /// be executed.
+    ///
+    /// If a thread wishes to avoid being interrupted, it can create an instance
+    /// of \a hpx::this_thread::disable_interruption. Objects of this class disable
+    /// interruption for the thread that created them on construction, and
+    /// restore the interruption state to whatever it was before on destruction.
+    ///
+    /// \code
+    ///     void f()
+    ///     {
+    ///         // interruption enabled here
+    ///         {
+    ///             hpx::this_thread::disable_interruption di;
+    ///             // interruption disabled
+    ///             {
+    ///                 hpx::this_thread::disable_interruption di2;
+    ///                 // interruption still disabled
+    ///             } // di2 destroyed, interruption state restored
+    ///             // interruption still disabled
+    ///         } // di destroyed, interruption state restored
+    ///         // interruption now enabled
+    ///     }
+    /// \endcode
+    ///
+    /// The effects of an instance of \a hpx::this_thread::disable_interruption can be
+    /// temporarily reversed by constructing an instance of
+    /// \a hpx::this_thread::restore_interruption, passing in the
+    /// \a hpx::this_thread::disable_interruption object in question. This will restore
+    /// the interruption state to what it was when the \a hpx::this_thread::disable_interruption
+    /// object was constructed, and then disable interruption again when the
+    /// \a hpx::this_thread::restore_interruption object is destroyed.
+    ///
+    /// \code
+    ///     void g()
+    ///     {
+    ///         // interruption enabled here
+    ///         {
+    ///             hpx::this_thread::disable_interruption di;
+    ///             // interruption disabled
+    ///             {
+    ///                 hpx::this_thread::restore_interruption ri(di);
+    ///                 // interruption now enabled
+    ///             } // ri destroyed, interruption disable again
+    ///         } // di destroyed, interruption state restored
+    ///         // interruption now enabled
+    ///     }
+    /// \endcode
+    ///
+    /// At any point, the interruption state for the current thread can be
+    /// queried by calling \a hpx::this_thread::interruption_enabled().
+    struct HPX_EXCEPTION_EXPORT thread_interrupted : std::exception {};
 
     /// \cond NODETAIL
     namespace detail
@@ -720,6 +681,9 @@ namespace hpx
         struct tag_throw_function {};
         struct tag_throw_stacktrace {};
         struct tag_throw_env {};
+        struct tag_throw_config {};
+        struct tag_throw_state {};
+        struct tag_throw_auxinfo {};
 
         // Stores the information about the locality id the exception has been
         // raised on. This information will show up in error messages under the
@@ -786,36 +750,64 @@ namespace hpx
         typedef boost::error_info<detail::tag_throw_env, std::string>
             throw_env;
 
+        // Stores the full HPX configuration information of the locality the
+        // exception has been raised in. This information will show up in error
+        // messages under the [config] tag.
+        typedef boost::error_info<detail::tag_throw_config, std::string>
+            throw_config;
+
+        // Stores the current runtime state. This information will show up in
+        // error messages under the [state] tag.
+        typedef boost::error_info<detail::tag_throw_state, std::string>
+            throw_state;
+
+        // Stores additional auxiliary information (such as information about
+        // the current parcel). This information will show up in error messages
+        // under the [auxinfo] tag.
+        typedef boost::error_info<detail::tag_throw_auxinfo, std::string>
+            throw_auxinfo;
+
         // construct an exception, internal helper
         template <typename Exception>
         HPX_EXPORT boost::exception_ptr
             construct_exception(Exception const& e,
                 std::string const& func, std::string const& file, long line,
-                std::string const& back_trace, boost::uint32_t node = 0,
+                std::string const& back_trace = "", boost::uint32_t node = 0,
                 std::string const& hostname = "", boost::int64_t pid = -1,
                 std::size_t shepherd = ~0, std::size_t thread_id = 0,
                 std::string const& thread_name = "",
-                std::string const& env = "");
+                std::string const& env = "", std::string const& config = "",
+                std::string const& state = "", std::string const& auxinfo = "");
+
+        template <typename Exception>
+        HPX_EXPORT boost::exception_ptr
+            construct_lightweight_exception(Exception const& e);
 
         // main function for throwing exceptions
         template <typename Exception>
-        BOOST_ATTRIBUTE_NORETURN HPX_EXPORT
+        HPX_ATTRIBUTE_NORETURN HPX_EXPORT
         void throw_exception(Exception const& e,
             std::string const& func, std::string const& file, long line);
 
-        // BOOST_ASSERT handler
-        BOOST_ATTRIBUTE_NORETURN HPX_EXPORT
+        // HPX_ASSERT handler
+        HPX_ATTRIBUTE_NORETURN HPX_EXPORT
         void assertion_failed(char const* expr, char const* function,
             char const* file, long line);
 
-        // BOOST_ASSERT_MSG handler
-        BOOST_ATTRIBUTE_NORETURN HPX_EXPORT
+        // HPX_ASSERT_MSG handler
+        HPX_ATTRIBUTE_NORETURN HPX_EXPORT
         void assertion_failed_msg(char const* msg, char const* expr,
             char const* function, char const* file, long line);
 
         // If backtrace support is enabled, this function returns the current
         // stack backtrace, otherwise it will return an empty string.
-        HPX_EXPORT std::string backtrace();
+        HPX_EXPORT std::string backtrace(
+            std::size_t frames = HPX_THREAD_BACKTRACE_ON_SUSPENSION_DEPTH);
+        HPX_EXPORT std::string backtrace_direct(
+            std::size_t frames = HPX_THREAD_BACKTRACE_ON_SUSPENSION_DEPTH);
+
+        // Portably extract the current execution environment
+        HPX_EXPORT std::string get_execution_environment();
 
         // Report an early or late exception and locally abort execution. There
         // isn't anything more we could do.
@@ -855,7 +847,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string diagnostic_information(hpx::exception const& e);
 
@@ -895,7 +888,8 @@ namespace hpx
     ///             \a hpx::get_error_file_name(), \a hpx::get_error_line_number(),
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error()
-    ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env()
+    ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
+    ///             \a hpx::get_error_config(), \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_what(hpx::exception const& e);
 
@@ -933,7 +927,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT boost::uint32_t get_error_locality_id(hpx::exception const& e);
 
@@ -970,7 +965,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT error get_error(hpx::exception const& e);
 
@@ -1007,7 +1003,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error()
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_host_name(hpx::exception const& e);
 
@@ -1045,7 +1042,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT boost::int64_t get_error_process_id(hpx::exception const& e);
 
@@ -1083,7 +1081,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_env(hpx::exception const& e);
 
@@ -1120,7 +1119,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_function_name(hpx::exception const& e);
 
@@ -1157,7 +1157,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_backtrace(hpx::exception const& e);
 
@@ -1196,7 +1197,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::string get_error_file_name(hpx::exception const& e);
 
@@ -1234,7 +1236,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT int get_error_line_number(hpx::exception const& e);
 
@@ -1273,7 +1276,8 @@ namespace hpx
     ///             \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::size_t get_error_os_thread(hpx::exception const& e);
 
@@ -1312,7 +1316,8 @@ namespace hpx
     ///             \a hpx::get_error_os_thread()
     ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
     ///
     HPX_EXPORT std::size_t get_error_thread_id(hpx::exception const& e);
 
@@ -1350,8 +1355,8 @@ namespace hpx
     ///             \a hpx::get_error_file_name(), \a hpx::get_error_line_number(),
     ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
     ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
-    ///             \a hpx::get_error(),
-    ///             \a hpx::get_error_what()
+    ///             \a hpx::get_error(), \a hpx::get_error_state(),
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config()
     ///
     HPX_EXPORT std::string get_error_thread_description(hpx::exception const& e);
 
@@ -1361,6 +1366,84 @@ namespace hpx
     /// \cond NOINTERNAL
     HPX_EXPORT std::string get_error_thread_description(boost::exception const& e);
     HPX_EXPORT std::string get_error_thread_description(boost::exception_ptr const& e);
+    /// \endcond
+
+    /// \brief Return the HPX configuration information point from which the
+    ///        exception was thrown.
+    ///
+    /// The function \a hpx::get_error_config can be used to extract the
+    /// HPX configuration information element representing the full HPX
+    /// configuration information as stored in the given exception instance.
+    ///
+    /// \returns    Any additionally available HPX configuration information
+    ///             the point from which the exception was
+    ///             thrown. If the exception instance does not hold
+    ///             this information, the function will return an empty string.
+    ///
+    /// \param e    The parameter \p e will be inspected for the requested
+    ///             diagnostic information elements which have been stored at
+    ///             the point where the exception was thrown. This parameter
+    ///             can be one of the following types: \a hpx::exception,
+    ///             \a hpx::error_code, \a boost::exception, or
+    ///             \a boost::exception_ptr.
+    ///
+    /// \throws     std#bad_alloc (if one of the required allocations fails)
+    ///
+    /// \see        \a hpx::diagnostic_information(), \a hpx::get_error_host_name(),
+    ///             \a hpx::get_error_process_id(), \a hpx::get_error_function_name(),
+    ///             \a hpx::get_error_file_name(), \a hpx::get_error_line_number(),
+    ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
+    ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
+    ///             \a hpx::get_error(), \a hpx::get_error_state()
+    ///             \a hpx::get_error_what(), \a hpx::get_error_thread_description()
+    ///
+    HPX_EXPORT std::string get_error_config(hpx::exception const& e);
+
+    /// \copydoc get_error_config(hpx::exception const& e)
+    HPX_EXPORT std::string get_error_config(hpx::error_code const& e);
+
+    /// \cond NOINTERNAL
+    HPX_EXPORT std::string get_error_config(boost::exception const& e);
+    HPX_EXPORT std::string get_error_config(boost::exception_ptr const& e);
+    /// \endcond
+
+    /// \brief Return the HPX runtime state information at which the exception
+    ///        was thrown.
+    ///
+    /// The function \a hpx::get_error_state can be used to extract the
+    /// HPX runtime state information element representing the state the
+    /// runtime system is currently in as stored in the given exception
+    /// instance.
+    ///
+    /// \returns    The point runtime state at the point at which the exception
+    ///             was thrown. If the exception instance does not hold
+    ///             this information, the function will return an empty string.
+    ///
+    /// \param e    The parameter \p e will be inspected for the requested
+    ///             diagnostic information elements which have been stored at
+    ///             the point where the exception was thrown. This parameter
+    ///             can be one of the following types: \a hpx::exception,
+    ///             \a hpx::error_code, \a boost::exception, or
+    ///             \a boost::exception_ptr.
+    ///
+    /// \throws     std#bad_alloc (if one of the required allocations fails)
+    ///
+    /// \see        \a hpx::diagnostic_information(), \a hpx::get_error_host_name(),
+    ///             \a hpx::get_error_process_id(), \a hpx::get_error_function_name(),
+    ///             \a hpx::get_error_file_name(), \a hpx::get_error_line_number(),
+    ///             \a hpx::get_error_os_thread(), \a hpx::get_error_thread_id(),
+    ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
+    ///             \a hpx::get_error(),
+    ///             \a hpx::get_error_what(), \a hpx::get_error_thread_description()
+    ///
+    HPX_EXPORT std::string get_error_state(hpx::exception const& e);
+
+    /// \copydoc get_error_state(hpx::exception const& e)
+    HPX_EXPORT std::string get_error_state(hpx::error_code const& e);
+
+    /// \cond NOINTERNAL
+    HPX_EXPORT std::string get_error_state(boost::exception const& e);
+    HPX_EXPORT std::string get_error_state(boost::exception_ptr const& e);
     /// \endcond
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1420,6 +1503,16 @@ namespace hpx
         }
     }
 
+    inline boost::exception_ptr get_exception_ptr(hpx::exception const& e)
+    {
+        try {
+            throw e;
+        }
+        catch (...) {
+            return boost::current_exception();
+        }
+    }
+
     inline error_code::error_code(int err, hpx::exception const& e)
     {
         this->boost::system::error_code::assign(err, get_hpx_category());
@@ -1427,11 +1520,11 @@ namespace hpx
             throw e;
         }
         catch (...) {
-            exception_ = boost::current_exception();
+            exception_ = get_exception_ptr(e);
         }
     }
 
-    inline error_code::error_code(boost::exception_ptr e)
+    inline error_code::error_code(boost::exception_ptr const& e)
       : boost::system::error_code(make_system_error_code(get_error(e), rethrow)),
         exception_(e)
     {}
@@ -1447,7 +1540,40 @@ namespace hpx
                 return dynamic_cast<std::exception const*>(&be)->what();
             }
         }
-        return "";
+        return get_error_what(*this);   // provide at least minimal error text
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    inline error_code& error_code::operator=(error_code const& rhs)
+    {
+        if (this != &rhs) {
+            if (rhs.value() == success) {
+                // if the rhs is a success code, we maintain our throw mode
+                this->boost::system::error_code::operator=(
+                    make_success_code(
+                        (category() == get_lightweight_hpx_category()) ?
+                            hpx::lightweight : hpx::plain));
+            }
+            else {
+                this->boost::system::error_code::operator=(rhs);
+            }
+            exception_ = rhs.exception_;
+        }
+        return *this;
+    }
+
+        // forwarder for HPX_ASSERT handler
+    inline void assertion_failed(char const* expr, char const* function,
+        char const* file, long line)
+    {
+        hpx::detail::assertion_failed(expr, function, file, line);
+    }
+
+    // forwarder for HPX_ASSERT_MSG handler
+    inline void assertion_failed_msg(char const* msg, char const* expr,
+        char const* function, char const* file, long line)
+    {
+        hpx::detail::assertion_failed_msg(msg, expr, function, file, line);
     }
     // \endcond
 }
@@ -1455,20 +1581,6 @@ namespace hpx
 /// \cond NOEXTERNAL
 namespace boost
 {
-    // forwarder for BOOST_ASSERT handler
-    inline void assertion_failed(char const* expr, char const* function,
-        char const* file, long line)
-    {
-        hpx::detail::assertion_failed(expr, function, file, line);
-    }
-
-    // forwarder for BOOST_ASSERT_MSG handler
-    inline void assertion_failed_msg(char const* msg, char const* expr,
-        char const* function, char const* file, long line)
-    {
-        hpx::detail::assertion_failed_msg(msg, expr, function, file, line);
-    }
-
     namespace system
     {
         // make sure our errors get recognized by the Boost.System library
@@ -1506,7 +1618,7 @@ namespace boost
 
 #define HPX_RETHROW_EXCEPTION(e, f)                                           \
     HPX_THROW_EXCEPTION_(hpx::exception, e.get_error(), f, e.what(),          \
-        hpx::rethrow, hpx::get_error_file_name(e), hpx::get_error_line_number(e))         \
+        hpx::rethrow, hpx::get_error_file_name(e), hpx::get_error_line_number(e)) \
     /**/
 
 #define HPX_RETHROWS_IF(ec, e, f)                                             \
@@ -1515,12 +1627,25 @@ namespace boost
             HPX_RETHROW_EXCEPTION(e, f);                                      \
         } else {                                                              \
             ec = make_error_code(e.get_error(), e.what(),                     \
-                f, hpx::get_error_file_name(e).c_str(), hpx::get_error_line_number(e),    \
+                f, hpx::get_error_file_name(e).c_str(), hpx::get_error_line_number(e), \
                 (ec.category() == hpx::get_lightweight_hpx_category()) ?      \
                     hpx::lightweight_rethrow : hpx::rethrow);                 \
         }                                                                     \
     }                                                                         \
     /**/
+
+///////////////////////////////////////////////////////////////////////////////
+#define HPX_GET_EXCEPTION_(except, errcode, func, msg, mode, file, line)      \
+    hpx::detail::get_exception(                                               \
+        except(static_cast<hpx::error>(errcode), msg, mode),                  \
+        func, file, line)                                                    \
+/**/
+
+#define HPX_GET_EXCEPTION(errcode, f, msg)                                    \
+    HPX_GET_EXCEPTION_(hpx::exception, errcode, f, msg, hpx::plain,           \
+        boost::filesystem::path(hpx::util::create_path(__FILE__)).string(),   \
+        __LINE__)                                                             \
+/**/
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_THROW_IN_CURRENT_FUNC(errcode, msg)                               \

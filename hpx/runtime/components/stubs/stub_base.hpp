@@ -35,14 +35,29 @@ namespace hpx { namespace components
         create_async(naming::id_type const& gid)
         {
             using stubs::runtime_support;
-            return runtime_support::create_component_async<ServerComponent>
-                (gid);
+            return runtime_support::create_component_async<
+                ServerComponent>(gid);
         }
 
         static naming::id_type create(naming::id_type const& gid)
         {
             using stubs::runtime_support;
             return runtime_support::create_component<ServerComponent>(gid);
+        }
+
+        static lcos::future<naming::id_type>
+        create_colocated_async(naming::id_type const& gid)
+        {
+            using stubs::runtime_support;
+            return runtime_support::create_component_colocated_async<
+                ServerComponent>(gid);
+        }
+
+        static naming::id_type create_colocated(naming::id_type const& gid)
+        {
+            using stubs::runtime_support;
+            return runtime_support::create_component_colocated<
+                ServerComponent>(gid);
         }
 
         ///////////////////////////////////////////////////////////////////////
@@ -53,8 +68,8 @@ namespace hpx { namespace components
             HPX_ENUM_FWD_ARGS(N, Arg, arg))                                   \
         {                                                                     \
             using stubs::runtime_support;                                     \
-            return runtime_support::create_component_async<ServerComponent>   \
-                (gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));                   \
+            return runtime_support::create_component_async<ServerComponent>(  \
+                gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));                    \
         }                                                                     \
                                                                               \
         template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>                      \
@@ -63,8 +78,28 @@ namespace hpx { namespace components
                 HPX_ENUM_FWD_ARGS(N, Arg, arg))                               \
         {                                                                     \
             using stubs::runtime_support;                                     \
-            return runtime_support::create_component<ServerComponent>         \
-                (gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));                   \
+            return runtime_support::create_component<ServerComponent>(        \
+                gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));                    \
+        }                                                                     \
+                                                                              \
+        template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>                      \
+        static lcos::future<naming::id_type>                                  \
+        create_colocated_async(naming::id_type const& gid,                    \
+            HPX_ENUM_FWD_ARGS(N, Arg, arg))                                   \
+        {                                                                     \
+            using stubs::runtime_support;                                     \
+            return runtime_support::create_component_colocated_async<         \
+                ServerComponent>(gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));   \
+        }                                                                     \
+                                                                              \
+        template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>                      \
+        static naming::id_type create_colocated(                              \
+            naming::id_type const& gid,                                       \
+                HPX_ENUM_FWD_ARGS(N, Arg, arg))                               \
+        {                                                                     \
+            using stubs::runtime_support;                                     \
+            return runtime_support::create_component_colocated<               \
+                ServerComponent>(gid, HPX_ENUM_FORWARD_ARGS(N , Arg, arg));   \
         }                                                                     \
     /**/
 

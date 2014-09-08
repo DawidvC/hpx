@@ -11,7 +11,7 @@
         template <typename A0>
         static inline lcos::future<naming::id_type>
         create_component(naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0
+          , A0 && a0
           , boost::mpl::false_
         )
         {
@@ -19,20 +19,20 @@
                     server::dataflow
                   , detail::action_wrapper<Action> const &
                   , naming::id_type const &
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0>::type>::type const &
+                  , typename util::decay<A0>::type const &
                 > create_component_action;
             return
                 async<create_component_action>(
                     naming::get_locality_from_id(target)
                   , detail::action_wrapper<Action>()
                   , target
-                  , boost::forward<A0>( a0 )
+                  , std::forward<A0>( a0 )
                 );
         }
         template <typename A0>
         static inline lcos::future<naming::id_type>
         create_component(naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0
+          , A0 && a0
           , boost::mpl::true_
         )
         {
@@ -41,24 +41,24 @@
                     server::dataflow
                   , detail::action_wrapper<Action> const &
                   , naming::id_type const &
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0>::type>::type const &
+                  , typename util::decay<A0>::type const &
                 > create_component_action;
             return
                 async<create_component_action>(
                     naming::get_locality_from_id(target)
                   , detail::action_wrapper<Action>()
                   , target
-                  , boost::forward<A0>( a0 )
+                  , std::forward<A0>( a0 )
                 );
         }
         template <typename A0>
         dataflow(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0
+          , A0 && a0
         )
             : base_type(
                 create_component(target
-                  , boost::forward<A0>( a0 )
+                  , std::forward<A0>( a0 )
                   , typename Action::direct_execution()
                 )
             )

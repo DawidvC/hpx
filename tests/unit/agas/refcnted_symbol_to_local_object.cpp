@@ -8,8 +8,8 @@
 #include <hpx/util/lightweight_test.hpp>
 #include <hpx/runtime/agas/interface.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/assign/std/vector.hpp>
+#include <boost/chrono.hpp>
 
 #include <tests/unit/agas/components/simple_refcnt_checker.hpp>
 #include <tests/unit/agas/components/managed_refcnt_checker.hpp>
@@ -22,13 +22,14 @@ using hpx::init;
 using hpx::finalize;
 using hpx::find_here;
 
-using boost::posix_time::milliseconds;
+using boost::chrono::milliseconds;
 
 using hpx::naming::id_type;
 using hpx::naming::get_management_type_name;
 
-using hpx::agas::register_name;
-using hpx::agas::unregister_name;
+using hpx::agas::register_name_sync;
+using hpx::agas::unregister_name_sync;
+using hpx::agas::garbage_collect;
 
 using hpx::test::simple_refcnt_monitor;
 using hpx::test::managed_refcnt_monitor;
@@ -67,7 +68,7 @@ void hpx_test_main(
              << flush;
 
         // Associate a symbolic name with the object.
-        HPX_TEST_EQ(true, register_name(name, monitor.get_gid()));
+        HPX_TEST_EQ(true, register_name_sync(name, monitor.get_gid()));
 
         hpx::naming::gid_type gid;
 
@@ -76,7 +77,7 @@ void hpx_test_main(
             id_type id = monitor.detach().get();
 
             // The component should still be alive.
-            HPX_TEST_EQ(false, monitor.ready(milliseconds(delay)));
+            HPX_TEST_EQ(false, monitor.is_ready(milliseconds(delay)));
 
             gid = id.get_gid();
 
@@ -85,14 +86,18 @@ void hpx_test_main(
 
         // The component should still be alive, as the symbolic binding holds
         // a reference to it.
-        HPX_TEST_EQ(false, monitor.ready(milliseconds(delay)));
+        HPX_TEST_EQ(false, monitor.is_ready(milliseconds(delay)));
 
         // Remove the symbolic name. This should return the final credits
         // to AGAS.
-        HPX_TEST_EQ(gid, unregister_name(name).get_gid());
+        HPX_TEST_EQ(gid, unregister_name_sync(name).get_gid());
+
+        // Flush pending reference counting operations.
+        garbage_collect();
+        garbage_collect();
 
         // The component should be destroyed.
-        HPX_TEST_EQ(true, monitor.ready(milliseconds(delay)));
+        HPX_TEST_EQ(true, monitor.is_ready(milliseconds(delay)));
     }
 }
 

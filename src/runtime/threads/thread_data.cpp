@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c) 2008-2009 Chirag Dekate, Anshul Tandon
 //  Copyright (c) 2011      Bryce Lelbach
 //
@@ -10,45 +10,85 @@
 #include <hpx/runtime/components/component_type.hpp>
 #include <hpx/runtime/threads/threadmanager.hpp>
 #include <hpx/runtime/threads/thread_data.hpp>
-
+#include <hpx/util/assert.hpp>
 #include <hpx/util/coroutine/detail/coroutine_impl_impl.hpp>
-#include <boost/assert.hpp>
+
+// #if HPX_DEBUG
+// #  define HPX_DEBUG_THREAD_POOL 1
+// #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace threads
 {
+#ifdef HPX_DEBUG_THREAD_POOL
+    enum guard_value
+    {
+        initial_value = 0xcc,           // memory has been initialized
+        freed_value = 0xdd              // memory has been freed
+    };
+#endif
+
+    void intrusive_ptr_add_ref(thread_data_base* p)
+    {
+        ++p->count_;
+    }
+    void intrusive_ptr_release(thread_data_base* p)
+    {
+        if (0 == --p->count_)
+            delete p;
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     void* thread_data::operator new(std::size_t size, thread_pool& pool)
     {
-        BOOST_ASSERT(sizeof(thread_data) == size);
+        HPX_ASSERT(sizeof(thread_data) == size);
 
         void *ret = reinterpret_cast<void*>(pool.allocate());
         if (0 == ret)
+        {
             HPX_THROW_EXCEPTION(out_of_memory,
                 "thread_data::operator new",
                 "could not allocate memory for thread_data");
+        }
+
+#ifdef HPX_DEBUG_THREAD_POOL
+        using namespace std;    // some systems have memset in namespace std
+        memset (ret, initial_value, sizeof(thread_data));
+#endif
         return ret;
     }
 
     void thread_data::operator delete(void *p, std::size_t size)
     {
-        BOOST_ASSERT(sizeof(thread_data) == size);
+        HPX_ASSERT(sizeof(thread_data) == size);
 
         if (0 != p)
         {
-            thread_data* pt = reinterpret_cast<thread_data*>(p);
-            BOOST_ASSERT(pt->pool_);
-            pt->pool_->deallocate(pt);
+            thread_data* pt = static_cast<thread_data*>(p);
+            thread_pool* pool = pt->pool_;
+            HPX_ASSERT(pool);
+
+#ifdef HPX_DEBUG_THREAD_POOL
+            using namespace std;    // some systems have memset in namespace std
+            memset (static_cast<void*>(pt), freed_value, sizeof(thread_data)); //-V598
+#endif
+            pool->deallocate(pt);
         }
     }
 
     void thread_data::operator delete(void *p, thread_pool& pool)
     {
         if (0 != p)
-            pool.deallocate(reinterpret_cast<thread_data*>(p));
+        {
+#ifdef HPX_DEBUG_THREAD_POOL
+            using namespace std;    // some systems have memset in namespace std
+            memset (p, freed_value, sizeof(thread_data));
+#endif
+            pool.deallocate(static_cast<thread_data*>(p));
+        }
     }
 
-    void thread_data::run_thread_exit_callbacks()
+    void thread_data_base::run_thread_exit_callbacks()
     {
         mutex_type::scoped_lock l(this);
         while (exit_funcs_)
@@ -64,7 +104,7 @@ namespace hpx { namespace threads
         ran_exit_funcs_ = true;
     }
 
-    bool thread_data::add_thread_exit_callback(HPX_STD_FUNCTION<void()> const& f)
+    bool thread_data_base::add_thread_exit_callback(HPX_STD_FUNCTION<void()> const& f)
     {
         mutex_type::scoped_lock l(this);
         if (ran_exit_funcs_ || get_state() == terminated)
@@ -76,12 +116,12 @@ namespace hpx { namespace threads
         return true;
     }
 
-    void thread_data::free_thread_exit_callbacks()
+    void thread_data_base::free_thread_exit_callbacks()
     {
         mutex_type::scoped_lock l(this);
 
         // Exit functions should have been executed.
-        BOOST_ASSERT(!exit_funcs_ || ran_exit_funcs_);
+        HPX_ASSERT(!exit_funcs_ || ran_exit_funcs_);
 
         while (exit_funcs_)
         {
@@ -91,13 +131,15 @@ namespace hpx { namespace threads
         }
     }
 
-    bool thread_data::interruption_point(bool throw_on_interrupt)
+    bool thread_data_base::interruption_point(bool throw_on_interrupt)
     {
-        mutex_type::scoped_lock l(this);
+        // We do not protect enabled_interrupt_ and requested_interrupt_
+        // from concurrent access here (which creates a benign data race) in
+        // order to avoid infinite recursion. This function is called by
+        // this_thread::suspend which causes problems if the lock would call
+        // suspend itself.
         if (enabled_interrupt_ && requested_interrupt_)
         {
-            l.unlock();
-
             // Verify that there are no more registered locks for this
             // OS-thread. This will throw if there are still any locks
             // held.
@@ -105,11 +147,7 @@ namespace hpx { namespace threads
 
             // now interrupt this thread
             if (throw_on_interrupt)
-            {
-                HPX_THROW_EXCEPTION(thread_interrupted,
-                    "hpx::threads::thread_data::interruption_point",
-                    "thread aborts itself due to requested thread interruption");
-            }
+                boost::throw_exception(hpx::thread_interrupted());
 
             return true;
         }
@@ -157,13 +195,18 @@ namespace hpx { namespace threads
     thread_id_type get_self_id()
     {
         thread_self* self = get_self_ptr();
-        return (0 != self) ? self->get_thread_id() : threads::invalid_thread_id;
+        if (0 == self)
+            return threads::invalid_thread_id;
+
+        return thread_id_type(
+                reinterpret_cast<thread_data_base*>(self->get_thread_id())
+            );
     }
 
-#if !HPX_THREAD_MAINTAIN_PARENT_REFERENCE
-    thread_id_type get_parent_id()
+#ifndef HPX_THREAD_MAINTAIN_PARENT_REFERENCE
+    thread_id_repr_type get_parent_id()
     {
-        return threads::invalid_thread_id;
+        return threads::invalid_thread_id_repr;
     }
 
     std::size_t get_parent_phase()
@@ -176,45 +219,54 @@ namespace hpx { namespace threads
         return naming::invalid_locality_id;
     }
 #else
-    thread_id_type get_parent_id()
+    thread_id_repr_type get_parent_id()
     {
         thread_self* self = get_self_ptr();
-        return (0 != self) ?
-            reinterpret_cast<thread_data*>(self->get_thread_id())->get_parent_thread_id() :
-            threads::invalid_thread_id;
+        if (0 == self)
+            return threads::invalid_thread_id_repr;
+        return get_self_id()->get_parent_thread_id();
     }
 
     std::size_t get_parent_phase()
     {
         thread_self* self = get_self_ptr();
-        return (0 != self) ?
-            reinterpret_cast<thread_data*>(self->get_thread_id())->get_parent_thread_phase() :
-            0;
+        if (0 == self)
+            return 0;
+        return get_self_id()->get_parent_thread_phase();
     }
 
     boost::uint32_t get_parent_locality_id()
     {
         thread_self* self = get_self_ptr();
-        return (0 != self) ?
-            reinterpret_cast<thread_data*>(self->get_thread_id())->get_parent_locality_id() :
-            naming::invalid_locality_id;
+        if (0 == self)
+            return naming::invalid_locality_id;
+        return get_self_id()->get_parent_locality_id();
     }
 #endif
 
     naming::address::address_type get_self_component_id()
     {
-#if !HPX_THREAD_MAINTAIN_TARGET_ADDRESS
+#ifndef HPX_THREAD_MAINTAIN_TARGET_ADDRESS
         return 0;
 #else
         thread_self* self = get_self_ptr();
-        return (0 != self) ?
-            reinterpret_cast<thread_data*>(self->get_thread_id())->get_component_id() : 0;
+        if (0 == self)
+            return 0;
+        return get_self_id()->get_component_id();
 #endif
     }
 }}
 
 ///////////////////////////////////////////////////////////////////////////////
-// explicit instantiation of the function thread_self::set_self
+// explicit instantiation of the thread_self functions
 template HPX_EXPORT void
 hpx::threads::thread_self::impl_type::set_self(hpx::threads::thread_self*);
 
+template HPX_EXPORT hpx::threads::thread_self*
+hpx::threads::thread_self::impl_type::get_self();
+
+template HPX_EXPORT void
+hpx::threads::thread_self::impl_type::init_self();
+
+template HPX_EXPORT void
+hpx::threads::thread_self::impl_type::reset_self();

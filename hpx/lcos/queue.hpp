@@ -38,42 +38,42 @@ namespace hpx { namespace lcos
         lcos::future<ValueType>
         get_value_async()
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::get_value_async(this->get_gid());
         }
 
         lcos::future<void>
         set_value_async(RemoteType const& val)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             RemoteType tmp(val);
-            return this->base_type::set_value_async(this->get_gid(), boost::move(tmp));
+            return this->base_type::set_value_async(this->get_gid(), std::move(tmp));
         }
 
         lcos::future<void>
         abort_pending_async(boost::exception_ptr const& e)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::abort_pending_async(this->get_gid(), e);
         }
 
         ///////////////////////////////////////////////////////////////////////
         ValueType get_value_sync()
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             return this->base_type::get_value_sync(this->get_gid());
         }
 
         void set_value_sync(RemoteType const& val)
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             RemoteType tmp(val);
-            this->base_type::set_value_sync(this->get_gid(), boost::move(tmp));
+            this->base_type::set_value_sync(this->get_gid(), std::move(tmp));
         }
 
-        void set_value_sync(BOOST_RV_REF(RemoteType) val) //-V659
+        void set_value_sync(RemoteType && val) //-V659
         {
-            BOOST_ASSERT(this->get_gid());
+            HPX_ASSERT(this->get_gid());
             this->base_type::set_value_sync(this->get_gid(), val);
         }
 
@@ -86,9 +86,9 @@ namespace hpx { namespace lcos
         void set_value(RemoteType const& val)
         {
             RemoteType tmp(val);
-            this->base_type::set_value(this->get_gid(), boost::move(tmp));
+            this->base_type::set_value(this->get_gid(), std::move(tmp));
         }
-        void set_value(BOOST_RV_REF(RemoteType) val) //-V659
+        void set_value(RemoteType && val) //-V659
         {
             this->base_type::set_value(this->get_gid(), val);
         }

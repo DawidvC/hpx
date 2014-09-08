@@ -14,13 +14,13 @@
         template <typename Action, typename A0>
         void init(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 
+          , A0 && a0 
         )
         {
             typedef
                 detail::dataflow_impl<
                     Action
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0 >::type >::type
+                  , typename util::decay<A0>::type
                 >
                 wrapped_type;
             typedef
@@ -33,7 +33,7 @@
                 lcos::local::spinlock::scoped_lock l(mtx);
                 component_ptr = w;
             }
-            (*w)->init(boost::forward<A0>(a0));
+            (*w)->init(std::forward<A0>(a0));
             detail::update_initialized_count();
         }
         template <typename Action, typename A0>
@@ -41,25 +41,25 @@
             component_type * back_ptr
           , Action
           , naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 
+          , A0 && a0 
         )
             : base_type(back_ptr)
             , component_ptr(0)
         {
             
-            init<typename Action::type>(target, boost::forward<A0>(a0));
+            init<typename Action::type>(target, std::forward<A0>(a0));
         }
         
         template <typename Action, typename A0 , typename A1>
         void init(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 
+          , A0 && a0 , A1 && a1 
         )
         {
             typedef
                 detail::dataflow_impl<
                     Action
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A1 >::type >::type
+                  , typename util::decay<A0>::type , typename util::decay<A1>::type
                 >
                 wrapped_type;
             typedef
@@ -72,7 +72,7 @@
                 lcos::local::spinlock::scoped_lock l(mtx);
                 component_ptr = w;
             }
-            (*w)->init(boost::forward<A0>(a0) , boost::forward<A1>(a1));
+            (*w)->init(std::forward<A0>(a0) , std::forward<A1>(a1));
             detail::update_initialized_count();
         }
         template <typename Action, typename A0 , typename A1>
@@ -80,25 +80,25 @@
             component_type * back_ptr
           , Action
           , naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 
+          , A0 && a0 , A1 && a1 
         )
             : base_type(back_ptr)
             , component_ptr(0)
         {
             
-            init<typename Action::type>(target, boost::forward<A0>(a0) , boost::forward<A1>(a1));
+            init<typename Action::type>(target, std::forward<A0>(a0) , std::forward<A1>(a1));
         }
         
         template <typename Action, typename A0 , typename A1 , typename A2>
         void init(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 
+          , A0 && a0 , A1 && a1 , A2 && a2 
         )
         {
             typedef
                 detail::dataflow_impl<
                     Action
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A1 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A2 >::type >::type
+                  , typename util::decay<A0>::type , typename util::decay<A1>::type , typename util::decay<A2>::type
                 >
                 wrapped_type;
             typedef
@@ -111,7 +111,7 @@
                 lcos::local::spinlock::scoped_lock l(mtx);
                 component_ptr = w;
             }
-            (*w)->init(boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2));
+            (*w)->init(std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2));
             detail::update_initialized_count();
         }
         template <typename Action, typename A0 , typename A1 , typename A2>
@@ -119,25 +119,25 @@
             component_type * back_ptr
           , Action
           , naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 
+          , A0 && a0 , A1 && a1 , A2 && a2 
         )
             : base_type(back_ptr)
             , component_ptr(0)
         {
             
-            init<typename Action::type>(target, boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2));
+            init<typename Action::type>(target, std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2));
         }
         
         template <typename Action, typename A0 , typename A1 , typename A2 , typename A3>
         void init(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 
+          , A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 
         )
         {
             typedef
                 detail::dataflow_impl<
                     Action
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A1 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A2 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A3 >::type >::type
+                  , typename util::decay<A0>::type , typename util::decay<A1>::type , typename util::decay<A2>::type , typename util::decay<A3>::type
                 >
                 wrapped_type;
             typedef
@@ -150,7 +150,7 @@
                 lcos::local::spinlock::scoped_lock l(mtx);
                 component_ptr = w;
             }
-            (*w)->init(boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2) , boost::forward<A3>(a3));
+            (*w)->init(std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2) , std::forward<A3>(a3));
             detail::update_initialized_count();
         }
         template <typename Action, typename A0 , typename A1 , typename A2 , typename A3>
@@ -158,25 +158,25 @@
             component_type * back_ptr
           , Action
           , naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 
+          , A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 
         )
             : base_type(back_ptr)
             , component_ptr(0)
         {
             
-            init<typename Action::type>(target, boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2) , boost::forward<A3>(a3));
+            init<typename Action::type>(target, std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2) , std::forward<A3>(a3));
         }
         
         template <typename Action, typename A0 , typename A1 , typename A2 , typename A3 , typename A4>
         void init(
             naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 
+          , A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 
         )
         {
             typedef
                 detail::dataflow_impl<
                     Action
-                  , typename boost::remove_const< typename hpx::util::detail::remove_reference< A0 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A1 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A2 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A3 >::type >::type , typename boost::remove_const< typename hpx::util::detail::remove_reference< A4 >::type >::type
+                  , typename util::decay<A0>::type , typename util::decay<A1>::type , typename util::decay<A2>::type , typename util::decay<A3>::type , typename util::decay<A4>::type
                 >
                 wrapped_type;
             typedef
@@ -189,7 +189,7 @@
                 lcos::local::spinlock::scoped_lock l(mtx);
                 component_ptr = w;
             }
-            (*w)->init(boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2) , boost::forward<A3>(a3) , boost::forward<A4>(a4));
+            (*w)->init(std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2) , std::forward<A3>(a3) , std::forward<A4>(a4));
             detail::update_initialized_count();
         }
         template <typename Action, typename A0 , typename A1 , typename A2 , typename A3 , typename A4>
@@ -197,11 +197,11 @@
             component_type * back_ptr
           , Action
           , naming::id_type const & target
-          , BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 
+          , A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 
         )
             : base_type(back_ptr)
             , component_ptr(0)
         {
             
-            init<typename Action::type>(target, boost::forward<A0>(a0) , boost::forward<A1>(a1) , boost::forward<A2>(a2) , boost::forward<A3>(a3) , boost::forward<A4>(a4));
+            init<typename Action::type>(target, std::forward<A0>(a0) , std::forward<A1>(a1) , std::forward<A2>(a2) , std::forward<A3>(a3) , std::forward<A4>(a4));
         }

@@ -7,7 +7,7 @@
 #define HPX_UTIL_THREAD_AWARE_TIMER_AUG_17_2012_0745PM
 
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/lcos/local/packaged_task.hpp>
+#include <hpx/lcos/local/promise.hpp>
 #include <hpx/util/high_resolution_clock.hpp>
 #include <hpx/util/io_service_pool.hpp>
 
@@ -33,10 +33,6 @@ namespace hpx { namespace util
 
         thread_aware_timer(double t)
           : start_time_(static_cast<boost::uint64_t>(t * 1e9))
-        {}
-
-        thread_aware_timer(thread_aware_timer const& rhs)
-          : start_time_(rhs.start_time_)
         {}
 
         static double now()

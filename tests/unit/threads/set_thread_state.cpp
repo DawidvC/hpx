@@ -17,7 +17,7 @@ using boost::program_options::variables_map;
 using boost::program_options::options_description;
 using boost::program_options::value;
 
-using boost::posix_time::milliseconds;
+using boost::chrono::milliseconds;
 
 using hpx::naming::id_type;
 
@@ -30,6 +30,7 @@ using hpx::lcos::future;
 using hpx::async;
 
 using hpx::threads::thread_id_type;
+using hpx::threads::thread_data_base;
 using hpx::this_thread::suspend;
 using hpx::threads::set_thread_state;
 using hpx::threads::thread_state_ex_enum;
@@ -63,7 +64,7 @@ namespace detail
             {
                 // loop over all lazy_values, executing the next as soon as its
                 // value gets available
-                if (!handled[i] && lazy_values[i].ready())
+                if (!handled[i] && lazy_values[i].is_ready())
                 {
                     handled[i] = true;
                     ++handled_count;
@@ -90,10 +91,11 @@ void change_thread_state(
     )
 {
 //    std::cout << "waking up thread (wait_signaled)\n";
-    set_thread_state(reinterpret_cast<void*>(thread), pending, wait_signaled);
+    thread_id_type id(reinterpret_cast<thread_data_base*>(thread));
+    set_thread_state(id, pending, wait_signaled);
 
 //    std::cout << "suspending thread (wait_timeout)\n";
-    set_thread_state(reinterpret_cast<void*>(thread), suspended, wait_timeout);
+    set_thread_state(id, suspended, wait_timeout);
 }
 
 HPX_PLAIN_ACTION(change_thread_state, change_thread_state_action)
@@ -116,8 +118,8 @@ void tree_boot(
   , boost::uint64_t thread
     )
 {
-    BOOST_ASSERT(grain_size);
-    BOOST_ASSERT(count);
+    HPX_ASSERT(grain_size);
+    HPX_ASSERT(count);
 
     std::vector<future<void> > promises;
 
@@ -198,13 +200,13 @@ int hpx_main(variables_map& vm)
     {
         id_type const prefix = find_here();
 
-        boost::uint64_t thread = boost::uint64_t(register_thread_nullary
-            (boost::bind(&test_dummy_thread, futures)));
+        thread_id_type thread = register_thread_nullary
+            (boost::bind(&test_dummy_thread, futures));
 
-        tree_boot(futures, grain_size, prefix, thread);
+        tree_boot(futures, grain_size, prefix,
+            reinterpret_cast<boost::uint64_t>(thread.get()));
 
-        set_thread_state(reinterpret_cast<void*>(thread),
-            pending, wait_terminate);
+        set_thread_state(thread, pending, wait_terminate);
     }
 
     finalize();

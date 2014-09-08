@@ -11,6 +11,7 @@
 #include <hpx/lcos/future.hpp>
 #include <hpx/traits/promise_remote_result.hpp>
 #include <hpx/runtime/naming/address.hpp>
+#include <hpx/util/decay.hpp>
 
 #include <boost/config.hpp>
 #include <boost/detail/workaround.hpp>
@@ -26,45 +27,41 @@ namespace hpx { namespace components
         {
 
             typedef
-                typename boost::result_of<typename hpx::util::detail::remove_reference<F>::type(T &)>::type
+                typename util::result_of<typename hpx::util::decay<F>::type(T &)>::type
                 result_type;
 
             invoke_apply_fun() {}
 
             template <typename Functor>
             invoke_apply_fun(
-                BOOST_FWD_REF(Functor) f_
+                Functor && f_
               , typename ::boost::disable_if<
                     typename boost::is_same<
                         invoke_apply_fun
-                      , typename boost::remove_const<
-                            typename hpx::util::detail::remove_reference<
-                                Functor
-                            >::type
-                        >::type
+                      , typename util::decay<Functor>::type
                     >::type
                 >::type * = 0
             )
-                : f(boost::forward<Functor>(f_))
+                : f(std::forward<Functor>(f_))
             {}
 
             invoke_apply_fun(invoke_apply_fun const & other)
                 : f(other.f)
             {}
 
-            invoke_apply_fun(BOOST_RV_REF(invoke_apply_fun) other)
-                : f(boost::move(other.f))
+            invoke_apply_fun(invoke_apply_fun && other)
+                : f(std::move(other.f))
             {}
 
-            invoke_apply_fun & operator=(BOOST_COPY_ASSIGN_REF(invoke_apply_fun) other)
+            invoke_apply_fun & operator=(invoke_apply_fun const & other)
             {
                 f = other.f;
                 return *this;
             }
 
-            invoke_apply_fun & operator=(BOOST_RV_REF(invoke_apply_fun) other)
+            invoke_apply_fun & operator=(invoke_apply_fun && other)
             {
-                f = boost::move(other.f);
+                f = std::move(other.f);
                 return *this;
             }
 
@@ -74,9 +71,9 @@ namespace hpx { namespace components
             }
 
             template <typename A>
-            result_type operator()(void ** p, BOOST_FWD_REF(A) a) const
+            result_type operator()(void ** p, A && a) const
             {
-                return f(*reinterpret_cast<T *>(*p), boost::forward<A>(a));
+                return f(*reinterpret_cast<T *>(*p), std::forward<A>(a));
             }
 
             template <typename Archive>
@@ -85,14 +82,8 @@ namespace hpx { namespace components
                 ar & f;
             }
 
-            typename boost::remove_const<
-                typename hpx::util::detail::remove_reference<
-                    F
-                >::type
-            >::type f;
+            typename util::decay<F>::type f;
 
-            private:
-                BOOST_COPYABLE_AND_MOVABLE(invoke_apply_fun)
         };
     }
 
@@ -104,27 +95,27 @@ namespace hpx { namespace components
         naming::id_type gid_;
         template <typename F>
         lcos::future<
-            typename boost::result_of<typename hpx::util::detail::remove_reference<F>::type(T &)>::type
+            typename util::result_of<typename hpx::util::decay<F>::type(T &)>::type
         >
-        operator<=(BOOST_FWD_REF(F) f) const
+        operator<=(F && f) const
         {
             return
                 stubs::remote_object::apply_async(
                     gid_
-                  , boost::move(remote_object::invoke_apply_fun<T, F>(boost::forward<F>(f)))
+                  , std::move(remote_object::invoke_apply_fun<T, F>(std::forward<F>(f)))
                 );
         }
 
         template <typename F>
         lcos::future<
-            typename boost::result_of<typename hpx::util::detail::remove_reference<F>::type(T &)>::type
+            typename util::result_of<typename hpx::util::decay<F>::type(T &)>::type
         >
-        apply(BOOST_FWD_REF(F) f) const
+        apply(F && f) const
         {
             return
                 stubs::remote_object::apply_async(
                     gid_
-                  , boost::move(remote_object::invoke_apply_fun<T, F>(boost::forward<F>(f)))
+                  , std::move(remote_object::invoke_apply_fun<T, F>(std::forward<F>(f)))
                 );
         }
 
@@ -162,7 +153,7 @@ namespace hpx { namespace traits
         HPX_ALWAYS_EXPORT static void
         set(components::component_type)
         {
-            BOOST_ASSERT(false);
+            HPX_ASSERT(false);
         }
     };
 }}

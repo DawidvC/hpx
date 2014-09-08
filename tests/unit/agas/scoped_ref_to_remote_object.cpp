@@ -9,8 +9,8 @@
 #include <hpx/runtime/applier/applier.hpp>
 #include <hpx/runtime/agas/interface.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/assign/std/vector.hpp>
+#include <boost/chrono.hpp>
 
 #include <tests/unit/agas/components/simple_refcnt_checker.hpp>
 #include <tests/unit/agas/components/managed_refcnt_checker.hpp>
@@ -22,7 +22,7 @@ using boost::program_options::value;
 using hpx::init;
 using hpx::finalize;
 
-using boost::posix_time::milliseconds;
+using boost::chrono::milliseconds;
 
 using hpx::naming::id_type;
 using hpx::naming::get_management_type_name;
@@ -78,14 +78,17 @@ void hpx_test_main(
             id_type id = monitor.detach().get();
 
             // The component should still be alive.
-            HPX_TEST_EQ(false, monitor.ready(milliseconds(delay)));
+            HPX_TEST_EQ(false, monitor.is_ready(milliseconds(delay)));
         }
 
         // Flush pending reference counting operations.
+        garbage_collect(remote_localities[0]);
+        garbage_collect();
+        garbage_collect(remote_localities[0]);
         garbage_collect();
 
         // The component should be out of scope now.
-        HPX_TEST_EQ(true, monitor.ready(milliseconds(delay)));
+        HPX_TEST_EQ(true, monitor.is_ready(milliseconds(delay)));
     }
 }
 

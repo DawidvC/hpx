@@ -8,8 +8,9 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/get_lva.hpp>
-#include <hpx/util/unlock_lock.hpp>
+#include <hpx/util/scoped_unlock.hpp>
 #include <hpx/util/move.hpp>
+#include <hpx/util/coroutine/coroutine.hpp>
 #include <hpx/lcos/local/spinlock.hpp>
 
 namespace hpx { namespace components
@@ -29,22 +30,22 @@ namespace hpx { namespace components
         locking_hook() : base_type() {}
 
         template <typename Arg>
-        locking_hook(BOOST_FWD_REF(Arg) arg)
-          : base_type(boost::forward<Arg>(arg))
+        locking_hook(Arg && arg)
+          : base_type(std::forward<Arg>(arg))
         {}
 
         /// This is the hook implementation for decorate_action which locks
         /// the component ensuring that only one action is executed at a time
         /// for this component instance.
-        static HPX_STD_FUNCTION<threads::thread_function_type>
-        wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-            naming::address::address_type lva)
+        template <typename F>
+        static threads::thread_function_type
+        decorate_action(naming::address::address_type lva, F && f)
         {
-            using HPX_STD_PLACEHOLDERS::_1;
-
-            return HPX_STD_BIND(&locking_hook::thread_function,
-                get_lva<this_component_type>::call(lva), _1,
-                boost::move(base_type::wrap_action(boost::move(f), lva)));
+            return util::bind(
+                util::one_shot(&locking_hook::thread_function),
+                get_lva<this_component_type>::call(lva),
+                util::placeholders::_1,
+                base_type::decorate_action(lva, std::forward<F>(f)));
         }
 
     protected:
@@ -64,10 +65,8 @@ namespace hpx { namespace components
         // safe action invocation.
         threads::thread_state_enum thread_function(
             threads::thread_state_ex_enum state,
-            HPX_STD_FUNCTION<threads::thread_function_type> f)
+            threads::thread_function_type f)
         {
-            using HPX_STD_PLACEHOLDERS::_1;
-
             threads::thread_state_enum result = threads::unknown;
 
             // now lock the mutex and execute the action
@@ -75,10 +74,13 @@ namespace hpx { namespace components
 
             {
                 // register our yield decorator
+                using util::placeholders::_1;
                 threads::get_self().decorate_yield(
-                    HPX_STD_BIND(&locking_hook::yield_function, this, _1));
+                    util::bind(&locking_hook::yield_function, this, _1));
 
                 undecorate_wrapper yield_undecorator;
+                (void)yield_undecorator;       // silence gcc warnings
+
                 result = f(state);
             }
 
@@ -88,12 +90,12 @@ namespace hpx { namespace components
         struct decorate_wrapper
         {
             decorate_wrapper()
-              : yield_decorator_(boost::move(threads::get_self().undecorate_yield()))
+              : yield_decorator_(threads::get_self().undecorate_yield())
             {}
 
             ~decorate_wrapper()
             {
-                threads::get_self().decorate_yield(boost::move(yield_decorator_));
+                threads::get_self().decorate_yield(std::move(yield_decorator_));
             }
 
             yield_decorator_type yield_decorator_;
@@ -110,7 +112,7 @@ namespace hpx { namespace components
             threads::thread_state_ex_enum result = threads::wait_unknown;
 
             {
-                util::unlock_the_lock<mutex_type> ul(mtx_);
+                util::scoped_unlock<mutex_type> ul(mtx_);
                 result = threads::get_self().yield_impl(state);
             }
 

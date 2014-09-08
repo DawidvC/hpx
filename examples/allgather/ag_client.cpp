@@ -4,16 +4,17 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include<iostream>
-#include<vector>
-#include<math.h>
-
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/components/distributing_factory/distributing_factory.hpp>
+#include <hpx/lcos/wait_all.hpp>
 
 #include "ag/server/allgather.hpp"
 #include "ag/server/allgather_and_gate.hpp"
+
+#include <iostream>
+#include <vector>
+#include <math.h>
 
 /// This function initializes a vector of \a ag::point clients,
 /// connecting them to components created with
@@ -34,8 +35,8 @@ init(hpx::components::server::distributing_factory::iterator_range_type const& r
 // all localities that support that component type.
 void test_allgather(std::size_t np)
 {
-    hpx::components::distributing_factory factory;
-    factory.create(hpx::find_here());
+    hpx::components::distributing_factory factory =
+        hpx::components::distributing_factory::create(hpx::find_here());
 
     // Get the component type for our point component.
     hpx::components::component_type block_type =
@@ -65,7 +66,7 @@ void test_allgather(std::size_t np)
       for (std::size_t i=0;i<np;i++) {
         init_phase.push_back(hpx::async(init, components[i], i, np));
       }
-      hpx::lcos::wait(init_phase);
+      hpx::wait_all(init_phase);
     }
     double k1time = kernel1time.elapsed();
 
@@ -76,7 +77,7 @@ void test_allgather(std::size_t np)
       for (std::size_t i=0;i<np;i++) {
         compute_phase.push_back(hpx::async(compute, components[i], components));
       }
-      hpx::lcos::wait(compute_phase);
+      hpx::wait_all(compute_phase);
     }
     double ctime = computetime.elapsed();
 
@@ -92,8 +93,8 @@ void test_allgather(std::size_t np)
 
 void test_allgather_and_gate(std::size_t np)
 {
-    hpx::components::distributing_factory factory;
-    factory.create(hpx::find_here());
+    hpx::components::distributing_factory factory =
+        hpx::components::distributing_factory::create(hpx::find_here());
 
     // Get the component type for our point component.
     hpx::components::component_type block_type =
@@ -124,7 +125,7 @@ void test_allgather_and_gate(std::size_t np)
       {
         init_phase.push_back(hpx::async(init, components[i], components, i));
       }
-      hpx::lcos::wait(init_phase);
+      hpx::wait_all(init_phase);
     }
     double inittime = inittimer.elapsed();
 
@@ -136,7 +137,7 @@ void test_allgather_and_gate(std::size_t np)
       {
         compute_phase.push_back(hpx::async(compute, components[i], 100));
       }
-      hpx::lcos::wait(compute_phase);
+      hpx::wait_all(compute_phase);
     }
     double computetime = computetimer.elapsed();
 

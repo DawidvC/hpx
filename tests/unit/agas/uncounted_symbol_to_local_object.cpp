@@ -8,8 +8,8 @@
 #include <hpx/util/lightweight_test.hpp>
 #include <hpx/runtime/agas/interface.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/assign/std/vector.hpp>
+#include <boost/chrono.hpp>
 
 #include <tests/unit/agas/components/simple_refcnt_checker.hpp>
 #include <tests/unit/agas/components/managed_refcnt_checker.hpp>
@@ -22,15 +22,15 @@ using hpx::init;
 using hpx::finalize;
 using hpx::find_here;
 
-using boost::posix_time::milliseconds;
+using boost::chrono::milliseconds;
 
 using hpx::naming::id_type;
 using hpx::naming::gid_type;
 using hpx::naming::get_management_type_name;
 using hpx::naming::detail::get_stripped_gid;
 
-using hpx::agas::register_name;
-using hpx::agas::unregister_name;
+using hpx::agas::register_name_sync;
+using hpx::agas::unregister_name_sync;
 
 using hpx::test::simple_refcnt_monitor;
 using hpx::test::managed_refcnt_monitor;
@@ -53,7 +53,7 @@ void hpx_test_main(
     {
         /// AGAS reference-counting test 9 (from #126):
         ///
-        ///     Create a component locally, and register it's credit-stripped
+        ///     Create a component locally, and register its credit-stripped
         ///     raw gid with a symbolic name. Then, let all references to the
         ///     component go out of scope. The component should be destroyed.
         ///     Finally, unregister the symbolic name. Unregistering the
@@ -72,14 +72,14 @@ void hpx_test_main(
         // should not reference-count the name, as the GID we're passing has
         // no credits.
         gid_type raw_gid = get_stripped_gid(monitor.get_raw_gid());
-        HPX_TEST_EQ(true, register_name(name, raw_gid));
+        HPX_TEST_EQ(true, register_name_sync(name, raw_gid));
 
         {
             // Detach the reference.
             id_type id = monitor.detach().get();
 
             // The component should still be alive.
-            HPX_TEST_EQ(false, monitor.ready(milliseconds(delay)));
+            HPX_TEST_EQ(false, monitor.is_ready(milliseconds(delay)));
 
             // let id go out of scope. id was the last reference to the
             // component
@@ -87,13 +87,13 @@ void hpx_test_main(
 
         // The component should not be alive anymore, as the symbolic binding
         // does not hold a reference to it.
-        HPX_TEST_EQ(true, monitor.ready(milliseconds(delay)));
+        HPX_TEST_EQ(true, monitor.is_ready(milliseconds(delay)));
 
         // Remove the symbolic name.
-        HPX_TEST_EQ(raw_gid, unregister_name(name).get_gid());
+        HPX_TEST_EQ(raw_gid, unregister_name_sync(name).get_gid());
 
         // The component should be out of scope now.
-        HPX_TEST_EQ(true, monitor.ready(milliseconds(delay)));
+        HPX_TEST_EQ(true, monitor.is_ready(milliseconds(delay)));
     }
 }
 

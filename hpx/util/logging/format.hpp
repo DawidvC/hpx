@@ -21,18 +21,17 @@
 # pragma once
 #endif
 
+#include <hpx/util/assert.hpp>
 #include <hpx/util/logging/detail/fwd.hpp>
 #include <hpx/util/logging/detail/forward_constructor.hpp>
+#include <hpx/util/logging/detail/manipulator.hpp>
+#include <hpx/util/logging/format_fwd.hpp>
 #include <hpx/util/logging/format/op_equal.hpp>
 #include <hpx/util/logging/format/array.hpp>
 #include <vector>
 #include <set>
 #include <boost/shared_ptr.hpp>
-#include <boost/assert.hpp>
-
 #include <boost/type_traits/is_base_of.hpp>
-#include <hpx/util/logging/detail/manipulator.hpp>
-#include <hpx/util/logging/format_fwd.hpp>
 
 namespace hpx { namespace util { namespace logging {
 
@@ -405,11 +404,11 @@ In the above case:
             struct item {
                 item() : m_fmt(0), m_dest(0), m_type(is_clear) {}
                 item& fmt(formatter_ptr f) {
-                    BOOST_ASSERT(f);
+                    HPX_ASSERT(f);
                     m_fmt = f; m_type = is_fmt; return *this;
                 }
                 item &dest(destination_ptr d) {
-                    BOOST_ASSERT(d);
+                    HPX_ASSERT(d);
                     m_dest = d; m_type = is_dest; return *this;
                 }
                 formatter_ptr m_fmt;
@@ -505,7 +504,7 @@ In the above case:
             typename data::write to_write(m_to_write);
 
             for ( typename write_array::const_iterator b = to_write->begin(), e = to_write->end(); b != e; ++b) {
-                typename f_array::iterator del = std::remove( b->formats.begin(), b->formats.end(), fmt);
+                typename f_array::iterator del = std::remove( b->formats.begin(), b->formats.end(), fmt); //-V807
                 b->formats.erase(del, b->formats.end());
             }
         }
@@ -527,7 +526,7 @@ In the above case:
             typename data::write to_write(m_to_write);
 
             for ( typename write_array::const_iterator b = to_write->begin(), e = to_write->end(); b != e; ++b) {
-                typename d_array::iterator del = std::remove( b->destinations.begin(), b->destinations.end(), dest);
+                typename d_array::iterator del = std::remove( b->destinations.begin(), b->destinations.end(), dest); //-V807
                 b->destinations.erase(del, b->destinations.end());
 
                 // if from a write_once - all destinations are gone, don't clear_afterwards

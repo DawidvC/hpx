@@ -1,19 +1,43 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2011 Bryce Lelbach
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ////////////////////////////////////////////////////////////////////////////////
 
+#include <hpx/config.hpp>
 #include <hpx/version.hpp>
 #include <hpx/hpx.hpp>
 #include <hpx/runtime/applier/applier.hpp>
+#include <hpx/runtime/threads/thread_data.hpp>
 #include <hpx/util/logging.hpp>
 #include <hpx/lcos/barrier.hpp>
-#include <hpx/lcos/future_wait.hpp>
+#include <hpx/lcos/detail/full_empty_entry.hpp>
 #include <hpx/runtime/agas/interface.hpp>
 
+#if !defined(HPX_GCC44_WORKAROUND)
+#define HPX_USE_FAST_BOOTSTRAP_SYNCHRONIZATION
+#endif
+
+#if defined(HPX_USE_FAST_BOOTSTRAP_SYNCHRONIZATION)
+#include <hpx/lcos/broadcast.hpp>
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#if defined(HPX_USE_FAST_BOOTSTRAP_SYNCHRONIZATION)
+
+///////////////////////////////////////////////////////////////////////////////
+typedef hpx::components::server::runtime_support::call_startup_functions_action
+    call_startup_functions_action;
+
+HPX_REGISTER_BROADCAST_ACTION_DECLARATION(call_startup_functions_action)
+HPX_REGISTER_BROADCAST_ACTION(call_startup_functions_action)
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 namespace
 {
     void garbage_collect_non_blocking()
@@ -26,19 +50,26 @@ namespace
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
 namespace hpx
 {
 
 ///////////////////////////////////////////////////////////////////////////////
-// Create a new barrier and register its gid with the given symbolic name.
+// Create a new barrier and register its id with the given symbolic name.
 inline lcos::barrier
 create_barrier(std::size_t num_localities, char const* symname)
 {
-    lcos::barrier b;
-    b.create(find_here(), num_localities);
+    lcos::barrier b = lcos::barrier::create(find_here(), num_localities);
 
-    agas::register_name(symname, b.get_gid());
+    // register an unmanaged gid to avoid id-splitting during startup
+    agas::register_name_sync(symname, b.get_gid().get_gid());
     return b;
+}
+
+inline void delete_barrier(lcos::barrier& b, char const* symname)
+{
+    agas::unregister_name_sync(symname);
+    b.free();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,7 +80,7 @@ find_barrier(char const* symname)
     naming::id_type barrier_id;
     for (std::size_t i = 0; i < HPX_MAX_NETWORK_RETRIES; ++i)
     {
-        if (agas::resolve_name(symname, barrier_id))
+        if (agas::resolve_name_sync(symname, barrier_id))
             break;
 
         boost::this_thread::sleep(boost::get_system_time() +
@@ -65,9 +96,7 @@ find_barrier(char const* symname)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Symbolic names of global boot barrier objects
-const char* second_barrier = "/barrier(agas#0)/second_stage";
-const char* third_barrier = "/barrier(agas#0)/third_stage";
-const char* fourth_barrier = "/barrier(agas#0)/fourth_stage";
+static const char* const startup_barrier_name = "/0/agas/startup_barrier";
 
 ///////////////////////////////////////////////////////////////////////////////
 // Install performance counter startup functions for core subsystems.
@@ -99,6 +128,11 @@ inline void register_counter_types()
 bool pre_main(runtime_mode mode);
 bool pre_main(runtime_mode mode)
 {
+    // Register pre-shutdown and shutdown functions to flush pending
+    // reference counting operations.
+    register_pre_shutdown_function(&::garbage_collect_non_blocking);
+    register_shutdown_function(&::garbage_collect);
+
     using components::stubs::runtime_support;
 
     naming::resolver_client& agas_client = naming::get_agas_client();
@@ -106,19 +140,10 @@ bool pre_main(runtime_mode mode)
     util::runtime_configuration const& cfg = rt.get_config();
 
     bool exit_requested = false;
-
-    BOOST_ASSERT(cfg.get_agas_promise_pool_size() <
-        static_cast<std::size_t>((std::numeric_limits<boost::int64_t>::max)()));
-    boost::int64_t const pool_size =
-        static_cast<boost::int64_t>(cfg.get_agas_promise_pool_size());
     if (runtime_mode_connect == mode)
     {
         LBT_(info) << "(2nd stage) pre_main: locality is in connect mode, "
                       "skipping 2nd and 3rd stage startup synchronization";
-
-        // Unblock the AGAS router by adding the initial pool size to the
-        // promise pool semaphores.
-        agas_client.hosted->promise_pool_semaphore_.signal(pool_size);
         LBT_(info) << "(2nd stage) pre_main: addressing services enabled";
 
         // Load components, so that we can use the barrier LCO.
@@ -136,34 +161,21 @@ bool pre_main(runtime_mode mode)
         runtime_support::call_startup_functions(find_here(), false);
         LBT_(info) << "(3rd stage) pre_main: ran startup functions";
     }
-
     else
     {
-        // {{{ unblock addressing_service
-        if (!agas_client.is_bootstrap())
-        {
-            // Unblock the local addressing_service by adding the initial pool
-            // size to the promise pool semaphores. This ensures that no AGAS
-            // requests are sent after first-stage AGAS bootstrap and before
-            // second-stage bootstrap.
-            agas_client.hosted->promise_pool_semaphore_.signal(pool_size);
-
-            LBT_(info) << "(2nd stage) pre_main: addressing services enabled";
-        }
-        // }}}
+        LBT_(info) << "(2nd stage) pre_main: addressing services enabled";
 
         // Load components, so that we can use the barrier LCO.
         exit_requested = !runtime_support::load_components(find_here());
         LBT_(info) << "(2nd stage) pre_main: loaded components"
             << (exit_requested ? ", application exit has been requested" : "");
 
-        lcos::barrier second_stage, third_stage, fourth_stage;
+        lcos::barrier startup_barrier;
 
         // {{{ Second and third stage barrier creation.
         if (agas_client.is_bootstrap())
         {
             naming::gid_type console_;
-
             if (HPX_UNLIKELY(!agas_client.get_console_locality(console_)))
             {
                 HPX_THROW_EXCEPTION(network_error
@@ -171,28 +183,26 @@ bool pre_main(runtime_mode mode)
                     , "no console locality registered");
             }
 
-            std::size_t const num_localities = cfg.get_num_localities();
-            second_stage = create_barrier(num_localities, second_barrier);
-            third_stage = create_barrier(num_localities, third_barrier);
-            fourth_stage = create_barrier(num_localities, fourth_barrier);
+            std::size_t const num_localities =
+                static_cast<std::size_t>(cfg.get_num_localities());
 
-            if (num_localities > 1) {
-                // retrieve list of resolved localities 
+            if (num_localities > 1)
+            {
+                startup_barrier = create_barrier(num_localities, startup_barrier_name);
+
+                // retrieve list of resolved localities
                 rt.get_parcel_handler().set_resolved_localities(
                     agas_client.get_resolved_localities());
             }
 
             LBT_(info) << "(2nd stage) pre_main: created 2nd and 3rd stage boot barriers";
         }
-
         else // Hosted.
         {
             // Initialize the barrier clients (find them in AGAS)
-            second_stage = find_barrier(second_barrier);
-            third_stage = find_barrier(third_barrier);
-            fourth_stage = find_barrier(fourth_barrier);
+            startup_barrier = find_barrier(startup_barrier_name);
 
-            // retrieve list of resolved localities 
+            // retrieve list of resolved localities
             rt.get_parcel_handler().set_resolved_localities(
                 agas_client.get_resolved_localities());
 
@@ -207,50 +217,58 @@ bool pre_main(runtime_mode mode)
         // Second stage bootstrap synchronizes component loading across all
         // localities, ensuring that the component namespace tables are fully
         // populated before user code is executed.
-        second_stage.wait();
-        LBT_(info) << "(2nd stage) pre_main: passed 2nd stage boot barrier";
+        if (startup_barrier)
+        {
+            startup_barrier.wait();
+            LBT_(info) << "(2nd stage) pre_main: passed 2nd stage boot barrier";
+        }
 
-        // Tear down the second stage barrier.
+#if defined(HPX_USE_FAST_BOOTSTRAP_SYNCHRONIZATION)
         if (agas_client.is_bootstrap())
-            agas::unregister_name(second_barrier);
+        {
+            std::vector<naming::id_type> localities = hpx::find_all_localities();
 
-        rt.set_state(runtime::state_pre_startup);
+            call_startup_functions_action act;
+            lcos::broadcast(act, localities, true).get();
+            LBT_(info) << "(3rd stage) pre_main: ran pre-startup functions";
+
+            lcos::broadcast(act, localities, false).get();
+            LBT_(info) << "(4th stage) pre_main: ran startup functions";
+        }
+#else
         runtime_support::call_startup_functions(find_here(), true);
         LBT_(info) << "(3rd stage) pre_main: ran pre-startup functions";
 
         // Third stage separates pre-startup and startup function phase.
-        third_stage.wait();
-        LBT_(info) << "(3rd stage) pre_main: passed 3rd stage boot barrier";
+        if (startup_barrier)
+        {
+            startup_barrier.wait();
+            LBT_(info) << "(3rd stage) pre_main: passed 3rd stage boot barrier";
+        }
 
-        // Tear down the third stage barrier.
-        if (agas_client.is_bootstrap())
-            agas::unregister_name(third_barrier);
-
-        rt.set_state(runtime::state_startup);
         runtime_support::call_startup_functions(find_here(), false);
         LBT_(info) << "(4th stage) pre_main: ran startup functions";
+#endif
 
-        // Forth stage bootstrap synchronizes startup functions across all
-        // localities. This is done after component loading to guarantee that
-        // all user code, including startup functions, are only run after the
-        // component tables are populated.
-        fourth_stage.wait();
-        LBT_(info) << "(4th stage) pre_main: passed 4th stage boot barrier";
+        if (startup_barrier)
+        {
+            // Forth stage bootstrap synchronizes startup functions across all
+            // localities. This is done after component loading to guarantee that
+            // all user code, including startup functions, are only run after the
+            // component tables are populated.
+            startup_barrier.wait();
+            LBT_(info) << "(4th stage) pre_main: passed 4th stage boot barrier";
 
-        // Tear down the fourth stage barrier.
-        if (agas_client.is_bootstrap())
-            agas::unregister_name(fourth_barrier);
+            // Tear down the startup barrier.
+            if (agas_client.is_bootstrap())
+                delete_barrier(startup_barrier, startup_barrier_name);
+        }
     }
 
     // Enable logging. Even if we terminate at this point we will see all
     // pending log messages so far.
     components::activate_logging();
     LBT_(info) << "(4th stage) pre_main: activated logging";
-
-    // Register pre-shutdown and shutdown functions to flush pending
-    // reference counting operations.
-    register_pre_shutdown_function(&::garbage_collect_non_blocking);
-    register_shutdown_function(&::garbage_collect);
 
     // Any error in post-command line handling or any explicit --exit command
     // line option will cause the application to terminate at this point.
@@ -263,7 +281,7 @@ bool pre_main(runtime_mode mode)
         return false;
     }
 
-    // now adjust the number of local AGAS cache entries for the number of 
+    // now adjust the number of local AGAS cache entries for the number of
     // connected localities
     agas_client.adjust_local_cache_size();
 

@@ -13,8 +13,9 @@
 #include "server/sine.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-// Add factory registration functionality
-HPX_REGISTER_COMPONENT_MODULE();    // create entry point for component factory
+// Add factory registration functionality, We register the module dynamically
+// as no executable links against it.
+HPX_REGISTER_COMPONENT_MODULE_DYNAMIC();
 
 ///////////////////////////////////////////////////////////////////////////////
 typedef hpx::components::managed_component<
@@ -71,7 +72,7 @@ namespace performance_counters { namespace sine
 
         // We enable the performance counters if --sine is specified on the
         // command line.
-        return (vm.count("sine") != 0) ? true : false;
+        return vm.count("sine") != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -112,7 +113,7 @@ namespace performance_counters { namespace sine
                 return false;
         }
         else if(p.instancename_ == "instance#*") {
-            BOOST_ASSERT(mode == hpx::performance_counters::discover_counters_full);
+            HPX_ASSERT(mode == hpx::performance_counters::discover_counters_full);
 
             // FIXME: expand for all instances
             p.instancename_ = "instance";
@@ -209,7 +210,8 @@ namespace performance_counters { namespace sine
               // instance number to use for the particular counter. We allow
               // any arbitrary number of instances.
               &explicit_sine_counter_creator,
-              &explicit_sine_counter_discoverer
+              &explicit_sine_counter_discoverer,
+              ""
             },
             { "/sine/immediate/implicit", counter_raw,
               "returns the current value of a sine wave calculated over "
@@ -224,7 +226,8 @@ namespace performance_counters { namespace sine
               // is used as the source of counter data for the created counter.
               boost::bind(&hpx::performance_counters::locality_raw_counter_creator,
                   _1, &immediate_sine, _2),
-              &hpx::performance_counters::locality_counter_discoverer
+              &hpx::performance_counters::locality_counter_discoverer,
+              ""
             }
         };
 
@@ -259,13 +262,13 @@ namespace performance_counters { namespace sine
 // type and performance counter instances.
 //
 // Note that this macro can be used not more than once in one module.
-HPX_REGISTER_STARTUP_MODULE(::performance_counters::sine::get_startup);
+HPX_REGISTER_STARTUP_MODULE_DYNAMIC(::performance_counters::sine::get_startup);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Register a function to be called to populate the special command line
 // options supported by this component.
 //
 // Note that this macro can be used not more than once in one module.
-HPX_REGISTER_COMMANDLINE_MODULE(
+HPX_REGISTER_COMMANDLINE_MODULE_DYNAMIC(
     ::performance_counters::sine::command_line_options);
 

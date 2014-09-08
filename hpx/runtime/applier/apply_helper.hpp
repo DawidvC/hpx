@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,6 +15,7 @@
 #include <hpx/runtime/applier/applier.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
+#include <hpx/traits/action_schedule_thread.hpp>
 
 namespace hpx { namespace applier { namespace detail
 {
@@ -24,7 +25,8 @@ namespace hpx { namespace applier { namespace detail
         fix_priority(threads::thread_priority priority)
     {
         return hpx::actions::detail::thread_priority<
-            static_cast<threads::thread_priority>(traits::action_priority<Action>::value)
+            static_cast<threads::thread_priority>(
+                traits::action_priority<Action>::value)
         >::call(priority);
     }
 
@@ -38,30 +40,65 @@ namespace hpx { namespace applier { namespace detail
     {
         template <typename Arguments>
         static void
-        call (naming::address::address_type lva,
-            threads::thread_priority priority, BOOST_FWD_REF(Arguments) args)
+        call (naming::id_type const& target, naming::address::address_type lva,
+            threads::thread_priority priority, Arguments && args)
         {
-            hpx::applier::register_work_plain(
-                boost::move(Action::construct_thread_function(
-                    lva, boost::forward<Arguments>(args))),
-                actions::detail::get_action_name<Action>(), lva,
-                threads::pending, fix_priority<Action>(priority), std::size_t(-1),
+            actions::continuation_type cont;
+            threads::thread_init_data data;
+            if (traits::action_decorate_continuation<Action>::call(cont))
+            {
+                data.func = Action::construct_thread_function(cont, lva,
+                    std::forward<Arguments>(args));
+            }
+            else
+            {
+                data.func = Action::construct_thread_function(lva,
+                    std::forward<Arguments>(args));
+            }
+
+#if defined(HPX_THREAD_MAINTAIN_TARGET_ADDRESS)
+            data.lva = lva;
+#endif
+#if defined(HPX_THREAD_MAINTAIN_DESCRIPTION)
+            data.description = actions::detail::get_action_name<Action>();
+#endif
+            data.priority = fix_priority<Action>(priority);
+            data.stacksize = threads::get_stack_size(
                 static_cast<threads::thread_stacksize>(
                     traits::action_stacksize<Action>::value));
+            data.target = target;
+
+            traits::action_schedule_thread<Action>::call(
+                lva, data, threads::pending);
         }
 
         template <typename Arguments>
         static void
-        call (actions::continuation_type& c, naming::address::address_type lva,
-            threads::thread_priority priority, BOOST_FWD_REF(Arguments) args)
+        call (actions::continuation_type& c, naming::id_type const& target,
+            naming::address::address_type lva, threads::thread_priority priority,
+            Arguments && args)
         {
-            hpx::applier::register_work_plain(
-                boost::move(Action::construct_thread_function(c, lva,
-                    boost::forward<Arguments>(args))),
-                actions::detail::get_action_name<Action>(), lva,
-                threads::pending, fix_priority<Action>(priority), std::size_t(-1),
+            // first decorate the continuation
+            traits::action_decorate_continuation<Action>::call(c);
+
+            // now, schedule the thread
+            threads::thread_init_data data;
+            data.func = Action::construct_thread_function(c, lva,
+                std::forward<Arguments>(args));
+#if defined(HPX_THREAD_MAINTAIN_TARGET_ADDRESS)
+            data.lva = lva;
+#endif
+#if defined(HPX_THREAD_MAINTAIN_DESCRIPTION)
+            data.description = actions::detail::get_action_name<Action>();
+#endif
+            data.priority = fix_priority<Action>(priority);
+            data.stacksize = threads::get_stack_size(
                 static_cast<threads::thread_stacksize>(
                     traits::action_stacksize<Action>::value));
+            data.target = target;
+
+            traits::action_schedule_thread<Action>::call(
+                lva, data, threads::pending);
         }
     };
 
@@ -71,20 +108,21 @@ namespace hpx { namespace applier { namespace detail
         // If local and to be directly executed, just call the function
         template <typename Arguments>
         static void
-        call (naming::address::address_type lva,
-            threads::thread_priority, BOOST_FWD_REF(Arguments) args)
+        call (naming::id_type const& target, naming::address::address_type lva,
+            threads::thread_priority, Arguments && args)
         {
-            Action::execute_function(lva, boost::forward<Arguments>(args));
+            Action::execute_function(lva, std::forward<Arguments>(args));
         }
 
         template <typename Arguments>
         static void
-        call (actions::continuation_type& c, naming::address::address_type lva,
-            threads::thread_priority, BOOST_FWD_REF(Arguments) args)
+        call (actions::continuation_type& c, naming::id_type const& target,
+            naming::address::address_type lva, threads::thread_priority,
+            Arguments && args)
         {
             try {
-                c->trigger(boost::move(Action::execute_function(
-                    lva, boost::forward<Arguments>(args))));
+                c->trigger(std::move(Action::execute_function(
+                    lva, std::forward<Arguments>(args))));
             }
             catch (hpx::exception const& /*e*/) {
                 // make sure hpx::exceptions are propagated back to the client

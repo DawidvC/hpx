@@ -1,5 +1,5 @@
 // Copyright Vladimir Prus 2004.
-// Copyright (c) 2005-2013 Hartmut Kaiser
+// Copyright (c) 2005-2014 Hartmut Kaiser
 // Distributed under the Boost Software License, Version 1.0.
 // (See accompanying file LICENSE_1_0.txt
 // or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -46,11 +46,25 @@ namespace detail {
     >
     :   public Base
     {
+        plugin_factory_item(dll& d, std::string const& basename)
+          : Base(d, basename)
+        {}
+
         using Base::create;
         BasePlugin* create(std::string const& name, BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))
         {
             std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                 get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename);
+            return r.first->create(r.second, BOOST_PP_ENUM_PARAMS(N, a));
+        }
+
+        BasePlugin* create(std::string const& name, error_code& ec,
+            BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))
+        {
+            std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                get_abstract_factory<BasePlugin>(this->m_dll, name, this->m_basename, ec);
+            if (ec) return 0;
+
             return r.first->create(r.second, BOOST_PP_ENUM_PARAMS(N, a));
         }
     };
@@ -66,12 +80,27 @@ namespace detail {
     >
     :   public Base
     {
+        static_plugin_factory_item(get_plugins_list_type const& f)
+          : Base(f)
+        {}
+
         using Base::create;
         BasePlugin* create(std::string const& name, BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))
         {
             std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
                 get_abstract_factory_static<BasePlugin>(
                     this->f, &empty_deleter, name);
+            return r.first->create(r.second, BOOST_PP_ENUM_PARAMS(N, a));
+        }
+
+        BasePlugin* create(std::string const& name, error_code& ec,
+            BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))
+        {
+            std::pair<abstract_factory<BasePlugin> *, dll_handle> r =
+                get_abstract_factory_static<BasePlugin>(
+                    this->f, &empty_deleter, name, "", ec);
+            if (ec) return 0;
+
             return r.first->create(r.second, BOOST_PP_ENUM_PARAMS(N, a));
         }
     };

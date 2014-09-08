@@ -60,7 +60,7 @@ namespace hpx { namespace plugins
                 unique_plugin_name<plugin_registry>::call() + "]";
             fillini += "name = " HPX_PLUGIN_STRING;
             fillini += std::string("path = ") +
-                util::find_prefix(HPX_PLUGIN_STRING) + "/lib/hpx";
+                util::find_prefixes("/lib/hpx", HPX_PLUGIN_STRING);
             fillini += "enabled = 1";
 
             char const* more = traits::plugin_config_data<Plugin>::call();
@@ -89,13 +89,13 @@ namespace hpx { namespace plugins
 /**/
 
 #define HPX_REGISTER_PLUGIN_REGISTRY_2(PluginType, pluginname)                \
-    template struct hpx::plugins::plugin_registry<PluginType >;               \
     typedef hpx::plugins::plugin_registry<PluginType>                         \
         pluginname ## _plugin_registry_type;                                  \
     HPX_REGISTER_PLUGIN_BASE_REGISTRY(                                        \
         pluginname ## _plugin_registry_type, pluginname)                      \
     HPX_DEF_UNIQUE_PLUGIN_NAME(                                               \
         pluginname ## _plugin_registry_type, pluginname)                      \
+    template struct hpx::plugins::plugin_registry<PluginType >;               \
 /**/
 
 #endif

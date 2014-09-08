@@ -6,6 +6,7 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/agas/interface.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/query_counters.hpp>
 #include <hpx/util/high_resolution_clock.hpp>
 #include <hpx/util/stringstream.hpp>
@@ -15,7 +16,6 @@
 #include <hpx/performance_counters/stubs/performance_counter.hpp>
 #include <hpx/lcos/wait_all.hpp>
 
-#include <boost/assert.hpp>
 #include <boost/foreach.hpp>
 #include <boost/format.hpp>
 
@@ -71,11 +71,11 @@ namespace hpx { namespace util
         names_.reserve(names.size());
         if (ids_.empty())
         {
-            using HPX_STD_PLACEHOLDERS::_1;
-            using HPX_STD_PLACEHOLDERS::_2;
+            using util::placeholders::_1;
+            using util::placeholders::_2;
 
             HPX_STD_FUNCTION<performance_counters::discover_counter_func> func(
-                HPX_STD_BIND(&query_counters::find_counter, this, _1, _2));
+                util::bind(&query_counters::find_counter, this, _1, _2));
 
             ids_.reserve(names.size());
             uoms_.reserve(names.size());
@@ -86,22 +86,22 @@ namespace hpx { namespace util
 
                 // find matching counter type
                 {
-                    hpx::util::unlock_the_lock<mutex_type::scoped_lock> ul(l);
+                    hpx::util::scoped_unlock<mutex_type::scoped_lock> ul(l);
                     performance_counters::discover_counter_type(name, func,
                         performance_counters::discover_counters_full);
                 }
             }
         }
 
-        BOOST_ASSERT(ids_.size() == names_.size());
-        BOOST_ASSERT(ids_.size() == uoms_.size());
+        HPX_ASSERT(ids_.size() == names_.size());
+        HPX_ASSERT(ids_.size() == uoms_.size());
     }
 
     void query_counters::start()
     {
         find_counters();
 
-        for (std::size_t i = 0; i < ids_.size(); ++i)
+        for (std::size_t i = 0; i != ids_.size(); ++i)
         {
             // start the performance counter
             using performance_counters::stubs::performance_counter;
@@ -110,6 +110,11 @@ namespace hpx { namespace util
 
         // this will invoke the evaluate function for the first time
         timer_.start();
+    }
+
+    void query_counters::stop_evaluating_counters()
+    {
+        timer_.stop();
     }
 
     template <typename Stream>
@@ -145,7 +150,12 @@ namespace hpx { namespace util
 
     void query_counters::terminate()
     {
-        ids_.clear();      // give up control over all performance counters
+        std::vector<naming::id_type> ids;
+        {
+            mutex_type::scoped_lock l(mtx_);
+            // give up control over all performance counters
+            std::swap(ids, ids_);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -171,7 +181,7 @@ namespace hpx { namespace util
         std::vector<future<bool> > started;
 
         started.reserve(ids_.size());
-        for (std::size_t i = 0; i < ids_.size(); ++i)
+        for (std::size_t i = 0; i != ids_.size(); ++i)
             started.push_back(performance_counter::start_async(ids_[i]));
 
         // wait for all counters to be started
@@ -200,7 +210,7 @@ namespace hpx { namespace util
         std::vector<future<bool> > stopped;
 
         stopped.reserve(ids_.size());
-        for (std::size_t i = 0; i < ids_.size(); ++i)
+        for (std::size_t i = 0; i != ids_.size(); ++i)
             stopped.push_back(performance_counter::stop_async(ids_[i]));
 
         // wait for all counters to be started
@@ -229,7 +239,7 @@ namespace hpx { namespace util
         std::vector<future<void> > reset;
 
         reset.reserve(ids_.size());
-        for (std::size_t i = 0; i < ids_.size(); ++i)
+        for (std::size_t i = 0; i != ids_.size(); ++i)
             reset.push_back(performance_counter::reset_async(ids_[i]));
 
         // wait for all counters to be started
@@ -251,7 +261,7 @@ namespace hpx { namespace util
         {
             mutex_type::scoped_lock l(mtx_);
             has_been_started = !ids_.empty();
-            destination_is_cout = (destination_ == "cout") ? true : false;
+            destination_is_cout = destination_ == "cout";
         }
 
         if (!has_been_started)
@@ -263,13 +273,22 @@ namespace hpx { namespace util
             return false;
         }
 
+        std::vector<id_type> ids;
+        {
+            mutex_type::scoped_lock l(mtx_);
+            ids = ids_;
+        }
+
+        if (ids.empty())
+            return false;
+
         // Query the performance counters.
         using performance_counters::stubs::performance_counter;
         std::vector<future<performance_counters::counter_value> > values;
 
-        values.reserve(ids_.size());
-        for (std::size_t i = 0; i < ids_.size(); ++i)
-            values.push_back(performance_counter::get_value_async(ids_[i], reset));
+        values.reserve(ids.size());
+        for (std::size_t i = 0; i != ids.size(); ++i)
+            values.push_back(performance_counter::get_value_async(ids[i], reset));
 
         util::osstream output;
         if (description)
@@ -286,7 +305,7 @@ namespace hpx { namespace util
             std::cout << util::osstream_get_string(output) << std::flush;
         }
         else {
-            std::ofstream out(destination_, std::ios_base::app);
+            std::ofstream out(destination_.c_str(), std::ofstream::app);
             out << util::osstream_get_string(output);
         }
 

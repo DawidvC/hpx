@@ -5,14 +5,26 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(subdirs
+    actions
     agas
+    build
     components
     diagnostics
     lcos
+    parcelset
     performance_counters
     threads
+    traits
     util
    )
+
+if(HPX_WITH_SECURITY)
+  set(subdirs ${subdirs} security)
+endif()
+
+if(HPX_WITH_CXX11_LAMBDAS)
+  set(subdirs ${subdirs} parallel)
+endif()
 
 foreach(subdir ${subdirs})
   add_hpx_pseudo_target(tests.unit.${subdir})

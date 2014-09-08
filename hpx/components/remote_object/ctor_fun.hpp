@@ -8,21 +8,18 @@
 #ifndef HPX_COMPONENTS_REMOTE_OBJECT_CTOR_FUN_HPP
 #define HPX_COMPONENTS_REMOTE_OBJECT_CTOR_FUN_HPP
 
+#include <hpx/hpx_fwd.hpp>
 #include <hpx/util/move.hpp>
-#include <hpx/util/detail/remove_reference.hpp>
+#include <hpx/util/decay.hpp>
 
 #include <boost/type_traits/remove_const.hpp>
 #include <boost/preprocessor/repetition/enum_params_with_a_default.hpp>
 #include <boost/preprocessor/repetition/enum.hpp>
 
-#ifndef HPX_FUNCTION_ARGUMENT_LIMIT
-#define HPX_FUNCTION_ARGUMENT_LIMIT 10
-#endif
-
 namespace hpx { namespace components { namespace remote_object
 {
 #define HPX_REMOTE_OBJECT_M0(Z, N, D)                                           \
-    BOOST_PP_CAT(a, N)(boost::forward<BOOST_PP_CAT(Arg, N)>(BOOST_PP_CAT(arg, N)))\
+    BOOST_PP_CAT(a, N)(std::forward<BOOST_PP_CAT(Arg, N)>(BOOST_PP_CAT(arg, N)))\
 /**/
 
 #define HPX_REMOTE_OBJECT_COPY_CTOR(Z, N, D)                                    \
@@ -30,19 +27,11 @@ namespace hpx { namespace components { namespace remote_object
 /**/
 
 #define HPX_REMOTE_OBJECT_MOVE_CTOR(Z, N, D)                                    \
-    BOOST_PP_CAT(a, N)(boost::move(rhs. BOOST_PP_CAT(a, N)))                    \
+    BOOST_PP_CAT(a, N)(std::move(rhs. BOOST_PP_CAT(a, N)))                    \
 /**/
 
 #define HPX_REMOTE_OBJECT_RV(Z, N, D)                                           \
-    BOOST_RV_REF(BOOST_PP_CAT(A, N)) BOOST_PP_CAT(a, N)                         \
-/**/
-
-#define HPX_REMOTE_OBJECT_COPY(Z, N, D)                                         \
-    BOOST_PP_CAT(a, N) = rhs.BOOST_PP_CAT(a, N);                                \
-/**/
-
-#define HPX_REMOTE_OBJECT_MOVE(Z, N, D)                                         \
-    BOOST_PP_CAT(a, N) = boost::move(rhs.BOOST_PP_CAT(a, N));                   \
+    BOOST_PP_CAT(A, N &&) BOOST_PP_CAT(a, N)                         \
 /**/
 
 #define HPX_REMOTE_OBJECT_M1(Z, N, D)                                           \
@@ -50,9 +39,7 @@ namespace hpx { namespace components { namespace remote_object
 /**/
 
 #define HPX_REMOTE_OBJECT_M2(Z, N, D)                                           \
-    typename boost::remove_const<                                               \
-        typename hpx::util::detail::remove_reference<BOOST_PP_CAT(A, N)>::type  \
-    >::type BOOST_PP_CAT(a, N);                                                 \
+    typename util::decay<BOOST_PP_CAT(A, N)>::type BOOST_PP_CAT(a, N);          \
 /**/
 
 #if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
@@ -109,8 +96,6 @@ namespace hpx { namespace components { namespace remote_object
 #undef HPX_REMOTE_OBJECT_M1
 #undef HPX_REMOTE_OBJECT_M2
 #undef HPX_REMOTE_OBJECT_RV
-#undef HPX_REMOTE_OBJECT_MOVE
-#undef HPX_REMOTE_OBJECT_COPY
 
 }}}
 
@@ -132,29 +117,13 @@ namespace hpx { namespace components { namespace remote_object
             : BOOST_PP_ENUM(N, HPX_REMOTE_OBJECT_M0, _)
         {}
 
-        ctor_fun(BOOST_COPY_ASSIGN_REF(ctor_fun) rhs)
+        ctor_fun(ctor_fun const & rhs)
             : BOOST_PP_ENUM(N, HPX_REMOTE_OBJECT_COPY_CTOR, _)
         {}
 
-        ctor_fun(BOOST_RV_REF(ctor_fun) rhs)
+        ctor_fun(ctor_fun && rhs)
             : BOOST_PP_ENUM(N, HPX_REMOTE_OBJECT_MOVE_CTOR, _)
         {}
-
-        ctor_fun& operator=(BOOST_COPY_ASSIGN_REF(ctor_fun) rhs)
-        {
-            if (this != &rhs) {
-                BOOST_PP_REPEAT(N, HPX_REMOTE_OBJECT_COPY, _)
-            }
-            return *this;
-        }
-
-        ctor_fun& operator=(BOOST_RV_REF(ctor_fun) rhs)
-        {
-            if (this != &rhs) {
-                BOOST_PP_REPEAT(N, HPX_REMOTE_OBJECT_MOVE, _)
-            }
-            return *this;
-        }
 
         void operator()(void ** p) const
         {
@@ -169,9 +138,6 @@ namespace hpx { namespace components { namespace remote_object
         }
 
         BOOST_PP_REPEAT(N, HPX_REMOTE_OBJECT_M2, _)
-
-    private:
-        BOOST_COPYABLE_AND_MOVABLE(ctor_fun);
     };
 
 #undef N

@@ -3,45 +3,79 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-hpx_write_boostbook_catalog(${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml)
+hpx_write_boostbook_catalog("${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml")
 
-file(GLOB base_files ${hpx_SOURCE_DIR}/docs/*.qbk)
-file(GLOB_RECURSE manual_files ${hpx_SOURCE_DIR}/docs/manual/*.qbk)
-file(GLOB_RECURSE tutorial_files ${hpx_SOURCE_DIR}/docs/tutorial/*.qbk)
-file(GLOB_RECURSE index_files ${hpx_SOURCE_DIR}/docs/*.idx)
+file(GLOB base_files "${hpx_SOURCE_DIR}/docs/*.qbk")
+file(GLOB_RECURSE manual_files "${hpx_SOURCE_DIR}/docs/manual/*.qbk")
+file(GLOB_RECURSE tutorial_files "${hpx_SOURCE_DIR}/docs/tutorial/*.qbk")
+file(GLOB_RECURSE index_files "${hpx_SOURCE_DIR}/docs/*.idx")
 
 set(documentation_files
     ${manual_files} ${tutorial_files} ${base_files} ${index_files})
 
 set(documentation_dependencies
+    "${hpx_SOURCE_DIR}/examples/quickstart/hello_world.cpp"
+    "${hpx_SOURCE_DIR}/examples/quickstart/simplest_hello_world.cpp"
+    "${hpx_SOURCE_DIR}/examples/quickstart/error_handling.cpp"
+    "${hpx_SOURCE_DIR}/examples/accumulator/accumulators/server/managed_accumulator.hpp"
+    "${hpx_SOURCE_DIR}/examples/accumulator/accumulators/stubs/managed_accumulator.hpp"
+    "${hpx_SOURCE_DIR}/examples/accumulator/accumulators/managed_accumulator.hpp"
+    "${hpx_SOURCE_DIR}/examples/accumulator/accumulators/managed_accumulator.cpp"
+    "${hpx_SOURCE_DIR}/examples/accumulator/managed_accumulator_client.cpp"
+    "${hpx_SOURCE_DIR}/examples/hello_world_component/hello_world_component.hpp"
+    "${hpx_SOURCE_DIR}/examples/hello_world_component/hello_world_component.cpp"
+    "${hpx_SOURCE_DIR}/examples/performance_counters/simplest_performance_counter.cpp"
+    "${hpx_SOURCE_DIR}/examples/performance_counters/sine/server/sine.hpp"
+    "${hpx_SOURCE_DIR}/hpx/performance_counters/performance_counter.hpp"
+    "${hpx_SOURCE_DIR}/hpx/performance_counters/base_performance_counter.hpp")
+
+set(all_documentation_dependencies
     ${documentation_files}
-    ${hpx_SOURCE_DIR}/examples/quickstart/hello_world.cpp
-    ${hpx_SOURCE_DIR}/examples/quickstart/simplest_hello_world.cpp
-    ${hpx_SOURCE_DIR}/examples/quickstart/error_handling.cpp
-    ${hpx_SOURCE_DIR}/examples/accumulator/accumulators/server/managed_accumulator.hpp
-    ${hpx_SOURCE_DIR}/examples/accumulator/accumulators/stubs/managed_accumulator.hpp
-    ${hpx_SOURCE_DIR}/examples/accumulator/accumulators/managed_accumulator.hpp
-    ${hpx_SOURCE_DIR}/examples/accumulator/accumulators/managed_accumulator.cpp
-    ${hpx_SOURCE_DIR}/examples/accumulator/managed_accumulator_client.cpp
-    ${hpx_SOURCE_DIR}/examples/hello_world_component/hello_world_component.hpp
-    ${hpx_SOURCE_DIR}/examples/hello_world_component/hello_world_component.cpp
-    ${hpx_SOURCE_DIR}/examples/performance_counters/simplest_performance_counter.cpp
-    ${hpx_SOURCE_DIR}/examples/performance_counters/sine/server/sine.hpp
-    ${hpx_SOURCE_DIR}/hpx/performance_counters/performance_counter.hpp
-    ${hpx_SOURCE_DIR}/hpx/performance_counters/base_performance_counter.hpp)
+    ${documentation_dependencies})
 
 # Add all files here which should be passed to doxygen
 set(doxygen_dependencies
-    ${hpx_SOURCE_DIR}/hpx/hpx_fwd.hpp
-    ${hpx_SOURCE_DIR}/hpx/hpx_init.hpp
-    ${hpx_SOURCE_DIR}/hpx/hpx_start.hpp
-    ${hpx_SOURCE_DIR}/hpx/hpx_finalize.hpp
-    ${hpx_SOURCE_DIR}/hpx/exception.hpp
-    ${hpx_SOURCE_DIR}/hpx/runtime/actions/action_support.hpp
-    ${hpx_SOURCE_DIR}/hpx/runtime/actions/plain_action.hpp
-    ${hpx_SOURCE_DIR}/hpx/runtime/actions/component_non_const_action.hpp
-    ${hpx_SOURCE_DIR}/hpx/runtime/components/new.hpp
-    ${hpx_SOURCE_DIR}/hpx/performance_counters/manage_counter_type.hpp)
+    "${hpx_SOURCE_DIR}/hpx/hpx_fwd.hpp"
+    "${hpx_SOURCE_DIR}/hpx/hpx_init.hpp"
+    "${hpx_SOURCE_DIR}/hpx/hpx_start.hpp"
+    "${hpx_SOURCE_DIR}/hpx/hpx_finalize.hpp"
+    "${hpx_SOURCE_DIR}/hpx/error.hpp"
+    "${hpx_SOURCE_DIR}/hpx/exception.hpp"
+    "${hpx_SOURCE_DIR}/hpx/exception_list.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/execution_policy.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/algorithm.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/task_region.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/all_any_none.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/copy.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/count.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/equal.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/fill.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/find.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/for_each.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/generate.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/minmax.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/mismatch.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/move.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/reduce.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/replace.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/reverse.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/rotate.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/swap_ranges.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/transform.hpp"
+    "${hpx_SOURCE_DIR}/hpx/parallel/detail/transform_reduce.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/get_ptr.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/actions/action_support.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/actions/plain_action.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/actions/component_non_const_action.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/components/new.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/components/copy_component.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/components/migrate_component.hpp"
+    "${hpx_SOURCE_DIR}/hpx/runtime/naming/unmanaged.hpp"
+    "${hpx_SOURCE_DIR}/hpx/lcos/broadcast.hpp"
+    "${hpx_SOURCE_DIR}/hpx/lcos/fold.hpp"
+    "${hpx_SOURCE_DIR}/hpx/lcos/reduce.hpp"
+    "${hpx_SOURCE_DIR}/hpx/performance_counters/manage_counter_type.hpp")
+
 
 foreach(doxygen_input ${doxygen_dependencies})
   set(doxygen_inputs "${doxygen_inputs} ${doxygen_input}")
@@ -55,11 +89,14 @@ set(doxygen_definition_list
     "DOXYGEN:=1"
     "BOOST_SCOPED_ENUM_START(x):=enum x"
     "BOOST_SCOPED_ENUM_END="
+    "BOOST_SYSTEM_NOEXCEPT="
     "HPX_EXCEPTION_EXPORT="
     "HPX_EXPORT="
     "HPX_API_EXPORT="
     "HPX_STD_FUNCTION=std::function"
-    "extern=")
+    "extern="
+    "BOOST_NOEXCEPT="
+    "HPX_INLINE_NAMESPACE(x)=namespace x")
 
 #############################################################################
 # Definitions for autodoc.doxy.in
@@ -74,18 +111,18 @@ foreach(doxygen_input ${doxygen_dependencies})
   set(doxygen_inputs "${doxygen_inputs} ${doxygen_input}")
 endforeach()
 
-hpx_info("doxygen" "Creating ${CMAKE_CURRENT_BINARY_DIR}/hpx_autodoc.doxy")
-configure_file(${hpx_SOURCE_DIR}/cmake/templates/autodoc.doxy.in
-                ${CMAKE_CURRENT_BINARY_DIR}/hpx_autodoc.doxy
+hpx_info("Creating Doxyfile: ${CMAKE_CURRENT_BINARY_DIR}/hpx_autodoc.doxy")
+configure_file("${hpx_SOURCE_DIR}/cmake/templates/autodoc.doxy.in"
+                "${CMAKE_CURRENT_BINARY_DIR}/hpx_autodoc.doxy"
                 @ONLY)
 
 #############################################################################
-set(documentation_dependencies ${documentation_dependencies}
+set(all_documentation_dependencies ${all_documentation_dependencies}
     ${CMAKE_CURRENT_BINARY_DIR}/hpx_autodoc.xml)
 
 # Generate Doxygen from the source code.
 hpx_source_to_boostbook(hpx_autodoc
-    CATALOG ${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml
+    CATALOG "${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml"
     DEPENDENCIES ${doxygen_dependencies})
 
 set(quickbook_fixme_mode "-D__hpx_disable_fixme__")
@@ -95,33 +132,158 @@ endif()
 
 if(BOOSTAUTOINDEX_FOUND)
   set(auto_index_mode "-D__use_auto_index__")
-  set(auto_index_xsl_param --stringparam index.on.type 1)
+  set(auto_index_xsl_param index.on.type=1)
 endif()
 
 set(image
-    images/hpx_${HPX_MAJOR_VERSION}_${HPX_MINOR_VERSION}_${HPX_PATCH_LEVEL}.png)
+    images/hpx_${HPX_MAJOR_VERSION}_${HPX_MINOR_VERSION}_${HPX_PATCH_LEVEL}_draft.png)
+
+set(HPX_CMAKE_OPTIONS "")
+foreach(_cat ${HPX_OPTION_CATEGORIES})
+  string(REPLACE " " "_" _cat_link "${_cat}")
+  set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}* [link build_system.cmake_variables.${_cat_link} ${_cat} Options]\n")
+endforeach()
+set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}\n")
+
+get_cmake_property(_variableNames CACHE_VARIABLES)
+foreach(_cat ${HPX_OPTION_CATEGORIES})
+  string(REPLACE " " "_" _cat_anchor "${_cat}")
+  set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}[#build_system.cmake_variables.${_cat_anchor}][h3 ${_cat} Options]\n")
+  foreach (_variableName ${_variableNames})
+    if(${_variableName}Category)
+      if(_cat STREQUAL ${_variableName}Category)
+        string(REPLACE " " "_" _variableName_anchor "${_variableName}")
+        set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}* [link build_system.cmake_variables.${_variableName_anchor} ${_variableName}]\n")
+      endif()
+    endif()
+  endforeach()
+  set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}\n")
+  set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}[variablelist\n")
+
+  foreach (_variableName ${_variableNames})
+    if(${_variableName}Category)
+      if(_cat STREQUAL ${_variableName}Category)
+        string(REPLACE " " "_" _variableName_anchor "${_variableName}")
+
+        get_property(_doc CACHE "${_variableName}" PROPERTY HELPSTRING)
+        get_property(_type CACHE "${_variableName}" PROPERTY TYPE)
+        if(NOT _type STREQUAL "UNINITIALIZED")
+          set(_variableName "${_variableName}:${_type}")
+        endif()
+        set(HPX_CMAKE_OPTIONS
+          "${HPX_CMAKE_OPTIONS}    ")
+        set(HPX_CMAKE_OPTIONS
+          "${HPX_CMAKE_OPTIONS}    [[[#build_system.cmake_variables.${_variableName_anchor}] `${_variableName}`][${_doc}]]\n")
+      endif()
+    endif()
+  endforeach()
+
+  set(HPX_CMAKE_OPTIONS "${HPX_CMAKE_OPTIONS}] [/ ${_cat} Options]\n\n")
+endforeach()
+
+configure_file(
+  "${hpx_SOURCE_DIR}/cmake/templates/cmake_variables.qbk.in"
+  "${hpx_SOURCE_DIR}/docs/manual/build_system/cmake_variables.qbk"
+  @ONLY
+)
+
+set(toolchains_base_dir ${hpx_SOURCE_DIR}/cmake/toolchains/)
+file(GLOB _toolchain_files ${toolchains_base_dir} ${toolchains_base_dir}*.cmake)
+
+set(HPX_CMAKE_TOOLCHAINS_LIST "")
+set(HPX_CMAKE_TOOLCHAINS "")
+foreach(_toolchain ${_toolchain_files})
+  get_filename_component(_toolchain_name ${_toolchain} NAME_WE)
+  string(REGEX REPLACE "[ -]" "_" _toolchain_anchor "${_toolchain_name}")
+  set(HPX_CMAKE_TOOLCHAINS_LIST "${HPX_CMAKE_TOOLCHAINS_LIST}* [link hpx.manual.build_system.building_hpx.cmake_toolchains.${_toolchain_anchor} ${_toolchain_name}]\n")
+  set(HPX_CMAKE_TOOLCHAINS "${HPX_CMAKE_TOOLCHAINS}[heading:${_toolchain_anchor} ${_toolchain_name}]\n")
+  set(HPX_CMAKE_TOOLCHAINS "${HPX_CMAKE_TOOLCHAINS}\n``\n")
+  file(STRINGS ${_toolchain} _toolchain_content)
+  foreach(_line ${_toolchain_content})
+    set(HPX_CMAKE_TOOLCHAINS "${HPX_CMAKE_TOOLCHAINS}    ${_line}\n")
+  endforeach()
+  set(HPX_CMAKE_TOOLCHAINS "${HPX_CMAKE_TOOLCHAINS}``\n")
+  set(HPX_CMAKE_TOOLCHAINS "${HPX_CMAKE_TOOLCHAINS}\n")
+endforeach()
+
+
+configure_file(
+  "${hpx_SOURCE_DIR}/cmake/templates/cmake_toolchains.qbk.in"
+  "${hpx_SOURCE_DIR}/docs/manual/build_system/cmake_toolchains.qbk"
+  @ONLY
+)
 
 hpx_quickbook_to_html(hpx
   SOURCE hpx.qbk
   INDEX hpx.idx
-  DEPENDENCIES ${documentation_dependencies}
-  CATALOG ${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml
-  XSLTPROC_ARGS --stringparam chunk.section.depth 4
-                --stringparam chunk.first.sections 1
-                --stringparam toc.section.depth 4
-                --stringparam toc.max.depth 4
-                --stringparam generate.section.toc.level 4
-                --stringparam boost.image.src ${image}
-                --stringparam boost.image.w 458
-                --stringparam boost.image.h 112
-                --stringparam boost.image.alt "HPX - High Performance ParalleX"
+  DEPENDENCIES
+    ${all_documentation_dependencies}
+    "${hpx_SOURCE_DIR}/docs/manual/build_system/cmake_variables.qbk"
+    "${hpx_SOURCE_DIR}/docs/manual/build_system/cmake_toolchains.qbk"
+  CATALOG "${CMAKE_CURRENT_BINARY_DIR}/boostbook_catalog.xml"
+  XSLTPROC_ARGS chunk.section.depth=4
+                chunk.first.sections=1
+                toc.section.depth=4
+                toc.max.depth=4
+                generate.section.toc.level=4
+                boost.image.src=${image}
+                boost.image.w=440
+                boost.image.h=104
+                boost.image.alt="HPX - High Performance ParalleX"
                 ${auto_index_xsl_param}
   QUICKBOOK_ARGS ${quickbook_fixme_mode} ${auto_index_mode}
-  AUTOINDEX_ARGS --internal-index)
+  AUTOINDEX_ARGS --internal-index
+  SINGLEPAGE ${HPX_BUILD_DOCUMENTATION_SINGLEPAGE})
 
-add_custom_target(docs
-  DEPENDS hpx_HTML.manifest
-  SOURCES ${documentation_files})
+if(FOP_FOUND)
+  # This assumes that Quickbook -> BoostBook succeeded above.
+#  hpx_quickbook_to_boostbook(hpx_pdf SOURCE hpx.qbk
+#    DEPENDENCIES ${all_documentation_dependencies}
+#    QUICKBOOK_ARGS ${quickbook_fixme_mode} ${auto_index_mode}
+#    NODOXYGEN)
+
+  if(BOOSTAUTOINDEX_FOUND)
+    hpx_docbook_to_xslfo(hpx SOURCE hpx_auto_index.dbk
+                         XSLTPROC_ARGS index.on.type=1)
+  else()
+    hpx_docbook_to_xslfo(hpx SOURCE hpx.dbk)
+  endif()
+
+  hpx_xslfo_to_pdf(hpx SOURCE hpx.fo)
+endif()
+
+if(FOP_FOUND)
+  add_custom_target(docs
+    DEPENDS hpx_HTML.manifest hpx.pdf
+    SOURCES ${documentation_files})
+else()
+  add_custom_target(docs
+    DEPENDS hpx_HTML.manifest
+    SOURCES ${documentation_files})
+endif()
+
+if(HPX_BUILD_DOCUMENTATION_SINGLEPAGE)
+  add_custom_target(singlepage_docs
+    DEPENDS hpx_singlepage_HTML.manifest
+    SOURCES ${documentation_files})
+endif()
+
+# Create links to properly view the docs in the build directory
+set(DOCS_OUTPUT_DIR "${CMAKE_BINARY_DIR}/share/hpx-${HPX_VERSION}/docs/html")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${DOCS_OUTPUT_DIR}" )
+execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${DOCS_OUTPUT_DIR}/code" )
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/docs/html/src" "${DOCS_OUTPUT_DIR}/src")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/docs/html/images" "${DOCS_OUTPUT_DIR}/images")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/hpx" "${DOCS_OUTPUT_DIR}/code/hpx")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/src" "${DOCS_OUTPUT_DIR}/code/src")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/examples" "${DOCS_OUTPUT_DIR}/code/examples")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E create_symlink "${hpx_SOURCE_DIR}/tests" "${DOCS_OUTPUT_DIR}/code/tests")
 
 source_group(Documentation FILES ${base_files})
 source_group("Documentation\\Manual" FILES ${manual_files})
@@ -133,3 +295,17 @@ endif()
 set_source_files_properties(${documentation_files}
   PROPERTIES HEADER_FILE_ONLY TRUE)
 
+###############################################################################
+# handle generating docs for github pages
+add_custom_target(git_docs
+  COMMAND "${CMAKE_COMMAND}"
+    -DHPX_SOURCE_DIR:PATH=${CMAKE_SOURCE_DIR}
+    -DHPX_VERSION:STRING=${HPX_VERSION}
+    -DHPX_DOCUMENTATION_FILES=\"${documentation_dependencies}\"
+    -P "${CMAKE_SOURCE_DIR}/cmake/HPX_UpdateGitDocs.cmake"
+  VERBATIM)
+
+add_dependencies(git_docs docs)
+if(HPX_BUILD_DOCUMENTATION_SINGLEPAGE)
+  add_dependencies(git_docs singlepage_docs)
+endif()

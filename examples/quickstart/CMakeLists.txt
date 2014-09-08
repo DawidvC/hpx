@@ -1,14 +1,19 @@
-# Copyright (c) 2007-2013 Hartmut Kaiser
+# Copyright (c) 2007-2014 Hartmut Kaiser
 # Copyright (c) 2011      Bryce Adelstein-Lelbach
 #
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(example_programs
+    allow_unknown_options
     component_ctors
     component_in_executable
     component_inheritance
     component_inheritance_simple
+    component_with_executor
+    composable_guard
+    customize_async
+    data_actions
     error_handling
     event_synchronization
     factorial
@@ -16,43 +21,65 @@ set(example_programs
     fibonacci_await
     fibonacci_one
     fibonacci_futures
+    fibonacci_futures_distributed
     fractals
     fractals_struct
-    #fractals_oclm
     interest_calculator
     non_atomic_rma
     pingpong
     print_to_console
     quicksort
+    simple_future_continuation
     simplest_hello_world
+    timed_futures
     timed_wake
     use_main_thread
     wait_composition
+    zerocopy_rdma
    )
 
-if(HPX_HAVE_CXX11_LAMBDAS)
+if(HPX_LOCAL_SCHEDULER OR HPX_ALL_SCHEDULERS)
   set(example_programs ${example_programs}
-      hello_world
-      1d_wave_equation
-      fibonacci_dataflow
+      fractals_executor
      )
 endif()
 
-set(component_in_executable_FLAGS DEPENDENCIES iostreams_component)
-set(component_ctors_FLAGS DEPENDENCIES iostreams_component)
-set(event_synchronization_FLAGS DEPENDENCIES iostreams_component)
-
-set(error_handling_FLAGS DEPENDENCIES iostreams_component)
-if(HPX_USE_COMPRESSION_SNAPPY AND SNAPPY_FOUND)
-  set(hello_world_FLAGS DEPENDENCIES iostreams_component compress_snappy_lib)
-else()
-  set(hello_world_FLAGS DEPENDENCIES iostreams_component)
+if(HPX_WITH_CXX11_LAMBDAS)
+  set(example_programs ${example_programs}
+      1d_wave_equation
+      hello_world
+      fibonacci_dataflow
+      pipeline1
+      vector_zip_dotproduct
+      vector_counting_dotproduct
+     )
 endif()
-set(1d_wave_equation_FLAGS DEPENDENCIES iostreams_component)
-set(simplest_hello_world_FLAGS DEPENDENCIES iostreams_component)
-set(component_inheritance_FLAGS DEPENDENCIES iostreams_component)
-set(component_inheritance_simple_FLAGS DEPENDENCIES iostreams_component)
-set(interest_calculator_FLAGS DEPENDENCIES dataflow_component)
+
+set(allow_unknown_options_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(component_in_executable_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(component_ctors_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(component_with_executor_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(customize_async_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(event_synchronization_FLAGS COMPONENT_DEPENDENCIES iostreams)
+
+set(error_handling_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(fractals_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(fractals_executor_FLAGS COMPONENT_DEPENDENCIES iostreams)
+if(HPX_HAVE_COMPRESSION_SNAPPY AND SNAPPY_FOUND)
+  set(hello_world_FLAGS COMPONENT_DEPENDENCIES iostreams DEPENDENCIES compress_snappy_lib)
+else()
+  set(hello_world_FLAGS COMPONENT_DEPENDENCIES iostreams)
+endif()
+set(1d_wave_equation_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(simplest_hello_world_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(component_inheritance_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(component_inheritance_simple_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(interest_calculator_FLAGS COMPONENT_DEPENDENCIES dataflow)
+set(simple_future_continuation_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(timed_futures_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(pingpong_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(vector_zip_dotproduct_FLAGS COMPONENT_DEPENDENCIES iostreams)
+set(vector_counting_dotproduct_FLAGS COMPONENT_DEPENDENCIES iostreams)
 
 foreach(example_program ${example_programs})
   set(sources
@@ -64,7 +91,7 @@ foreach(example_program ${example_programs})
   add_hpx_executable(${example_program}
                      SOURCES ${sources}
                      ${${example_program}_FLAGS}
-                     FOLDER "Examples/Quickstart/${example_program}")
+                     FOLDER "Examples/Quickstart")
 
   # add a custom target for this example
   add_hpx_pseudo_target(examples.quickstart.${example_program})

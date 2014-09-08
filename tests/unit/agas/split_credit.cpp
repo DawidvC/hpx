@@ -44,15 +44,16 @@ using hpx::find_here;
 
 ///////////////////////////////////////////////////////////////////////////////
 // helper functions
-inline boost::uint32_t get_credit(id_type const& id)
+inline boost::uint64_t get_credit(id_type const& id)
 {
     return hpx::naming::detail::get_credit_from_gid(id.get_gid());
 }
 
-inline id_type split_credits(id_type const& id, int frac = 2)
+inline id_type split_credits(id_type const& id)
 {
-    return id_type(split_credits_for_gid(
-        const_cast<id_type&>(id).get_gid(), frac), id_type::managed);
+    return id_type(
+        split_credits_for_gid(const_cast<id_type&>(id).get_gid()),
+        id_type::managed);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,11 +64,27 @@ void hpx_test_main(
     variables_map& vm
     )
 {
+    boost::uint64_t const hpx_globalcredit_initial = HPX_GLOBALCREDIT_INITIAL;
+
+    // HPX_GLOBALCREDIT_INITIAL should be a power of 2
+    boost::uint16_t log2_initial_credit =
+        hpx::naming::detail::log2(hpx_globalcredit_initial);
+    boost::uint64_t restored_initial_credits =
+        hpx::naming::detail::power2(log2_initial_credit);
+    HPX_TEST_EQ(restored_initial_credits, hpx_globalcredit_initial);
+
     {
         Client object(find_here());
 
         id_type g0 = split_credits(object.get_gid());
+
+        HPX_TEST_EQ(get_credit(object.get_gid()), hpx_globalcredit_initial/2);
+        HPX_TEST_EQ(get_credit(g0), hpx_globalcredit_initial/2);
+
         id_type g1 = split_credits(object.get_gid());
+
+        HPX_TEST_EQ(get_credit(object.get_gid()), hpx_globalcredit_initial/4);
+        HPX_TEST_EQ(get_credit(g1), hpx_globalcredit_initial/4);
 
         cout << "  " << object.get_gid() << " : "
                      << get_credit(object.get_gid()) << "\n"

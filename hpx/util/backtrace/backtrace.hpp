@@ -97,6 +97,8 @@ namespace hpx { namespace util
             return stack_trace::get_symbols(&frames_.front(),frames_.size());
         }
 
+        HPX_BACKTRACE_DECL std::string trace_on_new_stack() const;
+
         void trace(std::ostream &out) const
         {
             if(frames_.empty())
@@ -138,8 +140,17 @@ namespace hpx { namespace util
         return details::trace_manip(tr);
     }
 
-    inline std::string trace()
-    { return backtrace().trace(); }
+    inline std::string trace(
+        std::size_t frames_no = backtrace::default_stack_size) //-V659
+    {
+        return backtrace(frames_no).trace();
+    }
+
+    inline std::string trace_on_new_stack(
+        std::size_t frames_no = backtrace::default_stack_size)
+    {
+        return backtrace(frames_no).trace_on_new_stack();
+    }
 
 }} // hpx::util
 

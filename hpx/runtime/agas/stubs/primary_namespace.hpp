@@ -9,7 +9,8 @@
 #define HPX_5D993B14_5B65_4231_A84E_90AD1807EB8F
 
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/include/async.hpp>
+#include <hpx/lcos/future.hpp>
+#include <hpx/lcos/packaged_action.hpp>
 #include <hpx/runtime/agas/server/primary_namespace.hpp>
 
 namespace hpx { namespace agas { namespace stubs
@@ -26,14 +27,7 @@ struct HPX_EXPORT primary_namespace
         naming::id_type const& gid
       , request const& req
       , threads::thread_priority priority = threads::thread_priority_default
-        )
-    {
-        typedef server_type::service_action action_type;
-
-        lcos::packaged_action<action_type, Result> p;
-        p.apply_p(gid, priority, req);
-        return p.get_future();
-    }
+        );
 
     /// Fire-and-forget semantics.
     ///
@@ -47,7 +41,8 @@ struct HPX_EXPORT primary_namespace
     static void service_non_blocking(
         naming::id_type const& gid
       , request const& req
-      , HPX_STD_FUNCTION<void(boost::system::error_code const&, std::size_t)> const& f
+      , HPX_STD_FUNCTION<void(boost::system::error_code const&,
+            parcelset::parcel const&)> const& f
       , threads::thread_priority priority = threads::thread_priority_default
         );
 
@@ -66,14 +61,7 @@ struct HPX_EXPORT primary_namespace
         naming::id_type const& gid
       , std::vector<request> const& reqs
       , threads::thread_priority priority = threads::thread_priority_default
-        )
-    {
-        typedef server_type::bulk_service_action action_type;
-
-        lcos::packaged_action<action_type> p;
-        p.apply_p(gid, priority, reqs);
-        return p.get_future();
-    }
+        );
 
     /// Fire-and-forget semantics.
     ///
@@ -97,14 +85,33 @@ struct HPX_EXPORT primary_namespace
     static naming::gid_type get_service_instance(naming::gid_type const& dest)
     {
         boost::uint32_t service_locality_id = naming::get_locality_id_from_gid(dest);
+        if (service_locality_id == naming::invalid_locality_id)
+        {
+            HPX_THROW_EXCEPTION(bad_parameter,
+                "primary_namespace::get_service_instance",
+                boost::str(boost::format(
+                        "can't retrieve a valid locality id from global address (%1%): "
+                    ) % dest));
+            return naming::gid_type();
+        }
         naming::gid_type service(HPX_AGAS_PRIMARY_NS_MSB, HPX_AGAS_PRIMARY_NS_LSB);
         return naming::replace_locality_id(service, service_locality_id);
+    }
+
+    static naming::gid_type get_service_instance(naming::id_type const& dest)
+    {
+        return get_service_instance(dest.get_gid());
     }
 
     static bool is_service_instance(naming::gid_type const& gid)
     {
         return gid.get_lsb() == HPX_AGAS_PRIMARY_NS_LSB &&
             (gid.get_msb() & ~naming::gid_type::locality_id_mask) == HPX_AGAS_NS_MSB;
+    }
+
+    static bool is_service_instance(naming::id_type const& id)
+    {
+        return is_service_instance(id.get_gid());
     }
 };
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -158,12 +158,13 @@ namespace hpx { namespace components
         /// \brief Create one new component instance and initialize it using
         ///        the using the given constructor function.
         ///
-        /// \param f  [in] The constructor function to call in order to
-        ///           initialize the newly allocated object.
+        /// \param ctor  [in] The constructor function to call in order to
+        ///              initialize the newly allocated object.
         ///
         /// \return   Returns the GID of the first newly created component
-        ///           instance. 
-        naming::gid_type create_with_args(HPX_STD_FUNCTION<void(void*)> const& ctor)
+        ///           instance.
+        naming::gid_type create_with_args(
+            HPX_STD_FUNCTION<void(void*)> const& ctor)
         {
             if (isenabled_)
             {
@@ -180,13 +181,45 @@ namespace hpx { namespace components
             return naming::invalid_gid;
         }
 
+        /// \brief Create one new component instance and initialize it using
+        ///        the using the given constructor function. Assign the give
+        ///        GID to the new object.
+        ///
+        /// \param assign_gid [in] The GID to assign to the newly created object.
+        /// \param ctor       [in] The constructor function to call in order to
+        ///                   initialize the newly allocated object.
+        ///
+        /// \return   Returns the GID of the first newly created component
+        ///           instance (this is the same as assign_gid, if successful).
+        naming::gid_type create_with_args(
+            naming::gid_type const& assign_gid,
+            HPX_STD_FUNCTION<void(void*)> const& ctor)
+        {
+            if (isenabled_)
+            {
+                naming::gid_type id = server::create<Component>(assign_gid, ctor);
+                if (id)
+                    ++refcnt_;
+                return id;
+            }
+
+            HPX_THROW_EXCEPTION(bad_request,
+                "component_factory::create_with_args",
+                "this factory instance is disabled for this locality (" +
+                get_component_name() + ")");
+            return naming::invalid_gid;
+        }
+
         /// \brief Destroy one or more component instances
         ///
         /// \param gid    [in] The gid of the first component instance to
         ///               destroy.
-        void destroy(naming::gid_type const& gid)
+        /// \param addr   [in] The resolved address of the first component
+        ///               instance to destroy.
+        void destroy(naming::gid_type const& gid,
+            naming::address const& addr)
         {
-            server::destroy<Component>(gid);
+            server::destroy<Component>(gid, addr);
             --refcnt_;
         }
 
@@ -199,6 +232,21 @@ namespace hpx { namespace components
         {
             return refcnt_;
         }
+
+#if defined(HPX_HAVE_SECURITY)
+        /// \brief Return the required capabilities necessary to create an
+        ///        instance of a component using this factory instance.
+        ///
+        /// \return Returns required capabilities necessary to create a new
+        ///         instance of a component using this factory instance.
+        virtual components::security::capability
+            get_required_capabilities() const
+        {
+            using namespace components::security;
+            return Component::get_required_capabilities(
+                traits::capability<>::capability_create_component);
+        }
+#endif
 
     protected:
         util::section global_settings_;
@@ -235,6 +283,11 @@ namespace hpx { namespace components
         HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_, HPX_UTIL_PP_NARG(__VA_ARGS__)\
     )(__VA_ARGS__))                                                           \
 /**/
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_1(ComponentType)               \
+    HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_3(                                 \
+        ComponentType, ComponentType, ::hpx::components::factory_check)       \
+    HPX_DEFINE_GET_COMPONENT_TYPE(ComponentType::wrapped_type)                \
+/**/
 #define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_2(ComponentType, componentname)\
     HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_3(                                 \
         ComponentType, componentname, ::hpx::components::factory_check)       \
@@ -248,6 +301,54 @@ namespace hpx { namespace components
         hpx::components::component_factory<ComponentType>, componentname)     \
     template struct hpx::components::component_factory<ComponentType>;        \
     HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                                \
+        ComponentType, componentname, state)                                  \
+/**/
+
+///////////////////////////////////////////////////////////////////////////////
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC(...)                   \
+    HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_(__VA_ARGS__)              \
+/**/
+
+#define HPX_REGISTER_ENABLED_COMPONENT_FACTORY_DYNAMIC(ComponentType,         \
+            componentname)                                                    \
+        HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_3(                     \
+            ComponentType, componentname, ::hpx::components::factory_enabled) \
+        HPX_DEFINE_GET_COMPONENT_TYPE(ComponentType::wrapped_type)            \
+/**/
+
+#define HPX_REGISTER_DISABLED_COMPONENT_FACTORY_DYNAMIC(ComponentType,        \
+            componentname)                                                    \
+        HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_3(                     \
+            ComponentType, componentname, ::hpx::components::factory_disabled)\
+        HPX_DEFINE_GET_COMPONENT_TYPE(ComponentType::wrapped_type)            \
+/**/
+
+
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_(...)                  \
+    HPX_UTIL_EXPAND_(BOOST_PP_CAT(                                            \
+        HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_,                      \
+            HPX_UTIL_PP_NARG(__VA_ARGS__)                                     \
+    )(__VA_ARGS__))                                                           \
+/**/
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_1(ComponentType)       \
+    HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_3(                         \
+        ComponentType, ComponentType, ::hpx::components::factory_check)       \
+    HPX_DEFINE_GET_COMPONENT_TYPE(ComponentType::wrapped_type)                \
+/**/
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_2(ComponentType,       \
+        componentname)                                                        \
+    HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_3(                         \
+        ComponentType, componentname, ::hpx::components::factory_check)       \
+    HPX_DEFINE_GET_COMPONENT_TYPE(ComponentType::wrapped_type)                \
+/**/
+#define HPX_REGISTER_MINIMAL_COMPONENT_FACTORY_DYNAMIC_3(                     \
+        ComponentType, componentname, state)                                  \
+    HPX_REGISTER_COMPONENT_FACTORY_DYNAMIC(                                   \
+        hpx::components::component_factory<ComponentType>, componentname)     \
+    HPX_DEF_UNIQUE_COMPONENT_NAME(                                            \
+        hpx::components::component_factory<ComponentType>, componentname)     \
+    template struct hpx::components::component_factory<ComponentType>;        \
+    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                        \
         ComponentType, componentname, state)                                  \
 /**/
 

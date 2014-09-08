@@ -4,14 +4,10 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-if(NOT HPX_FINDPACKAGE_LOADED)
-  include(HPX_FindPackage)
-endif()
-
 # This if statement is specific to Lorene, and should not be copied into other
 # Find cmake scripts.
 if(NOT LORENE_ROOT AND NOT $ENV{HOME_LORENE} STREQUAL "")
-  set(LORENE_ROOT $ENV{HOME_LORENE})
+  set(LORENE_ROOT "$ENV{HOME_LORENE}")
 endif()
 
 if(LORENE_USE_SYSTEM)
@@ -19,7 +15,7 @@ if(LORENE_USE_SYSTEM)
 endif()
 
 if(LORENE_ROOT)
-  set(LORENE_F77_ROOT ${LORENE_ROOT})
+  set(LORENE_F77_ROOT "${LORENE_ROOT}")
 endif()
 
 if(LORENE_USE_SYSTEM)
@@ -27,7 +23,7 @@ if(LORENE_USE_SYSTEM)
 endif()
 
 if(LORENE_ROOT)
-  set(LORENE_EXPORT_ROOT ${LORENE_ROOT})
+  set(LORENE_EXPORT_ROOT "${LORENE_ROOT}")
 endif()
 
 hpx_find_package(LORENE

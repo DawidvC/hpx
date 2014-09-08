@@ -24,8 +24,8 @@ namespace hpx { namespace lcos
         dataflow_base()
         {}
 
-        dataflow_base(future<naming::id_type> const & promise)
-            : impl(new detail::dataflow_base_impl(promise))
+        explicit dataflow_base(lcos::future<naming::id_type> promise)
+            : impl(new detail::dataflow_base_impl(std::move(promise)))
         {}
 
         void connect(naming::id_type const & id) const

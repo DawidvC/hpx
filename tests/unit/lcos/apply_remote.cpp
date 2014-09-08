@@ -12,12 +12,14 @@
 ///////////////////////////////////////////////////////////////////////////////
 boost::int32_t final_result;
 hpx::util::spinlock result_mutex;
+hpx::lcos::local::condition_variable result_cv;
 
 void receive_result(boost::int32_t i)
 {
     hpx::util::spinlock::scoped_lock l(result_mutex);
     if (i > final_result)
         final_result = i;
+    result_cv.notify_one();
 }
 HPX_PLAIN_ACTION(receive_result);
 
@@ -30,6 +32,13 @@ void increment(hpx::id_type const& there, boost::int32_t i)
     hpx::apply(receive_result_action(), there, accumulator.load());
 }
 HPX_PLAIN_ACTION(increment);
+
+void increment_with_future(hpx::id_type const& there, hpx::shared_future<boost::int32_t> fi)
+{
+    accumulator += fi.get();
+    hpx::apply(receive_result_action(), there, accumulator.load());
+}
+HPX_PLAIN_ACTION(increment_with_future);
 
 ///////////////////////////////////////////////////////////////////////////////
 struct increment_server
@@ -56,7 +65,7 @@ int hpx_main()
 {
     hpx::id_type here = hpx::find_here();
     hpx::id_type there = here;
-    if (hpx::get_num_localities() > 1)
+    if (hpx::get_num_localities_sync() > 1)
     {
         std::vector<hpx::id_type> localities = hpx::find_remote_localities();
         there = localities[0];
@@ -70,6 +79,20 @@ int hpx_main()
         hpx::apply(inc, there, here, 1);
         hpx::apply(hpx::util::bind(inc, there, here, 1));
         hpx::apply(hpx::util::bind(inc, there, here, _1), 1);
+    }
+
+    {
+        increment_with_future_action inc;
+        hpx::promise<boost::int32_t> p;
+        hpx::shared_future<boost::int32_t> f = p.get_future();
+
+        using hpx::util::placeholders::_1;
+
+        hpx::apply(inc, there, here, f);
+        hpx::apply(hpx::util::bind(inc, there, here, f));
+        hpx::apply(hpx::util::bind(inc, there, here, _1), f);
+
+        p.set_value(1);
     }
 
     {
@@ -98,6 +121,12 @@ int hpx_main()
         hpx::apply<call_action>(inc, here, 1);
     }
 
+    hpx::util::spinlock::scoped_lock l(result_mutex);
+    result_cv.wait_for(result_mutex, boost::chrono::seconds(1),
+        hpx::util::bind(std::equal_to<boost::int32_t>(), boost::ref(final_result), 13));
+
+    HPX_TEST_EQ(final_result, 13);
+
     return hpx::finalize();
 }
 
@@ -108,8 +137,6 @@ int main(int argc, char* argv[])
     // Initialize and run HPX
     HPX_TEST_EQ_MSG(hpx::init(argc, argv), 0,
         "HPX main exited with non-zero status");
-
-    HPX_TEST_EQ(final_result, 10);
 
     return hpx::util::report_errors();
 }

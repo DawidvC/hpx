@@ -3,6 +3,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/version.hpp>
 #include <hpx/runtime.hpp>
 #include <hpx/performance_counters/manage_counter.hpp>
@@ -14,7 +15,7 @@ namespace hpx { namespace performance_counters
     counter_status manage_counter::install(naming::id_type const& id,
         counter_info const& info, error_code& ec)
     {
-        if (0 != counter_) {
+        if (counter_ != naming::invalid_id) {
             HPX_THROWS_IF(ec, hpx::invalid_status, "manage_counter::install",
                 "counter has been already installed");
             return status_invalid_data;
@@ -39,7 +40,7 @@ namespace hpx { namespace performance_counters
     ///////////////////////////////////////////////////////////////////////////
     inline void counter_shutdown(boost::shared_ptr<manage_counter> const& p)
     {
-        BOOST_ASSERT(p);
+        HPX_ASSERT(p);
         p->uninstall();
     }
 

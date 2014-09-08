@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -162,11 +162,35 @@ namespace hpx { namespace components
             return naming::invalid_gid;
         }
 
+        /// \brief Create one new component instance and initialize it using
+        ///        the using the given constructor function. Assign the give
+        ///        GID to the new object.
+        ///
+        /// \param assign_gid [in] The GID to assign to the newly created object.
+        /// \param f  [in] The constructor function to call in order to
+        ///           initialize the newly allocated object.
+        ///
+        /// \return   Returns the GID of the first newly created component
+        ///           instance (this is the same as assign_gid, if successful).
+        naming::gid_type create_with_args(
+            naming::gid_type const& assign_gid,
+            HPX_STD_FUNCTION<void(void*)> const& f)
+        {
+            HPX_THROW_EXCEPTION(bad_request,
+                "plain_component_factory::create_with_args",
+                "create_with_args is not supported by this factory instance (" +
+                get_component_name() + ")");
+            return naming::invalid_gid;
+        }
+
         /// \brief Destroy one or more component instances
         ///
         /// \param gid    [in] The gid of the first component instance to
         ///               destroy.
-        void destroy(naming::gid_type const& /*gid*/)
+        /// \param addr   [in] The resolved address of the first component
+        ///               instance to destroy.
+        void destroy(naming::gid_type const& gid,
+            naming::address const& addr)
         {
         }
 
@@ -179,6 +203,20 @@ namespace hpx { namespace components
         {
             return 1;   // there is always exactly one instance
         }
+
+#if defined(HPX_HAVE_SECURITY)
+        /// \brief Return the required capabilities necessary to create an
+        ///        instance of a component using this factory instance.
+        ///
+        /// \return Returns required capabilities necessary to create a new
+        ///         instance of a component using this factory instance.
+        virtual components::security::capability
+            get_required_capabilities() const
+        {
+            // by default we don't require any capabilities
+            return components::security::capability();
+        }
+#endif
 
     protected:
         bool isenabled_;
@@ -209,8 +247,6 @@ namespace hpx { namespace components
 /**/
 
 #define HPX_REGISTER_PLAIN_ACTION_3(action_type, plain_action_name, state)    \
-    BOOST_CLASS_EXPORT_KEY2(hpx::actions::transfer_action<action_type>,       \
-        BOOST_PP_STRINGIZE(plain_action_name))                                \
     HPX_REGISTER_ACTION_2(action_type, plain_action_name)                     \
     HPX_REGISTER_COMPONENT_FACTORY(                                           \
         hpx::components::plain_component_factory<action_type>,                \
@@ -220,6 +256,40 @@ namespace hpx { namespace components
         plain_action_name)                                                    \
     template struct hpx::components::plain_component_factory<action_type>;    \
     HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                                \
+        hpx::components::server::plain_function<action_type>,                 \
+        plain_action_name, state)                                             \
+    HPX_DEFINE_GET_COMPONENT_TYPE(                                            \
+        hpx::components::server::plain_function<action_type>)                 \
+/**/
+
+///////////////////////////////////////////////////////////////////////////////
+#define HPX_REGISTER_PLAIN_ACTION_DYNAMIC_(...)                               \
+    HPX_UTIL_EXPAND_(BOOST_PP_CAT(                                            \
+        HPX_REGISTER_PLAIN_ACTION_DYNAMIC_, HPX_UTIL_PP_NARG(__VA_ARGS__)     \
+    )(__VA_ARGS__))                                                           \
+/**/
+
+#define HPX_REGISTER_PLAIN_ACTION_DYNAMIC_1(action_type)                      \
+    HPX_REGISTER_PLAIN_ACTION_DYNAMIC_3(action_type, action_type,             \
+        ::hpx::components::factory_check)                                     \
+/**/
+
+#define HPX_REGISTER_PLAIN_ACTION_DYNAMIC_2(action_type, plain_action_name)   \
+    HPX_REGISTER_PLAIN_ACTION_DYNAMIC_3(action_type, plain_action_name,       \
+        ::hpx::components::factory_check)                                     \
+/**/
+
+#define HPX_REGISTER_PLAIN_ACTION_DYNAMIC_3(action_type, plain_action_name,   \
+        state)                                                                \
+    HPX_REGISTER_ACTION_2(action_type, plain_action_name)                     \
+    HPX_REGISTER_COMPONENT_FACTORY_DYNAMIC(                                   \
+        hpx::components::plain_component_factory<action_type>,                \
+        plain_action_name)                                                    \
+    HPX_DEF_UNIQUE_COMPONENT_NAME(                                            \
+        hpx::components::plain_component_factory<action_type>,                \
+        plain_action_name)                                                    \
+    template struct hpx::components::plain_component_factory<action_type>;    \
+    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                        \
         hpx::components::server::plain_function<action_type>,                 \
         plain_action_name, state)                                             \
     HPX_DEFINE_GET_COMPONENT_TYPE(                                            \

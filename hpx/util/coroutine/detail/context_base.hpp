@@ -1,4 +1,5 @@
 //  Copyright (c) 2006, Giovanni P. Deretta
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //
 //  This code may be used under either of the following two licences:
 //
@@ -36,21 +37,24 @@
  * we will play it safe and use an atomic count. The overhead shouldn't
  * be big.
  */
+#include <hpx/util/assert.hpp>
+#include <hpx/util/coroutine/detail/swap_context.hpp> //for swap hints
+#include <hpx/util/coroutine/detail/tss.hpp>
+#include <hpx/util/coroutine/exception.hpp>
+
 #include <cstddef>
 #include <algorithm> //for swap
+#include <map>
 
 #include <boost/atomic.hpp>
-#include <boost/assert.hpp>
 #include <boost/version.hpp>
 #include <boost/intrusive_ptr.hpp>
+
 #if BOOST_VERSION < 104200
 #include <boost/exception.hpp>
 #else
 #include <boost/exception/all.hpp>
 #endif
-
-#include <hpx/util/coroutine/detail/swap_context.hpp> //for swap hints
-#include <hpx/util/coroutine/exception.hpp>
 
 #define HPX_THREAD_MAINTAIN_OPERATIONS_COUNT  0
 
@@ -87,123 +91,149 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
   class context_base : public ContextImpl
   {
   public:
-    enum deleter_mode
-    {
-        deleter_delete = 1,
-        deleter_reset = 2
-    };
-
     typedef ContextImpl context_impl;
     typedef context_base<context_impl> type;
-    typedef boost::intrusive_ptr<type> pointer;
-    typedef void deleter_type(type const*, deleter_mode);
-    typedef void* thread_id_type;
+
+    typedef void deleter_type(type const*);
+    typedef void* thread_id_repr_type;
 
     template <typename Derived>
-    context_base(Derived& derived, std::ptrdiff_t stack_size, thread_id_type id)
+    context_base(Derived& derived, std::ptrdiff_t stack_size, thread_id_repr_type id)
       : context_impl(derived, stack_size),
         m_caller(),
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
         m_counter(0),
+#endif
         m_deleter(&deleter<Derived>),
         m_state(ctx_ready),
         m_exit_state(ctx_exit_not_requested),
         m_exit_status(ctx_not_exited),
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
         m_wait_counter(0),
         m_operation_counter(0),
 #endif
-#if HPX_THREAD_MAINTAIN_PHASE_INFORMATION
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
         m_phase(0),
 #endif
-#if HPX_THREAD_MAINTAIN_THREAD_DATA
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
         m_thread_data(0),
 #endif
         m_type_info(),
         m_thread_id(id)
     {}
 
-    friend
-    void intrusive_ptr_add_ref(type * ctx) {
+    friend void intrusive_ptr_add_ref(type * ctx)
+    {
       ctx->acquire();
     }
 
-    friend
-    void intrusive_ptr_release(type * ctx) {
+    friend void intrusive_ptr_release(type * ctx)
+    {
       ctx->release();
     }
 
-    bool unique() const {
+    bool unique() const
+    {
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
       return count() == 1;
+#else
+      return true;
+#endif
     }
 
-    boost::int64_t count() const {
-      BOOST_ASSERT(m_counter < static_cast<std::size_t>(
+    boost::int64_t count() const
+    {
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
+      HPX_ASSERT(m_counter < static_cast<std::size_t>(
           (std::numeric_limits<boost::int64_t>::max)()));
       return static_cast<boost::int64_t>(m_counter);
+#else
+      return 1;
+#endif
     }
 
-    void acquire() const {
+    void acquire() const
+    {
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
       ++m_counter;
+#endif
     }
 
-    void release() const {
-      BOOST_ASSERT(m_counter);
+    void release()
+    {
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
+      HPX_ASSERT(m_counter);
       if(--m_counter == 0) {
-        m_deleter(this, deleter_delete);
+        m_deleter(this);
       }
+#else
+      m_deleter(this);
+#endif
     }
 
-    void reset() const {
-      m_deleter(this, deleter_reset);
+    void reset()
+    {
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
+      m_phase = 0;
+#endif
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
+      delete_tss_storage(m_thread_data);
+#endif
     }
 
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
-    void count_down() throw() {
-      BOOST_ASSERT(m_operation_counter) ;
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
+    void count_down() throw()
+    {
+      HPX_ASSERT(m_operation_counter);
       --m_operation_counter;
     }
 
-    void count_up() throw() {
+    void count_up() throw()
+    {
       ++m_operation_counter;
     }
 
     // return true if there are operations pending.
-    int pending() const {
+    int pending() const
+    {
       return m_operation_counter;
     }
 #else
-    int pending() const {
+    int pending() const
+    {
       return 0;
     }
 #endif
 
-#if HPX_THREAD_MAINTAIN_PHASE_INFORMATION
-    std::size_t phase() const {
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
+    std::size_t phase() const
+    {
         return m_phase;
     }
 #endif
 
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
     /*
      * A signal may occur only when a context is
      * not running (is delivered synchronously).
      * This means that state MUST NOT be busy.
      * It may be ready or waiting.
-     * returns 'ready()'.
+     * returns 'is_ready()'.
      * Nothrow.
      */
-    bool signal () throw() {
-      BOOST_ASSERT(!running() && !exited());
-      BOOST_ASSERT(m_wait_counter) ;
+    bool signal () throw()
+    {
+      HPX_ASSERT(!running() && !exited());
+      HPX_ASSERT(m_wait_counter) ;
 
       --m_wait_counter;
       if(!m_wait_counter && m_state == ctx_waiting)
         m_state = ctx_ready;
-      return ready();
+      return is_ready();
     }
 #endif
 
-    thread_id_type get_thread_id() const
+    thread_id_repr_type get_thread_id() const
     {
         return m_thread_id;
     }
@@ -219,8 +249,9 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
      *         true otherwise.
      *
      */
-    bool wake_up() {
-      BOOST_ASSERT(ready());
+    bool wake_up()
+    {
+      HPX_ASSERT(is_ready());
       do_invoke();
       // TODO: could use a binary 'or' here to eliminate
       // shortcut evaluation (and a branch), but maybe the compiler is
@@ -238,15 +269,17 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
         } else if(m_exit_status == ctx_exited_exit)
           return false;
         else {
-          BOOST_ASSERT(0 && "unknown exit status");
+          HPX_ASSERT(0 && "unknown exit status");
         }
       }
       return true;
     }
+
     /*
      * Returns true if the context is runnable.
      */
-    bool ready() const {
+    bool is_ready() const
+    {
       return m_state == ctx_ready;
     }
 
@@ -254,15 +287,18 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
      * Returns true if the context is in wait
      * state.
      */
-    bool waiting() const {
+    bool waiting() const
+    {
       return m_state == ctx_waiting;
     }
 
-    bool running() const {
+    bool running() const
+    {
       return m_state == ctx_running;
     }
 
-    bool exited() const {
+    bool exited() const
+    {
       return m_state == ctx_exited;
     }
 
@@ -277,8 +313,9 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     //          uncaught exception.
     // Note, it guarantees that the coroutine is resumed. Can throw only
     // on return.
-    void invoke() {
-      BOOST_ASSERT(ready());
+    void invoke()
+    {
+      HPX_ASSERT(is_ready());
       do_invoke();
       // TODO: could use a binary or here to eliminate
       // shortcut evaluation (and a branch), but maybe the compiler is
@@ -296,7 +333,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
         } else if(m_exit_status == ctx_exited_exit)
           boost::throw_exception(coroutine_exited());
         else {
-          BOOST_ASSERT(0 && "unknown exit status");
+          HPX_ASSERT(0 && "unknown exit status");
         }
       }
     }
@@ -309,19 +346,20 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     // Post: Coroutine is running.
     // Throws: exit_exception, if exit is pending *after* it has been
     //         resumed.
-    void yield() {
-      BOOST_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loops
-      BOOST_ASSERT(running());
-      BOOST_ASSERT(!pending());
+    void yield()
+    {
+      HPX_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loops
+      HPX_ASSERT(running());
+      HPX_ASSERT(!pending());
 
       m_state = ctx_ready;
       do_yield();
 
-      BOOST_ASSERT(running());
+      HPX_ASSERT(running());
       check_exit_state();
     }
 
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
     //
     // If n > 0, put the coroutine in the wait state
     // then relinquish control to caller.
@@ -343,10 +381,10 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     // bound to the future in fact hold a reference to it. If the coroutine
     // is exited the callback cannot be called.
     void wait(int n) {
-      BOOST_ASSERT(!(n<0));
-      BOOST_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loop
-      BOOST_ASSERT(running());
-      BOOST_ASSERT(!(pending() < n));
+      HPX_ASSERT(!(n<0));
+      HPX_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loop
+      HPX_ASSERT(running());
+      HPX_ASSERT(!(pending() < n));
 
       if(n == 0) return;
       m_wait_counter = n;
@@ -354,24 +392,25 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       m_state = ctx_waiting;
       do_yield();
 
-      BOOST_ASSERT(m_state == ctx_running);
+      HPX_ASSERT(m_state == ctx_running);
       check_exit_state();
-      BOOST_ASSERT(m_wait_counter == 0);
+      HPX_ASSERT(m_wait_counter == 0);
     }
 #endif
 
     // Throws: exit_exception.
-    void yield_to(context_base& to) {
-      BOOST_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loops
-      BOOST_ASSERT(m_state == ctx_running);
-      BOOST_ASSERT(to.ready());
-      BOOST_ASSERT(!to.pending());
+    void yield_to(context_base& to)
+    {
+      HPX_ASSERT(m_exit_state < ctx_exit_signaled); //prevent infinite loops
+      HPX_ASSERT(m_state == ctx_running);
+      HPX_ASSERT(to.is_ready());
+      HPX_ASSERT(!to.pending());
 
       std::swap(m_caller, to.m_caller);
       std::swap(m_state, to.m_state);
       swap_context(*this, to, detail::yield_to_hint());
 
-      BOOST_ASSERT(m_state == ctx_running);
+      HPX_ASSERT(m_state == ctx_running);
       check_exit_state();
     }
 
@@ -380,44 +419,61 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     // Cannot be called if there are pending operations.
     // It follows that cannot be called from 'this'.
     // Nothrow.
-    void exit() throw(){
-      BOOST_ASSERT(!pending());
-      BOOST_ASSERT(ready()) ;
+    void exit() throw()
+    {
+      HPX_ASSERT(!pending());
+      HPX_ASSERT(is_ready()) ;
       if(m_exit_state < ctx_exit_pending)
         m_exit_state = ctx_exit_pending;
       do_invoke();
-      BOOST_ASSERT(exited()); //at this point the coroutine MUST have exited.
+      HPX_ASSERT(exited()); // at this point the coroutine MUST have exited.
     }
 
     // Always throw exit_exception.
     // Never returns from standard control flow.
-    BOOST_ATTRIBUTE_NORETURN void exit_self() {
-      BOOST_ASSERT(!pending());
-      BOOST_ASSERT(running());
+    HPX_ATTRIBUTE_NORETURN void exit_self()
+    {
+      HPX_ASSERT(!pending());
+      HPX_ASSERT(running());
       m_exit_state = ctx_exit_pending;
       boost::throw_exception(exit_exception());
     }
 
     // Nothrow.
-    ~context_base() throw() {
-      BOOST_ASSERT(!running());
+    ~context_base() throw()
+    {
+      HPX_ASSERT(!running());
       try {
         if(!exited())
           exit();
-        BOOST_ASSERT(exited());
-      } catch(...) {}
+        HPX_ASSERT(exited());
+        m_thread_id = 0;
+      }
+      catch(...) {
+        /**/;
+      }
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
+      delete_tss_storage(m_thread_data);
+#endif
     }
 
-#if HPX_THREAD_MAINTAIN_THREAD_DATA
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
     std::size_t get_thread_data() const
     {
-        return m_thread_data;
+        if (!m_thread_data)
+            return 0;
+        return get_tss_thread_data(m_thread_data);
     }
     std::size_t set_thread_data(std::size_t data)
     {
-        std::size_t t = m_thread_data;
-        m_thread_data = data;
-        return t;
+        return set_tss_thread_data(m_thread_data, data);
+    }
+
+    tss_storage* get_thread_tss_data(bool create_if_needed) const
+    {
+        if (!m_thread_data && create_if_needed)
+            m_thread_data = create_tss_storage();
+        return m_thread_data;
     }
 #endif
 
@@ -469,18 +525,24 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
       ctx_exited_abnormally // process exited uncleanly.
     };
 
-    void rebind(thread_id_type id)
+    void rebind_base(thread_id_repr_type id)
     {
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
-      BOOST_ASSERT(exited() && 0 == m_wait_counter && !pending());
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
+      HPX_ASSERT(exited() && 0 == m_wait_counter && !pending());
 #else
-      BOOST_ASSERT(exited() && !pending());
+      HPX_ASSERT(exited() && !pending());
 #endif
 
       m_thread_id = id;
       m_state = ctx_ready;
       m_exit_state = ctx_exit_not_requested;
       m_exit_status = ctx_not_exited;
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
+      HPX_ASSERT(m_phase == 0);
+#endif
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
+      HPX_ASSERT(m_thread_data == 0);
+#endif
 #if BOOST_VERSION <= 104200 || BOOST_VERSION >= 104600
       m_type_info = boost::exception_ptr();
 #else
@@ -491,16 +553,18 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     // Cause the coroutine to exit if
     // a exit request is pending.
     // Throws: exit_exception if an exit request is pending.
-    void check_exit_state() {
-      BOOST_ASSERT(running());
+    void check_exit_state()
+    {
+      HPX_ASSERT(running());
       if(!m_exit_state) return;
       boost::throw_exception(exit_exception());
     }
 
     // Nothrow.
-    void do_return(context_exit_status status, boost::exception_ptr& info) throw() {
-      BOOST_ASSERT(status != ctx_not_exited);
-      BOOST_ASSERT(m_state == ctx_running);
+    void do_return(context_exit_status status, boost::exception_ptr& info) throw()
+    {
+      HPX_ASSERT(status != ctx_not_exited);
+      HPX_ASSERT(m_state == ctx_running);
       m_type_info = info;
       m_state = ctx_exited;
       m_exit_status = status;
@@ -516,9 +580,10 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     }
 
     // Nothrow.
-    void do_invoke() throw () {
-      BOOST_ASSERT(ready() || waiting());
-#if HPX_THREAD_MAINTAIN_PHASE_INFORMATION
+    void do_invoke() throw ()
+    {
+      HPX_ASSERT(is_ready() || waiting());
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
       ++m_phase;
 #endif
       m_state = ctx_running;
@@ -526,39 +591,36 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
     }
 
     template <typename ActualCtx>
-    static void deleter (type const* ctx, deleter_mode mode)
+    static void deleter (type const* ctx)
     {
-        if (deleter_delete == mode)
-            ActualCtx::destroy(static_cast<ActualCtx*>(const_cast<type*>(ctx)));
-        else if (deleter_reset == mode)
-            ActualCtx::reset(static_cast<ActualCtx*>(const_cast<type*>(ctx)));
-        else {
-            BOOST_ASSERT(deleter_delete == mode || deleter_reset == mode);
-        }
+        ActualCtx::destroy(static_cast<ActualCtx*>(const_cast<type*>(ctx)));
     }
 
     typedef typename context_impl::context_impl_base ctx_type;
     ctx_type m_caller;
+
+#if HPX_COROUTINE_IS_REFERENCE_COUNTED
     mutable boost::atomic_uint64_t m_counter;
+#endif
     static allocation_counters m_allocation_counters;
-    deleter_type * m_deleter;
+    deleter_type* m_deleter;
     context_state m_state;
     context_exit_state m_exit_state;
     context_exit_status m_exit_status;
-#if HPX_THREAD_MAINTAIN_OPERATIONS_COUNT
+#if defined(HPX_THREAD_MAINTAIN_OPERATIONS_COUNT)
     int m_wait_counter;
     int m_operation_counter;
 #endif
-#if HPX_THREAD_MAINTAIN_PHASE_INFORMATION
+#if defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
     std::size_t m_phase;
 #endif
-#if HPX_THREAD_MAINTAIN_THREAD_DATA
-    std::size_t m_thread_data;
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
+    mutable detail::tss_storage* m_thread_data;
 #endif
 
     // This is used to generate a meaningful exception trace.
     boost::exception_ptr m_type_info;
-    thread_id_type m_thread_id;
+    thread_id_repr_type m_thread_id;
   };
 
   // initialize static allocation counter

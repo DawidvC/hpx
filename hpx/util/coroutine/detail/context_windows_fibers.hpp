@@ -32,26 +32,27 @@
 #include <windows.h>
 #include <winnt.h>
 
+#include <hpx/config/forceinline.hpp>
+#include <hpx/util/assert.hpp>
+#include <hpx/util/coroutine/detail/config.hpp>
+#include <hpx/util/coroutine/exception.hpp>
+#include <hpx/util/coroutine/detail/swap_context.hpp>
+#include <hpx/util/get_and_reset_value.hpp>
+
 #include <boost/config.hpp>
 #include <boost/version.hpp>
-#include <boost/assert.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/throw_exception.hpp>
 #include <boost/system/system_error.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/cstdint.hpp>
 #include <boost/atomic.hpp>
-#include <hpx/config/forceinline.hpp>
-#include <hpx/util/coroutine/detail/config.hpp>
-#include <hpx/util/coroutine/exception.hpp>
-#include <hpx/util/coroutine/detail/swap_context.hpp>
-#include <hpx/util/get_and_reset_value.hpp>
 
-#if HPX_EMULATE_SWAP_CONTEXT != 0
+#if defined(HPX_HAVE_SWAP_CONTEXT_EMULATION)
 extern "C" void switch_to_fiber(void* lpFiber) throw();
 #endif
 
-namespace hpx { namespace util { namespace coroutines 
+namespace hpx { namespace util { namespace coroutines
 {
   // On Windows we need a special preparation for the main coroutines thread
   struct prepare_main_thread
@@ -59,14 +60,14 @@ namespace hpx { namespace util { namespace coroutines
       prepare_main_thread()
       {
           LPVOID result = ConvertThreadToFiber(0);
-          BOOST_ASSERT(0 != result);
-          (void)result;
+          HPX_ASSERT(0 != result);
+          HPX_UNUSED(result);
       }
       ~prepare_main_thread()
       {
           BOOL result = ConvertFiberToThread();
-          BOOST_ASSERT(FALSE != result);
-          (void)result;
+          HPX_ASSERT(FALSE != result);
+          HPX_UNUSED(result);
       }
   };
 
@@ -86,7 +87,6 @@ namespace hpx { namespace util { namespace coroutines
 
     /*
      * Return true if current thread is a fiber.
-     * FIXME: on longhorn should use IsThreadAFiber
      */
     inline bool is_fiber() {
 #if _WIN32_WINNT >= 0x0600
@@ -134,24 +134,24 @@ namespace hpx { namespace util { namespace coroutines
                    default_hint)
       {
         if(!is_fiber()) {
-          BOOST_ASSERT(from.m_ctx == 0);
+          HPX_ASSERT(from.m_ctx == 0);
           from.m_ctx = ConvertThreadToFiber(0);
-          BOOST_ASSERT(from.m_ctx != 0);
+          HPX_ASSERT(from.m_ctx != 0);
 
-#if HPX_EMULATE_SWAP_CONTEXT != 0
+#if defined(HPX_HAVE_SWAP_CONTEXT_EMULATION)
           switch_to_fiber(to.m_ctx);
 #else
           SwitchToFiber(to.m_ctx);
 #endif
           BOOL result = ConvertFiberToThread();
-          BOOST_ASSERT(result);
-          (void)result;
+          HPX_ASSERT(result);
+          HPX_UNUSED(result);
           from.m_ctx = 0;
         } else {
           bool call_from_main = from.m_ctx == 0;
           if(call_from_main)
             from.m_ctx = GetCurrentFiber();
-#if HPX_EMULATE_SWAP_CONTEXT != 0
+#if defined(HPX_HAVE_SWAP_CONTEXT_EMULATION)
           switch_to_fiber(to.m_ctx);
 #else
           SwitchToFiber(to.m_ctx);
@@ -175,7 +175,7 @@ namespace hpx { namespace util { namespace coroutines
     BOOST_FORCEINLINE VOID CALLBACK
     trampoline(LPVOID pv) {
       T* fun = static_cast<T*>(pv);
-      BOOST_ASSERT(fun);
+      HPX_ASSERT(fun);
       (*fun)();
     }
 

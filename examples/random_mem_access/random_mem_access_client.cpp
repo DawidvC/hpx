@@ -8,6 +8,7 @@
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/components/distributing_factory/distributing_factory.hpp>
+#include <hpx/lcos/wait_all.hpp>
 
 #include <boost/foreach.hpp>
 #include <time.h>
@@ -43,8 +44,8 @@ int hpx_main(boost::program_options::variables_map& vm)
         //hpx::naming::id_type prefix;
 
         // create a distributing factory locally
-        hpx::components::distributing_factory factory;
-        factory.create(hpx::applier::get_applier().get_runtime_support_gid());
+        hpx::components::distributing_factory factory =
+            hpx::components::distributing_factory::create(hpx::find_here());
 
         hpx::components::component_type mem_block_type =
             hpx::components::get_component_type<
@@ -53,22 +54,7 @@ int hpx_main(boost::program_options::variables_map& vm)
         hpx::components::distributing_factory::result_type mem_blocks =
             factory.create_components(mem_block_type, array_size);
 
-        //if (appl.get_remote_prefixes(prefixes))
-        //    // create random_mem_access on any of the remote localities
-        //    prefix = prefixes[0];
-        //else
-        //    // create an accumulator locally
-        //    prefix = appl.get_runtime_support_gid();
-
         std::vector<hpx::components::random_mem_access> accu;
-
-        //int array_size = 6;
-        //accu.resize(array_size);
-
-        //for (int i=0;i<array_size;i++) {
-        //  accu[i].create(prefix);
-        //}
-
         ::init(hpx::util::locality_results(mem_blocks), accu);
 
         // initialize the array
@@ -85,14 +71,14 @@ int hpx_main(boost::program_options::variables_map& vm)
           barrier.push_back(accu[rn].add_async());
         }
 
-        hpx::lcos::wait(barrier);
+        hpx::wait_all(barrier);
 
         std::vector<hpx::lcos::future<void> > barrier2;
         for (std::size_t i=0;i<array_size;i++) {
           barrier2.push_back(accu[i].print_async());
         }
 
-        hpx::lcos::wait(barrier2);
+        hpx::wait_all(barrier2);
     }
 
     hpx::finalize();

@@ -9,15 +9,12 @@
 //  accesses and writes occur on the remote locality.
 //
 // Note that this is a *non-atomic* example.
-#include <iostream>
-#include <time.h>
 
 //HPX includes
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/runtime/actions/plain_action.hpp>
 #include <hpx/runtime/components/plain_component_factory.hpp>
-#include <hpx/lcos/future_wait.hpp>
 #include <hpx/util/locking_helpers.hpp>
 
 //Boost includes
@@ -33,6 +30,9 @@
 
 #include <algorithm>
 #include <vector>
+
+#include <iostream>
+#include <ctime>
 
 using namespace hpx;
 namespace po = boost::program_options;
@@ -121,10 +121,7 @@ int hpx_main(po::variables_map &vm)
           future_update.push_back(hpx::async<update_action>(that_prefix,tmp));
         }
 
-        //for (int i=0;i<N;i++) {
-        //  future_update[i].get();
-        //}
-        hpx::lcos::wait(future_update);
+        hpx::wait_all(future_update);
 
         for (int i=0;i<array_length;i++) {
           components::access_memory_block<data>

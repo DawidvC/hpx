@@ -14,20 +14,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0)
+    new_(naming::id_type const & target_id, A0 && a0)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0
             >(
-                boost::forward<A0>( a0 )
+                std::forward<A0>( a0 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -37,20 +38,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -60,20 +62,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -83,20 +86,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -106,20 +110,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -129,20 +134,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -152,20 +158,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -175,20 +182,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -198,20 +206,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7 , BOOST_FWD_REF(A8) a8)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7 , A8 && a8)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 ) , boost::forward<A8>( a8 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -221,20 +230,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7 , BOOST_FWD_REF(A8) a8 , BOOST_FWD_REF(A9) a9)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7 , A8 && a8 , A9 && a9)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 ) , boost::forward<A8>( a8 ) , boost::forward<A9>( a9 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 ) , std::forward<A9>( a9 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -244,20 +254,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7 , BOOST_FWD_REF(A8) a8 , BOOST_FWD_REF(A9) a9 , BOOST_FWD_REF(A10) a10)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7 , A8 && a8 , A9 && a9 , A10 && a10)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9 , A10
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 ) , boost::forward<A8>( a8 ) , boost::forward<A9>( a9 ) , boost::forward<A10>( a10 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 ) , std::forward<A9>( a9 ) , std::forward<A10>( a10 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -267,20 +278,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7 , BOOST_FWD_REF(A8) a8 , BOOST_FWD_REF(A9) a9 , BOOST_FWD_REF(A10) a10 , BOOST_FWD_REF(A11) a11)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7 , A8 && a8 , A9 && a9 , A10 && a10 , A11 && a11)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9 , A10 , A11
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 ) , boost::forward<A8>( a8 ) , boost::forward<A9>( a9 ) , boost::forward<A10>( a10 ) , boost::forward<A11>( a11 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 ) , std::forward<A9>( a9 ) , std::forward<A10>( a10 ) , std::forward<A11>( a11 )
             )
           , remote_object::dtor_fun<T>()
         );
@@ -290,20 +302,21 @@
     inline typename boost::disable_if<
         traits::is_component<T>, lcos::future<object<T> >
     >::type
-    new_(naming::id_type const & target_id, BOOST_FWD_REF(A0) a0 , BOOST_FWD_REF(A1) a1 , BOOST_FWD_REF(A2) a2 , BOOST_FWD_REF(A3) a3 , BOOST_FWD_REF(A4) a4 , BOOST_FWD_REF(A5) a5 , BOOST_FWD_REF(A6) a6 , BOOST_FWD_REF(A7) a7 , BOOST_FWD_REF(A8) a8 , BOOST_FWD_REF(A9) a9 , BOOST_FWD_REF(A10) a10 , BOOST_FWD_REF(A11) a11 , BOOST_FWD_REF(A12) a12)
+    new_(naming::id_type const & target_id, A0 && a0 , A1 && a1 , A2 && a2 , A3 && a3 , A4 && a4 , A5 && a5 , A6 && a6 , A7 && a7 , A8 && a8 , A9 && a9 , A10 && a10 , A11 && a11 , A12 && a12)
     {
         lcos::packaged_action<
             remote_object::new_impl_action
           , object<T>
         > p;
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T
               , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9 , A10 , A11 , A12
             >(
-                boost::forward<A0>( a0 ) , boost::forward<A1>( a1 ) , boost::forward<A2>( a2 ) , boost::forward<A3>( a3 ) , boost::forward<A4>( a4 ) , boost::forward<A5>( a5 ) , boost::forward<A6>( a6 ) , boost::forward<A7>( a7 ) , boost::forward<A8>( a8 ) , boost::forward<A9>( a9 ) , boost::forward<A10>( a10 ) , boost::forward<A11>( a11 ) , boost::forward<A12>( a12 )
+                std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 ) , std::forward<A9>( a9 ) , std::forward<A10>( a10 ) , std::forward<A11>( a11 ) , std::forward<A12>( a12 )
             )
           , remote_object::dtor_fun<T>()
         );

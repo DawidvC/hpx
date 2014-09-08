@@ -18,6 +18,7 @@ described in the table below:
     [[`--hpx:help`, `--help` or `-h`]       [print out program usage (default: this message), possible
                                              values: 'full' (additionally prints options from components)]]
     [[`--hpx:version`, `--version` or `-v`] [print out __hpx__ version and copyright information]]
+    [[`--hpx:info`]                         [print out __hpx__ configuration information]]
     [[`--hpx:options-file arg`]             [specify a file containing command line options
                                              (alternatively: @filepath)]]
 
@@ -40,7 +41,7 @@ described in the table below:
                                  node name per line and core)]]
     [[`--hpx:nodes arg`]        [the (space separated) list of the nodes to use (usually
                                  this is extracted from a node file)]]
-    [[`--hpx:endnodes`]         [this can be used to end the list of nodes specified 
+    [[`--hpx:endnodes`]         [this can be used to end the list of nodes specified
                                  using the option `--hpx:nodes`]]
     [[`--hpx:ifsuffix arg`]     [suffix to append to host names in order to resolve them
                                  to the proper network interconnect]]
@@ -57,17 +58,21 @@ described in the table below:
                                  --hpx:queuing=local and priority_local only]]
     [[`--hpx:pu-step`]          [the step between used processing unit numbers for this
                                  instance of __hpx__ (default: 1), valid for
-                                 --hpx:queuing=local and priority_local only]]
+                                 `--hpx:queuing=local` and priority_local only]]
     [[`--hpx:threads arg`]      [the number of operating system threads to spawn
                                  for this __hpx__ locality (default: 1, using 'all' will
                                  spawn one thread for each processing unit)]]
+    [[`--hpx:cores arg`]        [the number of cores to utilize for this __hpx__ locality
+                                 locality (default: 'all', i.e. the number of cores is based on
+                                 the number of threads (--hpx:threads) assuming --hpx:bind=compact)]]
     [[`--hpx:affinity arg`]     [the affinity domain the OS threads will be confined to,
                                  possible values: pu, core, numa, machine (default: pu), valid for
-                                 --hpx:queuing=local and priority_local only]]
+                                 `--hpx:queuing=local` and priority_local only]]
     [[`--hpx:bind arg`]         [the detailed affinity description for the OS threads, see
-                                 the documentation for a detailed description of possible
-                                 values. Do not use with --hpx:pu-step, --hpx:pu-offset, or
-                                 --hpx:affinity options. Implies --hpx:numa-sensitive.]]
+                                 [link hpx.manual.init.commandline.details the additional documentation]
+                                 for a detailed description of possible
+                                 values. Do not use with `--hpx:pu-step`, `--hpx:pu-offset`, or
+                                 `--hpx:affinity` options. Implies `--hpx:numa-sensitive`.]]
     [[`--hpx:print-bind`]       [print to the console the bit masks calculated from the
                                  arguments specified to all `--hpx:bind` options.]]
     [[`--hpx:queuing arg`]      [the queue scheduling policy to use, options are
@@ -77,10 +82,10 @@ described in the table below:
                                  --hpx:queuing=hierarchy only (default: 2)]]
     [[`--hpx:high-priority-threads arg`] [the number of operating system threads
                                  maintaining a high priority queue (default:
-                                 number of OS threads), valid for
-                                 --hpx:queuing=priority_local only]]
+                                 number of OS threads), valid for --hpx:queuing=priority_local
+                                 and --hpx:queuing=priority_abp only]]
     [[`--hpx:numa-sensitive`]   [makes the priority_local scheduler NUMA sensitive, valid for
-                                 --hpx:queuing=local and priority_local only]]
+                                 `--hpx:queuing=local` and priority_local only]]
 
     [[[*__hpx__ configuration options]]]
     [[`--hpx:app-config arg`]   [load the specified application configuration
@@ -103,11 +108,11 @@ described in the table below:
 
     [[[*__hpx__ options related to performance counters]]]
     [[`--hpx:print-counter`]    [print the specified performance counter either repeatedly or
-                                 before shutting down the system (see option --hpx:print-counter-interval)]]
+                                 before shutting down the system (see option `--hpx:print-counter-interval`)]]
     [[`--hpx:print-counter-interval`][print the performance counter(s) specified with --hpx:print-counter
                                  repeatedly after the time interval (specified in milliseconds)
                                  (default: 0, which means print once at shutdown)]]
-    [[`--hpx:print-counter-destination`][print the performance counter(s) specified with --hpx:print-counter
+    [[`--hpx:print-counter-destination`][print the performance counter(s) specified with `--hpx:print-counter`
                                  to the given file (default: console)]]
     [[`--hpx:list-counters`]    [list the names of all registered performance counters, possible
                                  values: 'minimal' (prints counter name skeletons),
@@ -119,9 +124,8 @@ described in the table below:
 
 [heading Command Line Argument Shortcuts]
 
-Additionally, every __hpx__ application defines certain shortcuts allowing to
-significantly shorten the command line options. The follwoing table lists all
-predefined command line option shortcuts:
+Additionally, the following shortcuts are available from
+every __hpx__ application.
 
 [teletype]
 
@@ -130,7 +134,6 @@ predefined command line option shortcuts:
     [[`-a`]               [`--hpx:agas`]]
     [[`-c`]               [`--hpx:console`]]
     [[`-h`]               [`--hpx:help`]]
-    [[`--help`]           [`--hpx:help`]]
     [[`-I`]               [`--hpx:ini`]]
     [[`-l`]               [`--hpx:localities`]]
     [[`-p`]               [`--hpx:app-config`]]
@@ -138,7 +141,6 @@ predefined command line option shortcuts:
     [[`-r`]               [`--hpx:run-agas-server`]]
     [[`-t`]               [`--hpx:threads`]]
     [[`-v`]               [`--hpx:version`]]
-    [[`--version`]        [`--hpx:version`]]
     [[`-w`]               [`--hpx:worker`]]
     [[`-x`]               [`--hpx:hpx`]]
     [[`-0`]               [`--hpx:node=0`]]
@@ -156,17 +158,17 @@ predefined command line option shortcuts:
 [c++]
 
 It is possible to define your own shortcut options. In fact, all of the shortcuts
-listed above are pre-defined using the technique described here. This implies,
-that it is possible to redefine any of the pre-defined shortcuts to expand
+listed above are pre-defined using the technique described here.
+In fact, it is possible to redefine any of the pre-defined shortcuts to expand
 differently as well.
 
-Shortcut options are looked up in the internal configuration database. They are
+Shortcut options are obtained from the internal configuration database. They are
 stored as key-value properties in a special properties section named
 `hpx.commandline`. You can define your own shortcuts by adding the corresponding
 definitions to one of the `ini` configuration files as described in the section
 __configuration__. For instance, in order to define a command line shortcut
 `--pc` which should expand to `--hpx:print-counter`, the following configuration
-information needs to be stored in one of the `ini` configuration files:
+information needs to be added to one of the `ini` configuration files:
 ``
     [hpx.commandline]
     --pc = --hpx:print-counter
@@ -183,21 +185,21 @@ information needs to be stored in one of the `ini` configuration files:
           `--hpx:print-counter=/threads{locality#0/total}/count/cumulative`
       ]
 
-[important Any shortcut option defined as described should either start with
+[important Any shortcut option should either start with
       a single `'-'` or with two `'--'` characters. Shortcuts starting with a
       single `'-'` are interpreted as short options (i.e. everything after the
       first character following the `'-'` is treated as the argument). Shortcuts
-      starting with `'--'` are interpreted as long options. Any other shortcut
-      formats are not supported.]
+      starting with `'--'` are interpreted as long options. No other shortcut
+      formats are supported.]
 [c++]
 
 [heading Specifying Options for Single Localities Only]
 
-For runs involving more than one locality it is sometimes desireable to supply
-specific command line options to single localities only. Especially when the
+For runs involving more than one locality it is sometimes desirable to supply
+specific command line options to single localities only. When the
 __hpx__ application is launched using a scheduler (like PBS, for more details
-see section __pbs__), specifying dedicated command line options for single
-localities could prove to be tricky. For this reason all of the command line
+see section __using_pbs__), specifying dedicated command line options for single
+localities may be desirable. For this reason all of the command line
 options which have the general format `--hpx:<some_key>` can be used in a more
 general form: `--hpx:<N>:<some_key>`, where <N> is the number of the locality
 this command line options will be applied to, all other localities will simply
@@ -213,18 +215,18 @@ ignore the option. For instance, the following PBS script passes the option
     APP_PATH=~/packages/hpx/bin/hello_world
     APP_OPTIONS=
 
-    __pbsdsh__ -u $APP_PATH $APP_OPTIONS ``[hpx_cmdline --hpx:1:pu-offset=4]`` ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` 
+    __pbsdsh__ -u $APP_PATH $APP_OPTIONS ``[hpx_cmdline --hpx:1:pu-offset=4]`` ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE`
 ```
 
 [caution If the first application specific argument (inside `$APP_OPTIONS`)
-         is a non-option (i.e. does not start with a '`-`' or a '`--`', then those
-         have to be placed before the option [hpx_cmdline --hpx:nodes], which
-         in this case should be the last option on the command line.
+         is a non-option (i.e. does not start with a '`-`' or a '`--`', then it
+         must be placed before the option [hpx_cmdline --hpx:nodes], which,
+         in this case, should be the last option on the command line.
 
-         Alternatively, use the option [hpx_cmdline --hpx:endnodes] to explicitly 
+         Alternatively, use the option [hpx_cmdline --hpx:endnodes] to explicitly
          mark the end of the list of node names:
          ```
-         __pbsdsh__ -u $APP_PATH ``[hpx_cmdline --hpx:1:pu-offset=4]`` ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` ``[hpx_cmdline --hpx:endnodes] ``$APP_OPTIONS 
+         __pbsdsh__ -u $APP_PATH ``[hpx_cmdline --hpx:1:pu-offset=4]`` ``[hpx_cmdline --hpx:nodes]``=`cat $PBS_NODEFILE` ``[hpx_cmdline --hpx:endnodes] ``$APP_OPTIONS
          ```
          ]
 
@@ -240,10 +242,12 @@ detail:
 
 [heading:bind The Command Line Option `--hpx:bind`]
 
-This command line option allows to specify the required affinity of the __hpx__
+This command line option allows one to specify the required affinity of the __hpx__
 worker threads to the underlying processing units. As a result the worker
 threads will run only on the processing units identified by the corresponding
-bind specification.
+bind specification. The affinity settings are to be specified using
+`--hpx:bind=<BINDINGS>`, where `<BINDINGS>` have to be formatted as described
+below.
 
 [note This command line option is only available if __hpx__ was built with
       support for HWLOC (__hwloc__) enabled. Please see __cmake_options__ for more
@@ -251,7 +255,7 @@ bind specification.
 
 The specified affinities refer to specific regions within a machine hardware
 topology. In order to understand the hardware topology of a particular machine
-it may be useful to run the lstopo tool which is part of __hwloc__to see the
+it may be useful to run the lstopo tool which is part of __hwloc__ to see the
 reported topology tree. Seeing and understanding a topology tree will definitely
 help in understanding the concepts that are discussed below.
 
@@ -264,13 +268,13 @@ and `pu` (processing unit). Indexes are non-negative integers that specify a
 unique physical object in a topology tree using its logical sequence number.
 
 Chaining multiple tuples together in the more general form
-`object1:index1[.object2:index2[...]]` is permissable. While the first tuple's
+`object1:index1[.object2:index2[...]]` is permissible. While the first tuple's
 object may appear anywhere in the topology, the Nth tuple's object must have
 a shallower topology depth than the (N+1)th tuple's object. Put simply: as
 you  move right in a tuple chain, objects must go deeper in the topology tree.
 Indexes specified in chained tuples are relative to the scope of the parent
 object. For example, `socket:0.core:1` refers to the second core in the first
-socket (all indicies are zero based).
+socket (all indices are zero based).
 
 Multiple affinities can be specified using several `--hpx:bind` command line
 options or by appending several affinities separated by a `';'`. By default,
@@ -287,15 +291,21 @@ if multiple affinities are specified, they are added.
 
 `"all"` is a special affinity consisting in the entire current topology.
 
-[note All 'names' in an affinity specification, such as `thread`, `socket`, 
-      `numanode`, `pu`, or `all` can be abbreviated. Thus the affinity 
+[note All 'names' in an affinity specification, such as `thread`, `socket`,
+      `numanode`, `pu`, or `all` can be abbreviated. Thus the affinity
       specification `threads:0-3=socket:0.core:1.pu:1` is fully equivalent to
       its shortened form `t:0-3=s:0.c:1.p:1`.]
 
 Here is a full grammar describing the possible format of mappings:
 
     mappings:
+        distribution
         mapping(;mapping)*
+
+    distribution:
+        'compact'
+        'scatter
+        'balanced'
 
     mapping:
         thread-spec=pu-specs
@@ -323,6 +333,18 @@ Here is a full grammar describing the possible format of mappings:
         'core'
         'pu'
 
+The following example assumes a system with at least 4 cores, where each core has more
+than 1 processing unit (hardware threads). Running hello_world with 4 OS-threads
+(on 4 processing units), where each of those threads is bound to the first processing
+unit of each of the cores, can be achieved by invoking:
+
+    hello_world -t4 --hpx:bind=thread:0-3=core:0-3.pu:0
+
+Here `thread:0-3` specifies the OS threads for which to define affinity bindings, and
+`core:0-3.pu:0` defines that for each of the cores (`core:0-3`) only their first
+processing unit (`pu:0`) should be used.
+
+
 [c++]
 
 [note The command line option `--hpx:print-bind` can be used to print the
@@ -334,13 +356,22 @@ Here is a full grammar describing the possible format of mappings:
       ``
       will cause this output to be printed:
       ``
-          0: 0x0000000000000001
-          1: 0x0000000000000004
-          2: 0x0000000000000010
-          3: 0x0000000000000040
+          0: PU L#0(P#0), Core L#0, Socket L#0, Node L#0(P#0)
+          1: PU L#2(P#2), Core L#1, Socket L#0, Node L#0(P#0)
+          2: PU L#4(P#4), Core L#2, Socket L#0, Node L#0(P#0)
+          3: PU L#6(P#6), Core L#3, Socket L#0, Node L#0(P#0)
       ``
       [c++]where each bit in the bitmasks corresponds to a processing unit the listed
       worker thread will be bound to run on.]
+
+The difference between the three possible predefined distribution schemes (`compact`,
+`scatter`, and `balanced`) is best explained with an example. Imagine that we have a system with 4
+cores and 4 hardware threads per core. If we place 8 threads the assignments produced by the `compact`,
+`scatter`, and `balanced` types are shown in eh figure below. Notice that `compact` does not fully
+utilize all the cores in the system. For this reason it is recommended that applications are run using
+the `scatter` or `balanced` options in most cases.
+
+[fig affinities.png..Schematic of thread affinity type distributions..commandline.affinities]
 
 [endsect]
 

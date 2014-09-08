@@ -12,7 +12,51 @@
 #include <hpx/lcos/detail/future_data.hpp>
 #include <hpx/lcos/local/packaged_continuation.hpp>
 
-namespace hpx { namespace lcos { namespace local
+namespace hpx { namespace lcos { namespace detail
+{
+
+template <typename Result>
+struct channel_future_data : future_data<Result>
+{
+  public:
+    typedef typename future_data<Result>::mutex_type mutex_type;
+    typedef typename future_data<Result>::result_type result_type;
+
+  public:
+    result_type move_data(error_code& ec = throws)
+    {
+        typedef typename future_data<Result>::data_type data_type;
+        // yields control if needed
+        data_type d;
+        {
+            typename mutex_type::scoped_lock l(this->mtx_);
+            // moves the data from the store
+            this->data_.read_and_empty(d, l, ec);
+            if (ec) return result_type();
+        }
+
+        if (d.is_empty()) {
+            // the value has already been moved out of this future
+            HPX_THROWS_IF(ec, no_state,
+                "future_data::move_data",
+                "this future has not been initialized");
+            return result_type();
+        }
+
+        // the thread has been re-activated by one of the actions
+        // supported by this promise (see \a promise::set_event
+        // and promise::set_exception).
+        if (d.stores_error())
+            return handle_error(d, ec);
+
+        // no error has been reported, return the result
+        return d.move_value();
+    }
+};
+
+} // namespace detail
+
+namespace local
 {
 
 /// An asynchronous, single value channel
@@ -20,11 +64,11 @@ template <typename T>
 struct channel
 {
   private:
-    typedef hpx::lcos::detail::future_data<T> future_data;
+    typedef hpx::lcos::detail::channel_future_data<T> future_data;
 
     boost::intrusive_ptr<future_data> data_;
 
-    BOOST_COPYABLE_AND_MOVABLE(vector3d);
+    (channel<T>);
 
   public:
     typedef typename future_data::completed_callback_type
@@ -34,47 +78,40 @@ struct channel
 
     channel(channel const& other) : data_(other.data_) {}
 
-    channel(BOOST_RV_REF(channel) other) : data_(boost::move(other.data_)) {}
+    channel(channel && other) : data_(std::move(other.data_)) {}
 
-    explicit channel(BOOST_RV_REF(T) init) : data_(new future_data())
+    explicit channel(T && init) : data_(new future_data())
     {
-        data_->set_data(init); 
+        data_->set_data(init);
     }
 
     explicit channel(T const& init) : data_(new future_data())
     {
-        data_->set_data(init); 
+        data_->set_data(init);
     }
 
     ~channel()
-    {
-        if (data_)
-            data_->deleting_owner();
-    }
+    {}
 
-    channel& operator=(BOOST_COPY_ASSIGN_REF(channel) other)
+    channel& operator=(channel const & other)
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
 
         if (this != &other)
         {
-            data_->deleting_owner();
-
             data_ = other.data_;
         }
 
         return *this;
     }
 
-    channel& operator=(BOOST_RV_REF(channel) other)
+    channel& operator=(channel && other)
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
 
         if (this != &other)
         {
-            data_->deleting_owner();
-
-            data_ = boost::move(other.data_);
+            data_ = std::move(other.data_);
             other.data_.reset();
         }
 
@@ -88,62 +125,64 @@ struct channel
 
     void reset()
     {
-        BOOST_ASSERT(data_);
-
-        data_->deleting_owner();
+        HPX_ASSERT(data_);
 
         data_->reset();
    }
 
+    hpx::future<T> get_future()
+    {
+        HPX_ASSERT(data_);
+
+        using traits::future_access;
+        return future_access<hpx::future<T> >::create(data_);
+    }
+
     T get(hpx::error_code& ec = hpx::throws) const
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
         T tmp = data_->get_data(ec);
-        return boost::move(tmp);
+        return std::move(tmp);
     }
 
     T move(hpx::error_code& ec = hpx::throws) const
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
         T tmp = data_->move_data(ec);
-        return boost::move(tmp);
+        return std::move(tmp);
     }
 
-    hpx::future<T> get_future()
+    void post(T && result)
     {
-        BOOST_ASSERT(data_);
-        return lcos::detail::make_future_from_data<T>(data_);
-    }
-
-    void post(BOOST_RV_REF(T) result)
-    {
-        BOOST_ASSERT(data_);
-        //if (data_->ready())
+        HPX_ASSERT(data_);
+        //if (data_->is_ready())
         //    data_->move_data();
         data_->set_data(result);
     }
 
     void post(T const& result)
     {
-        BOOST_ASSERT(data_);
-        //if (data_->ready())
+        HPX_ASSERT(data_);
+        //if (data_->is_ready())
         //    data_->move_data();
         data_->set_data(result);
     }
 
     template <typename F>
-    hpx::future<typename boost::result_of<F(hpx::future<T>)>::type>
-    then(BOOST_FWD_REF(F) f)
+    hpx::future<typename util::result_of<F(hpx::future<T>)>::type>
+    then(F && f)
     {
-        BOOST_ASSERT(data_);
-        return lcos::detail::make_future_from_data<T>(data_).then
-            (boost::forward<F>(f));
+        HPX_ASSERT(data_);
+
+        using traits::future_access;
+        return future_access<hpx::future<T> >::create(data_).then
+            (std::forward<F>(f));
     }
 
-    bool ready() const
+    bool is_ready() const
     {
-        BOOST_ASSERT(data_);
-        return data_->ready();
+        HPX_ASSERT(data_);
+        return data_->is_ready();
     }
 };
 
@@ -151,11 +190,11 @@ template <>
 struct channel<void>
 {
   private:
-    typedef hpx::lcos::detail::future_data<void> future_data;
+    typedef hpx::lcos::detail::channel_future_data<void> future_data;
 
     boost::intrusive_ptr<future_data> data_;
 
-    BOOST_COPYABLE_AND_MOVABLE(vector3d);
+    (channel<void>);
 
   public:
     typedef future_data::completed_callback_type
@@ -165,37 +204,30 @@ struct channel<void>
 
     channel(channel const& other) : data_(other.data_) {}
 
-    channel(BOOST_RV_REF(channel) other) : data_(boost::move(other.data_)) {}
+    channel(channel && other) : data_(std::move(other.data_)) {}
 
     ~channel()
-    {
-        if (data_)
-            data_->deleting_owner();
-    }
+    {}
 
-    channel& operator=(BOOST_COPY_ASSIGN_REF(channel) other)
+    channel& operator=(channel const & other)
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
 
         if (this != &other)
         {
-            data_->deleting_owner();
-
             data_ = other.data_;
         }
 
         return *this;
     }
 
-    channel& operator=(BOOST_RV_REF(channel) other)
+    channel& operator=(channel && other)
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
 
         if (this != &other)
         {
-            data_->deleting_owner();
-
-            data_ = boost::move(other.data_);
+            data_ = std::move(other.data_);
             other.data_.reset();
         }
 
@@ -209,52 +241,54 @@ struct channel<void>
 
     void reset()
     {
-        BOOST_ASSERT(data_);
-
-        data_->deleting_owner();
+        HPX_ASSERT(data_);
 
         data_->reset();
    }
 
+    hpx::future<void> get_future()
+    {
+        HPX_ASSERT(data_);
+
+        using traits::future_access;
+        return future_access<hpx::future<void> >::create(data_);
+    }
+
     void get(hpx::error_code& ec = hpx::throws) const
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
         hpx::util::unused_type tmp = data_->get_data(ec);
     }
 
     void move(hpx::error_code& ec = hpx::throws) const
     {
-        BOOST_ASSERT(data_);
+        HPX_ASSERT(data_);
         hpx::util::unused_type tmp = data_->move_data(ec);
-    }
-
-    hpx::future<void> get_future()
-    {
-        BOOST_ASSERT(data_);
-        return lcos::detail::make_future_from_data<void>(data_);
     }
 
     void post()
     {
-        BOOST_ASSERT(data_);
-        //if (data_->ready())
+        HPX_ASSERT(data_);
+        //if (data_->is_ready())
         //    data_->move_data();
         data_->set_data(hpx::util::unused);
     }
 
     template <typename F>
-    hpx::future<typename boost::result_of<F(hpx::future<void>)>::type>
-    then(BOOST_FWD_REF(F) f)
+    hpx::future<typename util::result_of<F(hpx::future<void>)>::type>
+    then(F && f)
     {
-        BOOST_ASSERT(data_);
-        return lcos::detail::make_future_from_data<void>(data_).then
-            (boost::forward<completed_callback_type>(f));
+        HPX_ASSERT(data_);
+
+        using traits::future_access;
+        return future_access<hpx::future<void> >::create(data_).then
+            (std::forward<completed_callback_type>(f));
     }
 
-    bool ready() const
+    bool is_ready() const
     {
-        BOOST_ASSERT(data_);
-        return data_->ready();
+        HPX_ASSERT(data_);
+        return data_->is_ready();
     }
 };
 

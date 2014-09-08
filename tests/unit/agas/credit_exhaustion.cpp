@@ -10,8 +10,8 @@
 #include <hpx/include/plain_actions.hpp>
 #include <hpx/include/async.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/assign/std/vector.hpp>
+#include <boost/chrono.hpp>
 
 #include <tests/unit/agas/components/simple_refcnt_checker.hpp>
 #include <tests/unit/agas/components/managed_refcnt_checker.hpp>
@@ -24,7 +24,7 @@ using hpx::init;
 using hpx::finalize;
 using hpx::find_here;
 
-using boost::posix_time::milliseconds;
+using boost::chrono::milliseconds;
 
 using hpx::naming::id_type;
 using hpx::naming::get_management_type_name;
@@ -37,8 +37,6 @@ using hpx::components::get_component_type;
 using hpx::applier::get_applier;
 
 using hpx::agas::garbage_collect;
-
-using hpx::actions::plain_action3;
 
 using hpx::async;
 
@@ -54,23 +52,14 @@ using hpx::find_here;
 void split(
     id_type const& from
   , id_type const& target
-  , boost::uint16_t old_credit
+  , boost::int64_t old_credit
     );
 
-typedef plain_action3<
-    // Arguments.
-    id_type const&
-  , id_type const&
-  , boost::uint16_t
-    // Function.
-  , split
-> split_action;
-
-HPX_REGISTER_PLAIN_ACTION(split_action);
+HPX_PLAIN_ACTION(split);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helper functions.
-inline boost::uint32_t get_credit(id_type const& id)
+inline boost::int64_t get_credit(id_type const& id)
 {
     return get_credit_from_gid(id.get_gid());
 }
@@ -79,7 +68,7 @@ inline boost::uint32_t get_credit(id_type const& id)
 void split(
     id_type const& from
   , id_type const& target
-  , boost::uint16_t old_credit
+  , boost::int64_t old_credit
     )
 {
     cout << "[" << find_here() << "/" << target << "]: "
@@ -94,8 +83,10 @@ void split(
     id_type const here = find_here();
 
     if (get_locality_id_from_id(from) == get_locality_id_from_id(here))
+    {
         throw std::logic_error("infinite recursion detected, split was "
                                "invoked locally");
+    }
 
     // Recursively call split on the sender locality.
     async<split_action>(from, here, target, get_credit(target)).get();
@@ -141,11 +132,13 @@ void hpx_test_main(
     }
 
     // Flush pending reference counting operations.
+    garbage_collect();
     garbage_collect(remote_localities[0]);
     garbage_collect();
+    garbage_collect(remote_localities[0]);
 
     // The component should be out of scope now.
-    HPX_TEST_EQ(true, monitor.ready(milliseconds(delay)));
+    HPX_TEST_EQ(true, monitor.is_ready(milliseconds(delay)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

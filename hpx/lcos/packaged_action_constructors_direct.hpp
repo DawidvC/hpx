@@ -25,7 +25,7 @@
 #endif
 
 #define BOOST_PP_ITERATION_PARAMS_1                                           \
-    (3, (2, HPX_ACTION_ARGUMENT_LIMIT,                                        \
+    (3, (1, HPX_ACTION_ARGUMENT_LIMIT,                                        \
     "hpx/lcos/packaged_action_constructors_direct.hpp"))                      \
     /**/
 
@@ -47,31 +47,54 @@
 #define N BOOST_PP_ITERATION()
 
     template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>
-    void apply(naming::id_type const& gid,
+    void apply(BOOST_SCOPED_ENUM(launch) /*policy*/, naming::id_type const& gid,
         HPX_ENUM_FWD_ARGS(N, Arg, arg))
     {
         util::block_profiler_wrapper<profiler_tag> bp(apply_logger_);
 
         naming::address addr;
-        if (agas::is_local_address(gid, addr)) {
+        if (agas::is_local_address_cached(gid, addr)) {
             // local, direct execution
-            BOOST_ASSERT(components::types_are_compatible(addr.type_,
-                components::get_component_type<
-                    typename action_type::component_type>()));
+            HPX_ASSERT(traits::component_type_is_compatible<
+                typename Action::component_type>::call(addr));
 
             (*this->impl_)->set_data(
-                boost::move(action_type::execute_function(addr.address_,
+                std::move(action_type::execute_function(addr.address_,
                     util::forward_as_tuple(HPX_ENUM_FORWARD_ARGS(N, Arg, arg))))
             );
         }
         else {
             // remote execution
-            using HPX_STD_PLACEHOLDERS::_1;
-            using HPX_STD_PLACEHOLDERS::_2;
+            hpx::applier::detail::apply_c_cb<action_type>(
+                std::move(addr), this->get_gid(), gid,
+                util::bind(&packaged_action::parcel_write_handler,
+                    this->impl_, util::placeholders::_1, util::placeholders::_2),
+                HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
+        }
+    }
 
-            hpx::applier::detail::apply_c_cb<action_type>(addr,
-                this->get_gid(), gid,
-                HPX_STD_BIND(&packaged_action::parcel_write_handler, this, _1, _2),
+    template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>
+    void apply(BOOST_SCOPED_ENUM(launch) /*policy*/, naming::address&& addr,
+        naming::id_type const& gid, HPX_ENUM_FWD_ARGS(N, Arg, arg))
+    {
+        util::block_profiler_wrapper<profiler_tag> bp(apply_logger_);
+
+        if (addr.locality_ == hpx::get_locality()) {
+            // local, direct execution
+            HPX_ASSERT(traits::component_type_is_compatible<
+                typename Action::component_type>::call(addr));
+
+            (*this->impl_)->set_data(
+                std::move(action_type::execute_function(addr.address_,
+                    util::forward_as_tuple(HPX_ENUM_FORWARD_ARGS(N, Arg, arg))))
+            );
+        }
+        else {
+            // remote execution
+            hpx::applier::detail::apply_c_cb<action_type>(
+                std::move(addr), this->get_gid(), gid,
+                util::bind(&packaged_action::parcel_write_handler,
+                    this->impl_, util::placeholders::_1, util::placeholders::_2),
                 HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
         }
     }
@@ -86,7 +109,7 @@
                     << ", "
                     << gid
                     << ") args(" << (N + 1) << ")";
-        apply(gid, HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
+        apply(launch::all, gid, HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
     }
 
 #undef N

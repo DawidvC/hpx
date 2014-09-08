@@ -5,10 +5,9 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/exception.hpp>
+#include <hpx/util/assert.hpp>
 
 #include "read_values.hpp"
-
-#include <boost/assert.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 // Interpolation helper functions related to HDF5.
@@ -59,7 +58,7 @@ namespace sheneos { namespace detail
             DataSpace dataspace = dataset.getSpace();
 
             // Verify number of dimensions.
-            BOOST_ASSERT(dataspace.getSimpleExtentNdims() == 1);
+            HPX_ASSERT(dataspace.getSimpleExtentNdims() == 1);
 
             // Read the data subset.
             detail::read_values(dataset, dataspace, offset, count, values);
@@ -89,7 +88,7 @@ namespace sheneos { namespace detail
             DataSpace dataspace = dataset.getSpace();
 
             // Verify number of dimensions
-            BOOST_ASSERT(dataspace.getSimpleExtentNdims() == 1);
+            HPX_ASSERT(dataspace.getSimpleExtentNdims() == 1);
 
             // Get the size of each dimension in the dataspace.
             hsize_t dims[1];
@@ -167,7 +166,7 @@ namespace detail
             DataSpace dataspace = dataset.getSpace();
 
             // Verify number of dimensions.
-            BOOST_ASSERT(dataspace.getSimpleExtentNdims() == dimension::dim);
+            HPX_ASSERT(dataspace.getSimpleExtentNdims() == dimension::dim);
 
             // Read the data subset.
             detail::read_values(dataset, dataspace, dimx, dimy, dimz, values);

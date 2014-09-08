@@ -9,6 +9,7 @@
 #include <hpx/util/lightweight_test.hpp>
 
 #include <boost/assign/std/vector.hpp>
+#include <boost/foreach.hpp>
 
 #include <iostream>
 #include <algorithm>
@@ -111,7 +112,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0x000fff }
         },
@@ -122,7 +123,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0x000fff }
         },
@@ -150,7 +151,7 @@ namespace test
                     spec_type(spec_type::socket, 0, -1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0xfff000 }
         },
@@ -161,7 +162,7 @@ namespace test
                     spec_type(spec_type::socket, 0, -1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0xfff000 }
         },
@@ -189,7 +190,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0x000fff }
         },
@@ -200,7 +201,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0x000fff }
         },
@@ -228,7 +229,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, -1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0xfff000 }
         },
@@ -239,7 +240,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, 1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000fff, 0xfff000 }
         },
@@ -267,7 +268,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 0, 0),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x000003 }
         },
@@ -278,7 +279,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 0, 0),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x000003 }
         },
@@ -306,7 +307,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 0, -1),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x00000c }
         },
@@ -317,7 +318,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 0, 1),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x00000c }
         },
@@ -345,7 +346,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000004, 0x000004 }
         },
@@ -373,7 +374,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 0, -1)
-                }
+                }, data_good_thread()
             },
             { 0x000004, 0x000008 }
         },
@@ -401,7 +402,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000001 }
         },
@@ -429,7 +430,7 @@ namespace test
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, -1)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000002 }
         },
@@ -457,7 +458,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::core, 0, 0),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x000003 }
         },
@@ -485,7 +486,7 @@ namespace test
                     spec_type(spec_type::socket, 1, 0),
                     spec_type(spec_type::core, 0, -1),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x003000, 0x00c000 }
         },
@@ -513,7 +514,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, 0),
                     spec_type(spec_type::core, 0, 0),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x000003, 0x000003 }
         },
@@ -541,7 +542,7 @@ namespace test
                     spec_type(spec_type::numanode, 1, 0),
                     spec_type(spec_type::core, 0, -1),
                     spec_type(spec_type::unknown)
-                }
+                }, data_good_thread()
             },
             { 0x003000, 0x00c000 }
         },
@@ -569,7 +570,7 @@ namespace test
                     spec_type(spec_type::socket, 1, 0),
                     spec_type(spec_type::core, 0, -1),
                     spec_type(spec_type::pu, 1, 0)
-                }
+                }, data_good_thread()
             },
             { 0x002000, 0x008000 }
         },
@@ -597,7 +598,7 @@ namespace test
                     spec_type(spec_type::socket, 1, 0),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x004000, 0x004000 }
         },
@@ -625,7 +626,7 @@ namespace test
                     spec_type(spec_type::socket, 1, 0),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 0, -1)
-                }
+                }, data_good_thread()
             },
             { 0x004000, 0x008000 }
         },
@@ -653,7 +654,7 @@ namespace test
                     spec_type(spec_type::numanode, 1, 0),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x004000, 0x004000 }
         },
@@ -681,7 +682,7 @@ namespace test
                     spec_type(spec_type::numanode, 1, 0),
                     spec_type(spec_type::core, 0, -1),
                     spec_type(spec_type::pu, 1, 0)
-                }
+                }, data_good_thread()
             },
             { 0x002000, 0x008000 }
         },
@@ -693,7 +694,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::core, spec_type::all_entities(), 0),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000004 }
         },
@@ -722,7 +723,7 @@ namespace test
                     spec_type(spec_type::socket, 0, -1),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 1, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000008, 0x008000 }
         },
@@ -751,7 +752,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, -1),
                     spec_type(spec_type::core, 1, 0),
                     spec_type(spec_type::pu, 1, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000008, 0x008000 }
         },
@@ -780,7 +781,7 @@ namespace test
                     spec_type(spec_type::socket, 0, -1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x001000 }
         },
@@ -809,7 +810,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, -1),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x001000 }
         },
@@ -838,7 +839,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000001 }
         },
@@ -867,7 +868,7 @@ namespace test
                     spec_type(spec_type::socket, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, -1)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000002 }
         },
@@ -896,7 +897,7 @@ namespace test
                     spec_type(spec_type::numanode, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, 0)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000001 }
         },
@@ -925,12 +926,12 @@ namespace test
                     spec_type(spec_type::numanode, 0, 0),
                     spec_type(spec_type::unknown),
                     spec_type(spec_type::pu, 0, -1)
-                }
+                }, data_good_thread()
             },
             { 0x000001, 0x000002 }
         },
 
-        { "" }
+        { "", {data_good_thread(), data_good_thread()}, {0,0} }
     };
 
     void good_testing(data_good const* t, char const* const options)
@@ -941,16 +942,24 @@ namespace test
         HPX_TEST(!ec);
 
         int i = 0;
-        BOOST_FOREACH(hpx::threads::detail::full_mapping_type const& m, mappings)
+
+        HPX_TEST_EQ(mappings.which(), 1);
+        if (mappings.which() == 1)
         {
-            HPX_TEST_EQ(t->t[i].thread, m.first);
-            HPX_TEST_EQ(m.second.size(), 3u);
-            if (m.second.size() == 3u) {
-                HPX_TEST_EQ(t->t[i].socket, m.second[0]);
-                HPX_TEST_EQ(t->t[i].core, m.second[1]);
-                HPX_TEST_EQ(t->t[i].pu, m.second[2]);
+            hpx::threads::detail::mappings_spec_type mappings_specs(
+                boost::get<hpx::threads::detail::mappings_spec_type>(mappings));
+
+            BOOST_FOREACH(hpx::threads::detail::full_mapping_type const& m, mappings_specs)
+            {
+                HPX_TEST_EQ(t->t[i].thread, m.first);
+                HPX_TEST_EQ(m.second.size(), 3u);
+                if (m.second.size() == 3u) {
+                    HPX_TEST_EQ(t->t[i].socket, m.second[0]);
+                    HPX_TEST_EQ(t->t[i].core, m.second[1]);
+                    HPX_TEST_EQ(t->t[i].pu, m.second[2]);
+                }
+                ++i;
             }
-            ++i;
         }
 
 #if defined(VERIFY_AFFINITY_MASKS)

@@ -12,8 +12,7 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/exception.hpp>
 #include <hpx/lcos/local/spinlock.hpp>
-#include <hpx/util/unlock_lock.hpp>
-#include <hpx/runtime/threads/thread_data.hpp>
+#include <hpx/util/scoped_unlock.hpp>
 #include <hpx/runtime/components/component_type.hpp>
 #include <hpx/runtime/components/server/managed_component_base.hpp>
 #include <hpx/runtime/applier/trigger.hpp>
@@ -93,7 +92,7 @@ struct object_semaphore
         {
             ValueType value = value_queue_.front().val_;
 
-            BOOST_ASSERT(0 != value_queue_.front().count_);
+            HPX_ASSERT(0 != value_queue_.front().count_);
 
             if (1 == value_queue_.front().count_)
             {
@@ -109,10 +108,10 @@ struct object_semaphore
             thread_queue_.pop_front();
 
             {
-                util::unlock_the_lock<mutex_type::scoped_lock> ul(l);
+                util::scoped_unlock<mutex_type::scoped_lock> ul(l);
 
                 // set the LCO's result
-                applier::trigger(id, boost::move(value));
+                applier::trigger(id, std::move(value));
             }
         }
     } // }}}
@@ -183,7 +182,7 @@ struct object_semaphore
             }
         }
 
-        BOOST_ASSERT(thread_queue_.empty());
+        HPX_ASSERT(thread_queue_.empty());
     } // }}}
 
     void wait()
@@ -207,7 +206,7 @@ struct object_semaphore
         }
     } // }}}
 
-#if defined(HPX_GCC_VERSION) && (HPX_GCC_VERSION <= 40400)
+#if defined(HPX_GCC44_WORKAROUND)
     typedef
         hpx::actions::action2<
             object_semaphore<ValueType>

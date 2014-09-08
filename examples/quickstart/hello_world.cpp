@@ -1,12 +1,12 @@
 ///////////////////////////////////////////////////////////////////////////////
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-// Including 'hpx/hpx_main.hpp' instead of the usual 'hpx/hpx_init.hpp' enables 
+// Including 'hpx/hpx_main.hpp' instead of the usual 'hpx/hpx_init.hpp' enables
 // to use the plain C-main below as the direct main HPX entry point.
 #include <hpx/hpx_main.hpp>
 #include <hpx/include/lcos.hpp>
@@ -44,10 +44,10 @@ std::size_t hello_world_worker(std::size_t desired)
     if (current == desired)
     {
         // The HPX-thread has been run on the desired OS-thread.
-        char const* msg = "hello world from OS-thread %1% on locality %2%\n";
+        char const* msg = "hello world from OS-thread %1% on locality %2%";
 
         hpx::cout << (boost::format(msg) % desired % hpx::get_locality_id())
-                  << hpx::flush;
+                  << std::endl << hpx::flush;
 
         return desired;
     }
@@ -108,14 +108,14 @@ void hello_world_foreman()
         // return value of the future. hpx::lcos::wait doesn't return until
         // all the futures in the vector have returned.
         hpx::lcos::local::spinlock mtx;
-        hpx::wait(futures,
-            [&](std::size_t, std::size_t t) {
+        hpx::lcos::wait_each(futures,
+            hpx::util::unwrapped([&](std::size_t t) {
                 if (std::size_t(-1) != t)
                 {
                     hpx::lcos::local::spinlock::scoped_lock lk(mtx);
                     attendance.erase(t);
                 }
-            });
+            }));
     }
 }
 //]
@@ -124,12 +124,11 @@ void hello_world_foreman()
 // Define the boilerplate code necessary for the function 'hello_world_foreman'
 // to be invoked as an HPX action.
 HPX_PLAIN_ACTION(hello_world_foreman, hello_world_foreman_action);
-HPX_ACTION_USES_SNAPPY_COMPRESSION(hello_world_foreman_action);
 //]
 
 ///////////////////////////////////////////////////////////////////////////////
 //[hello_world_hpx_main
-//` Here is the main entry point. By using the include 'hpx/hpx_main.hpp' HPX 
+//` Here is the main entry point. By using the include 'hpx/hpx_main.hpp' HPX
 //` will invoke the plain old C-main() as its first HPX thread.
 int main()
 {
@@ -151,9 +150,9 @@ int main()
     }
 
     // The non-callback version of hpx::lcos::wait takes a single parameter,
-    // a future of vectors to wait on. hpx::lcos::wait only returns when
+    // a future of vectors to wait on. hpx::wait_all only returns when
     // all of the futures have finished.
-    hpx::lcos::wait(futures);
+    hpx::wait_all(futures);
     return 0;
 }
 //]

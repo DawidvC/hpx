@@ -9,13 +9,13 @@
 #include <hpx/runtime/threads/thread_helpers.hpp>
 #include <hpx/util/high_resolution_timer.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/chrono.hpp>
 
 using boost::program_options::variables_map;
 using boost::program_options::options_description;
 using boost::program_options::value;
 
-using boost::posix_time::seconds;
+using boost::chrono::seconds;
 
 using hpx::init;
 using hpx::finalize;
@@ -39,8 +39,8 @@ int hpx_main(variables_map& vm)
         // Schedule a wakeup in 5 seconds.
         set_thread_state(get_self_id(), seconds(5), pending);
 
-        // Suspend this pxthread.
-        get_self().yield(suspended);
+        // Suspend this HPX thread.
+        hpx::this_thread::suspend(suspended);
 
         std::cout << "woke up after " << t.elapsed() << " seconds\n";
     }

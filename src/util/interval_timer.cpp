@@ -8,7 +8,7 @@
 #include <hpx/runtime/applier/applier.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
 #include <hpx/util/interval_timer.hpp>
-#include <hpx/util/unlock_lock.hpp>
+#include <hpx/util/scoped_unlock.hpp>
 
 #include <boost/bind.hpp>
 
@@ -25,7 +25,7 @@ namespace hpx { namespace util
       : f_(f), on_term_(),
         microsecs_(microsecs), id_(0), description_(description),
         pre_shutdown_(pre_shutdown), is_started_(false), first_start_(true),
-        is_terminated_(false)
+        is_terminated_(false), is_stopped_(false)
     {}
 
     interval_timer::interval_timer(HPX_STD_FUNCTION<bool()> const& f,
@@ -35,7 +35,7 @@ namespace hpx { namespace util
       : f_(f), on_term_(on_term),
         microsecs_(microsecs), id_(0), description_(description),
         pre_shutdown_(pre_shutdown), is_started_(false), first_start_(true),
-        is_terminated_(false)
+        is_terminated_(false), is_stopped_(false)
     {}
 
     bool interval_timer::start(bool evaluate_)
@@ -48,19 +48,21 @@ namespace hpx { namespace util
             if (first_start_) {
                 first_start_ = false;
 
-                util::unlock_the_lock<mutex_type::scoped_lock> ul(l);
+                util::scoped_unlock<mutex_type::scoped_lock> ul(l);
                 if (pre_shutdown_)
                     register_pre_shutdown_function(boost::bind(&interval_timer::terminate, this));
                 else
                     register_shutdown_function(boost::bind(&interval_timer::terminate, this));
             }
 
+            is_stopped_ = false;
+
             if (evaluate_) {
                 l.unlock();
                 evaluate(threads::wait_signaled);
             }
             else {
-                schedule_thread();
+                schedule_thread(l);
             }
 
             return true;
@@ -87,7 +89,7 @@ namespace hpx { namespace util
             evaluate(threads::wait_signaled);
         }
         else {
-            schedule_thread();
+            schedule_thread(l);
         }
         return true;
     }
@@ -95,6 +97,7 @@ namespace hpx { namespace util
     bool interval_timer::stop()
     {
         mutex_type::scoped_lock l(mtx_);
+        is_stopped_ = true;
         return stop_locked();
     }
 
@@ -106,13 +109,13 @@ namespace hpx { namespace util
             if (id_) {
                 error_code ec(lightweight);       // avoid throwing on error
                 threads::set_thread_state(id_, threads::pending,
-                    threads::wait_abort, threads::thread_priority_critical, ec);
+                    threads::wait_abort, threads::thread_priority_boost, ec);
                 id_ = 0;
             }
             return true;
         }
 
-        BOOST_ASSERT(id_ == 0);
+        HPX_ASSERT(id_ == 0);
         return false;
     }
 
@@ -146,8 +149,11 @@ namespace hpx { namespace util
         try {
             mutex_type::scoped_lock l(mtx_);
 
-            if (is_terminated_ || statex == threads::wait_abort || 0 == microsecs_)
+            if (is_stopped_ || is_terminated_ ||
+                statex == threads::wait_abort || 0 == microsecs_)
+            {
                 return threads::terminated;        // object has been finalized, exit
+            }
 
             if (id_ != 0 && id_ != threads::get_self_id())
                 return threads::terminated;        // obsolete timer thread
@@ -158,14 +164,14 @@ namespace hpx { namespace util
             bool result = false;
 
             {
-                util::unlock_the_lock<mutex_type::scoped_lock> ul(l);
+                util::scoped_unlock<mutex_type::scoped_lock> ul(l);
                 result = f_();            // invoke the supplied function
             }
 
             // some other thread might already have started the timer
             if (0 == id_ && result) {
-                BOOST_ASSERT(!is_started_);
-                schedule_thread();        // wait and repeat
+                HPX_ASSERT(!is_started_);
+                schedule_thread(l);        // wait and repeat
             }
         }
         catch (hpx::exception const& e){
@@ -177,22 +183,51 @@ namespace hpx { namespace util
     }
 
     // schedule a high priority task after a given time interval
-    void interval_timer::schedule_thread()
+    void interval_timer::schedule_thread(mutex_type::scoped_lock & l)
     {
         using namespace hpx::threads;
 
+        error_code ec;
+
         // create a new suspended thread
-        id_ = hpx::applier::register_thread_plain(
-            boost::bind(&interval_timer::evaluate, this, _1),
-            description_.c_str(), threads::suspended, true,
-            threads::thread_priority_critical);
+        threads::thread_id_type id;
+        {
+            // FIXME: registering threads might lead to thread suspension since
+            // the allocators use hpx::lcos::local::spinlock. Unlocking the
+            // lock here would be the right thing but leads to crashes and hangs
+            // at shutdown.
+            //util::scoped_unlock<mutex_type::scoped_lock> ul(l);
+            id = hpx::applier::register_thread_plain(
+                boost::bind(&interval_timer::evaluate, this, _1),
+                description_.c_str(), threads::suspended, true,
+                threads::thread_priority_boost, std::size_t(-1),
+                threads::thread_stacksize_default, ec);
+        }
+
+        if (ec) {
+            is_terminated_ = true;
+            is_started_ = false;
+            return;
+        }
 
         // schedule this thread to be run after the given amount of seconds
-        threads::set_thread_state(id_,
+        threads::set_thread_state(id,
             boost::posix_time::microseconds(microsecs_),
             threads::pending, threads::wait_signaled,
-            threads::thread_priority_critical);
+            threads::thread_priority_boost, ec);
 
+        if (ec) {
+            is_terminated_ = true;
+            is_started_ = false;
+
+            // abort the newly created thread
+            threads::set_thread_state(id, threads::pending, threads::wait_abort,
+                threads::thread_priority_boost, ec);
+
+            return;
+        }
+
+        id_ = id;
         is_started_ = true;
     }
 }}

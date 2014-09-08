@@ -21,19 +21,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace components
 {
-    typedef boost::fusion::vector3<
+    typedef hpx::util::tuple<
         logging_destination, std::size_t, std::string
     > message_type;
 
     typedef std::vector<message_type> messages_type;
-}}
-
-///////////////////////////////////////////////////////////////////////////////
-// non-intrusive serialization
-namespace boost { namespace serialization
-{
-    template <typename Archive>
-    void serialize(Archive&, hpx::components::message_type&, unsigned int const);
 }}
 
 //////////////////////////////////////////////////////////////////////////////
@@ -69,45 +61,24 @@ namespace hpx { namespace components { namespace server
           : base_type(msgs)
         {}
 
-        /// serialization support
-        static void register_base()
-        {
-            util::void_cast_register_nonvirt<console_logging_action, base_type>();
-            base_type::register_base();
-        }
-
     public:
         template <typename Arguments>
         static util::unused_type
         execute_function(naming::address::address_type lva,
-            BOOST_FWD_REF(Arguments) args)
+            Arguments && args)
         {
             try {
                 // call the function, ignoring the return value
                 console_logging(
-                    boost::move(boost::fusion::at_c<0>(args)));
+                    std::move(boost::fusion::at_c<0>(args)));
             }
             catch (hpx::exception const& /*e*/) {
                 /**/;      // no logging!
             }
             return util::unused;
         }
-
-    private:
-        // serialization support
-        friend class boost::serialization::access;
-
-        template<class Archive>
-        void serialize(Archive& ar, const unsigned int /*version*/)
-        {
-            ar & boost::serialization::base_object<base_type>(*this);
-        }
     };
 }}}
-
-HPX_REGISTER_PLAIN_ACTION_DECLARATION(
-    hpx::components::server::console_logging_action<>
-)
 
 namespace hpx { namespace traits
 {
@@ -118,6 +89,10 @@ namespace hpx { namespace traits
       : boost::mpl::false_
     {};
 }}
+
+HPX_REGISTER_PLAIN_ACTION_DECLARATION(
+    hpx::components::server::console_logging_action<>
+)
 
 #endif
 

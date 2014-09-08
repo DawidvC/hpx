@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #if !defined(HPX_RUNTIME_RUNTIME_IMPL_HPP)
-#define HPX_RUNTIME_RUNTIME_RUNTIME_IMPL_HPP
+#define HPX_RUNTIME_RUNTIME_IMPL_HPP
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/exception.hpp>
@@ -14,6 +14,7 @@
 #include <hpx/runtime/naming/resolver_client.hpp>
 #include <hpx/runtime/parcelset/parcelport.hpp>
 #include <hpx/runtime/parcelset/parcelhandler.hpp>
+#include <hpx/runtime/threads/policies/affinity_data.hpp>
 #include <hpx/runtime/threads/policies/callback_notifier.hpp>
 #include <hpx/runtime/threads/topology.hpp>
 #include <hpx/runtime/applier/applier.hpp>
@@ -23,7 +24,7 @@
 #include <hpx/util/runtime_configuration.hpp>
 #include <hpx/util/generate_unique_ids.hpp>
 #include <hpx/util/thread_specific_ptr.hpp>
-#include <hpx/util/thread_mapper.hpp>
+#include <hpx/util/init_logging.hpp>
 
 #include <boost/foreach.hpp>
 #include <boost/detail/atomic_count.hpp>
@@ -68,7 +69,9 @@ namespace hpx {
         explicit runtime_impl(util::runtime_configuration const& rtcfg,
             runtime_mode locality_mode = runtime_mode_console,
             std::size_t num_threads = 1,
-            init_scheduler_type const& init = init_scheduler_type());
+            init_scheduler_type const& init = init_scheduler_type(),
+            threads::policies::init_affinity_data const& affinity_init =
+                threads::policies::init_affinity_data());
 
         /// \brief The destructor makes sure all HPX runtime services are
         ///        properly shut down before exiting.
@@ -210,6 +213,11 @@ namespace hpx {
 
         /// \brief Allow access to the parcel handler instance used by the HPX
         ///        runtime.
+        parcelset::parcelhandler const& get_parcel_handler() const
+        {
+            return parcel_handler_;
+        }
+
         parcelset::parcelhandler& get_parcel_handler()
         {
             return parcel_handler_;
@@ -246,32 +254,34 @@ namespace hpx {
             return parcel_port_->here();
         }
 
-        /// \brief Return the number of executed PX threads
+        /// \brief Return the number of executed HPX threads
         ///
         /// \param num This parameter specifies the sequence number of the OS
-        ///            thread the number of executed PX threads should be
+        ///            thread the number of executed HPX threads should be
         ///            returned for. If this is std::size_t(-1) the function
-        ///            will return the overall number of executed PX threads.
+        ///            will return the overall number of executed HPX threads.
+#ifdef HPX_THREAD_MAINTAIN_CUMULATIVE_COUNTS
         boost::int64_t get_executed_threads(std::size_t num = std::size_t(-1)) const
         {
             return thread_manager_->get_executed_threads(num);
         }
+#endif
 
         boost::uint64_t get_runtime_support_lva() const
         {
-            return reinterpret_cast<boost::uint64_t>(&runtime_support_);
+            return reinterpret_cast<boost::uint64_t>(runtime_support_.get());
         }
 
         boost::uint64_t get_memory_lva() const
         {
-            return reinterpret_cast<boost::uint64_t>(&memory_);
+            return reinterpret_cast<boost::uint64_t>(memory_.get());
         }
 
-        naming::gid_type get_next_id();
+        naming::gid_type get_next_id(std::size_t count = 1);
 
-        util::unique_ids& get_id_pool()
+        util::unique_id_ranges& get_id_pool()
         {
-            return id_pool;
+            return id_pool_;
         }
 
         /// Add a function to be executed inside a HPX thread before hpx_main
@@ -331,13 +341,20 @@ namespace hpx {
         /// return zero.
         hpx::util::io_service_pool* get_thread_pool(char const* name);
 
+        /// Register an external OS-thread with HPX
+        bool register_thread(char const* name, std::size_t num = 0,
+            bool service_thread = true);
+
+        /// Unregister an external OS-thread with HPX
+        bool unregister_thread();
+
     private:
         void init_tss(char const* context, std::size_t num, char const* postfix,
             bool service_thread);
         void deinit_tss();
 
     private:
-        util::unique_ids id_pool;
+        util::unique_id_ranges id_pool_;
         runtime_mode mode_;
         int result_;
         std::size_t num_threads_;

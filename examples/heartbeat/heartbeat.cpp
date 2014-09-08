@@ -67,7 +67,7 @@ int monitor(double runfor, std::string const& name, boost::uint64_t pause)
     while (runfor < 0 || t.elapsed() < runfor)
     {
         // stop collecting data when the runtime is exiting
-        if (!hpx::is_running() || f.ready())
+        if (!hpx::is_running() || f.is_ready())
             return 0;
 
         // Query the performance counter.
@@ -135,6 +135,10 @@ int main(int argc, char* argv[])
 
     // Initialize and run HPX, enforce connect mode as we connect to an existing
     // application.
-    return hpx::init(desc_commandline, argc, argv, hpx::runtime_mode_connect);
+    std::vector<std::string> cfg;
+    cfg.push_back("hpx.run_hpx_main!=1");
+
+    HPX_STD_FUNCTION<void()> const empty;
+    return hpx::init(desc_commandline, argc, argv, cfg, empty, empty, hpx::runtime_mode_connect);
 }
 

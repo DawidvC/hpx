@@ -96,14 +96,14 @@ int hpx_main(variables_map &)
         }
 
         objects_type objects;
-        BOOST_FOREACH(object_promise_type const & promise, object_promises)
+        BOOST_FOREACH(object_promise_type & promise, object_promises)
         {
             objects.push_back(promise.get());
         }
 
         BOOST_FOREACH(object_type & o, objects)
         {
-            hpx::lcos::wait(o <= output());
+            hpx::wait_all(o <= output());
             cctor_counter = 0;
             hpx::util::function<int(foo &)> f = plus(9);
             hpx::cout << (o <= f).get() << "\n" << hpx::flush;

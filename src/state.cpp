@@ -8,10 +8,8 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/state.hpp>
 #include <hpx/runtime.hpp>
-#include <hpx/runtime/applier/applier.hpp>
 #include <hpx/runtime/threads/threadmanager.hpp>
 #include <hpx/runtime/naming/resolver_client.hpp>
-#include <hpx/runtime/actions/continuation.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx
@@ -24,9 +22,9 @@ namespace hpx
             hpx::runtime* rt = get_runtime_ptr();
             if (NULL == rt) {
                 // we're probably either starting or stopping
-                return (mask & (starting | stopping)) ? true : false;
+                return (mask & (starting | stopping)) != 0;
             }
-            return (rt->get_thread_manager().status() & mask) ? true : false;
+            return (rt->get_thread_manager().status() & mask) != 0;
         }
     }
 
@@ -38,9 +36,9 @@ namespace hpx
             runtime* rt = get_runtime_ptr();
             if (NULL == rt) {
                 // we're probably either starting or stopping
-                return (mask & (starting | stopping)) ? true : false;
+                return (mask & (starting | stopping)) != 0;
             }
-            return (rt->get_agas_client().get_status() & mask) ? true : false;
+            return (rt->get_agas_client().get_status() & mask) != 0;
         }
     }
 }

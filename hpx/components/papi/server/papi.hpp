@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2011 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c) 2011-2012 Maciej Brodowicz
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -72,7 +72,7 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
     struct thread_counters
     {
     public:
-        typedef hpx::util::spinlock mutex_type;
+        typedef hpx::lcos::local::spinlock mutex_type;
 
     private:
         typedef std::vector<papi_counter *> ctable_type;
@@ -121,7 +121,10 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
     ///////////////////////////////////////////////////////////////////////////
     class papi_counter_base: boost::noncopyable
     {
-        typedef hpx::util::spinlock mutex_type;
+    public:
+        typedef hpx::lcos::local::spinlock mutex_type;
+
+    private:
         typedef std::map<boost::uint32_t, thread_counters *> ttable_type;
 
         //// shared state
@@ -135,6 +138,11 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
 
         // lookup or create thread_counters instance for thread tix
         thread_counters *get_thread_counters(boost::uint32_t tix);
+
+        mutex_type& get_global_mtx()
+        {
+            return base_mtx_; 
+        }
     };
 
 
@@ -144,7 +152,7 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         public hpx::components::managed_component_base<papi_counter>,
         protected papi_counter_base
     {
-        friend class thread_counters;
+        friend struct thread_counters;
 
         // PAPI event associated with the counter and index into counter array
         int const event_;
@@ -175,9 +183,9 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         virtual bool start();
         // stop the counter
         virtual bool stop();
-    // various reset flavors
-    virtual void reset();
-    virtual void reset_counter_value() {reset();}
+        // various reset flavors
+        virtual void reset();
+        virtual void reset_counter_value() {reset();}
     
         // get the current value of this performance counter
         hpx::performance_counters::counter_value get_counter_value(bool reset=false);
@@ -231,24 +239,23 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
 
         // stop low level counter
         bool stop_counter()
-    {
-        if (status_ == PAPI_COUNTER_ACTIVE)
         {
-        if (!counters_->remove_event(this)) return false;
+            if (status_ == PAPI_COUNTER_ACTIVE)
+            {
+                if (!counters_->remove_event(this)) return false;
+            }
+            return true;
         }
-        return true;
-    }
-    // reset counter
-    void reset_counter()
-    {
-        // if active, clear the previous contents of low level counter
-        if (status_ == PAPI_COUNTER_ACTIVE)
-        counters_->read_value(this, true);
+        // reset counter
+        void reset_counter()
+        {
+            // if active, clear the previous contents of low level counter
+            if (status_ == PAPI_COUNTER_ACTIVE)
+            counters_->read_value(this, true);
 
-        value_ = 0;
-    }
+            value_ = 0;
+        }
     };
-
 }}}}
 
 #endif

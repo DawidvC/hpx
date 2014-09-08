@@ -6,8 +6,6 @@
 set(tests
     path_elements)
 
-set(merging_map_FLAGS NOLIBS)
-
 foreach(test ${tests})
   set(sources
       ${test}.cpp)
@@ -18,9 +16,11 @@ foreach(test ${tests})
   add_hpx_executable(${test}_test
                      SOURCES ${sources}
                      ${${test}_FLAGS}
+                     EXCLUDE_FROM_ALL
+                     HPX_PREFIX ${HPX_BUILD_PREFIX}
                      FOLDER "Tests/Unit/PerformanceCounters/")
 
-  add_hpx_unit_test(${test} ${${test}_PARAMETERS})  
+  add_hpx_unit_test("performance_counters" ${test} ${${test}_PARAMETERS})
 
   # add a custom target for this example
   add_hpx_pseudo_target(tests.unit.performance_counters.${test})

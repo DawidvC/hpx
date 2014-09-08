@@ -2,6 +2,7 @@
 //  Copyright (c) 2007 Robert Perricone
 //  Copyright (c) 2007-2012 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
+//  Copyright (c) 2013 Thomas Heller
 //
 //  Distributed under the Boost Software License, Version 1.0.
 //  (See accompanying file LICENSE_1_0.txt or copy at
@@ -12,6 +13,13 @@
 
 #if defined(__linux) || defined(linux) || defined(__linux__)
 
+#include <hpx/config/forceinline.hpp>
+#include <hpx/util/assert.hpp>
+#include <hpx/util/coroutine/detail/config.hpp>
+#include <hpx/util/coroutine/detail/posix_utility.hpp>
+#include <hpx/util/coroutine/detail/swap_context.hpp>
+#include <hpx/util/get_and_reset_value.hpp>
+
 #include <sys/param.h>
 #include <cstdlib>
 #include <cstddef>
@@ -19,14 +27,17 @@
 
 #include <boost/format.hpp>
 #include <boost/cstdint.hpp>
-#include <boost/assert.hpp>
 #include <boost/atomic.hpp>
 
-#include <hpx/config/forceinline.hpp>
-#include <hpx/util/coroutine/detail/config.hpp>
-#include <hpx/util/coroutine/detail/posix_utility.hpp>
-#include <hpx/util/coroutine/detail/swap_context.hpp>
-#include <hpx/util/get_and_reset_value.hpp>
+#if defined(HPX_HAVE_VALGRIND)
+#if defined(__GNUG__) && !defined(__INTEL_COMPILER)
+#if defined(HPX_GCC_DIAGNOSTIC_PRAGMA_CONTEXTS)
+#pragma GCC diagnostic push
+#endif
+#pragma GCC diagnostic ignored "-Wpointer-arith"
+#endif
+#include <valgrind/valgrind.h>
+#endif
 
 /*
  * Defining HPX_COROUTINE_NO_SEPARATE_CALL_SITES will disable separate
@@ -47,7 +58,7 @@ extern "C" void swapcontext_stack3 (void***, void**) throw()__attribute((regparm
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace util { namespace coroutines 
+namespace hpx { namespace util { namespace coroutines
 {
 
   // some platforms need special preparation of the main thread
@@ -59,7 +70,7 @@ namespace hpx { namespace util { namespace coroutines
 
   namespace detail { namespace lx
   {
-    template <typename TO, typename FROM> 
+    template <typename TO, typename FROM>
     TO nasty_cast(FROM f)
     {
       union {
@@ -89,19 +100,21 @@ namespace hpx { namespace util { namespace coroutines
       void prefetch() const
       {
 #if defined(__x86_64__)
-        BOOST_ASSERT(sizeof(void*) == 8);
+        HPX_ASSERT(sizeof(void*) == 8);
 #else
-        BOOST_ASSERT(sizeof(void*) == 4);
+        HPX_ASSERT(sizeof(void*) == 4);
 #endif
 
         __builtin_prefetch (m_sp, 1, 3);
         __builtin_prefetch (m_sp, 0, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)+64/sizeof(void*), 1, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)+64/sizeof(void*), 0, 3);
+#if !defined(__x86_64__)
         __builtin_prefetch (static_cast<void**>(m_sp)+32/sizeof(void*), 1, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)+32/sizeof(void*), 0, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)-32/sizeof(void*), 1, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)-32/sizeof(void*), 0, 3);
+#endif
         __builtin_prefetch (static_cast<void**>(m_sp)-64/sizeof(void*), 1, 3);
         __builtin_prefetch (static_cast<void**>(m_sp)-64/sizeof(void*), 0, 3);
       }
@@ -161,46 +174,38 @@ namespace hpx { namespace util { namespace coroutines
         }
 
         m_stack = posix::alloc_stack(static_cast<std::size_t>(m_stack_size));
-        BOOST_ASSERT(m_stack);
-        m_sp = (static_cast<void**>(m_stack) + static_cast<std::size_t>(m_stack_size)/sizeof(void*));
-
+        HPX_ASSERT(m_stack);
         posix::watermark_stack(m_stack, static_cast<std::size_t>(m_stack_size));
 
         typedef void fun(Functor*);
         fun * funp = trampoline;
 
-#if defined(__x86_64__)
-        // we have to make sure that the stack pointer is aligned on a 16 Byte
-        // boundary when the code is entering the trampoline (the stack itself
-        // is already properly aligned)
-        *--m_sp = 0;       // additional alignment
+        m_sp = (static_cast<void**>(m_stack)
+                + static_cast<std::size_t>(m_stack_size)/sizeof(void*))
+                - context_size;
 
-        *--m_sp = &cb;     // parm 0 of trampoline;
-        *--m_sp = 0;       // dummy return address for trampoline
-        *--m_sp = nasty_cast<void*>( funp );// return addr (here: start addr)
-        *--m_sp = 0;       // rbp
-        *--m_sp = 0;       // rbx
-        *--m_sp = 0;       // rsi
-        *--m_sp = 0;       // rdi
-        *--m_sp = 0;       // r12
-        *--m_sp = 0;       // r13
-        *--m_sp = 0;       // r14
-        *--m_sp = 0;       // r15
-#else
-        *--m_sp = &cb;     // parm 0 of trampoline;
-        *--m_sp = 0;       // dummy return address for trampoline
-        *--m_sp = nasty_cast<void*>( funp );// return addr (here: start addr)
-        *--m_sp = 0;       // ebp
-        *--m_sp = 0;       // ebx
-        *--m_sp = 0;       // esi
-        *--m_sp = 0;       // edi
+        m_sp[backup_cb_idx] = m_sp[cb_idx] = &cb;
+        m_sp[backup_funp_idx] = m_sp[funp_idx] = nasty_cast<void*>(funp);
+
+#if defined(HPX_HAVE_VALGRIND) && !defined(NVALGRIND)
+        {
+            void * eos = static_cast<char*>(m_stack) + m_stack_size;
+            m_sp[valgrind_id_idx] = reinterpret_cast<void*>(
+                VALGRIND_STACK_REGISTER(m_stack, eos));
+        }
 #endif
       }
 
       ~x86_linux_context_impl()
       {
         if(m_stack)
+        {
+#if defined(HPX_HAVE_VALGRIND) && !defined(NVALGRIND)
+          VALGRIND_STACK_DEREGISTER(
+            reinterpret_cast<std::size_t>(m_sp[valgrind_id_idx]));
+#endif
           posix::free_stack(m_stack, static_cast<std::size_t>(m_stack_size));
+        }
       }
 
       // Return the size of the reserved stack address space.
@@ -219,8 +224,17 @@ namespace hpx { namespace util { namespace coroutines
 
       void rebind_stack()
       {
-        if(m_stack) 
+        if(m_stack) {
           increment_stack_recycle_count();
+
+          // On rebind, we initialize our stack to ensure a virgin stack
+          m_sp = (static_cast<void**>(m_stack)
+                + static_cast<std::size_t>(m_stack_size)/sizeof(void*))
+                - context_size;
+
+          m_sp[cb_idx] = m_sp[backup_cb_idx];
+          m_sp[funp_idx] = m_sp[backup_funp_idx];
+        }
       }
 
       typedef boost::atomic<boost::int64_t> counter_type;
@@ -273,8 +287,60 @@ namespace hpx { namespace util { namespace coroutines
       }
 
     private:
+#if defined(__x86_64__)
+      /** structure of context_data:
+       * 13: backup address of function to execute
+       * 12: backup address of trampoline
+       * 11: additional alignment (or valgrind_id if enabled)
+       * 10: parm 0 of trampoline
+       * 9:  dummy return address for trampoline
+       * 8:  return addr (here: start addr)
+       * 7:  rbp
+       * 6:  rbx
+       * 5:  rsi
+       * 4:  rdi
+       * 3:  r12
+       * 2:  r13
+       * 1:  r14
+       * 0:  r15
+       **/
+#if defined(HPX_HAVE_VALGRIND) && !defined(NVALGRIND)
+      static const std::size_t valgrind_id_idx = 11;
+#endif
+
+      static const std::size_t context_size = 14;
+      static const std::size_t backup_cb_idx = 13;
+      static const std::size_t backup_funp_idx = 12;
+      static const std::size_t cb_idx = 10;
+      static const std::size_t funp_idx = 8;
+#else
+      /** structure of context_data:
+       * 9: valgrind_id (if enabled)
+       * 8: backup address of function to execute
+       * 7: backup address of trampoline
+       * 6: parm 0 of trampoline
+       * 5: dummy return address for trampoline
+       * 4: return addr (here: start addr)
+       * 3: ebp
+       * 2: ebx
+       * 1: esi
+       * 0: edi
+       **/
+#if defined(HPX_HAVE_VALGRIND) && !defined(NVALGRIND)
+      static const std::size_t context_size = 10;
+      static const std::size_t valgrind_id_idx = 9;
+#else
+      static const std::size_t context_size = 9;
+#endif
+
+      static const std::size_t backup_cb_idx = 8;
+      static const std::size_t backup_funp_idx = 7;
+      static const std::size_t cb_idx = 6;
+      static const std::size_t funp_idx = 4;
+#endif
+
       std::ptrdiff_t m_stack_size;
-      void * m_stack;
+      void* m_stack;
     };
 
     typedef x86_linux_context_impl context_impl;
@@ -287,7 +353,7 @@ namespace hpx { namespace util { namespace coroutines
     inline void swap_context(x86_linux_context_impl_base& from,
         x86_linux_context_impl const& to, default_hint)
     {
-//        BOOST_ASSERT(*(void**)to.m_stack == (void*)~0);
+//        HPX_ASSERT(*(void**)to.m_stack == (void*)~0);
         to.prefetch();
         swapcontext_stack(&from.m_sp, to.m_sp);
     }
@@ -295,7 +361,7 @@ namespace hpx { namespace util { namespace coroutines
     inline void swap_context(x86_linux_context_impl& from,
         x86_linux_context_impl_base const& to, yield_hint)
     {
-//        BOOST_ASSERT(*(void**)from.m_stack == (void*)~0);
+//        HPX_ASSERT(*(void**)from.m_stack == (void*)~0);
         to.prefetch();
 #ifndef HPX_COROUTINE_NO_SEPARATE_CALL_SITES
         swapcontext_stack2(&from.m_sp, to.m_sp);
@@ -307,7 +373,7 @@ namespace hpx { namespace util { namespace coroutines
     inline void swap_context(x86_linux_context_impl& from,
         x86_linux_context_impl_base const& to, yield_to_hint)
     {
-//        BOOST_ASSERT(*(void**)from.m_stack == (void*)~0);
+//        HPX_ASSERT(*(void**)from.m_stack == (void*)~0);
         to.prefetch();
 #ifndef HPX_COROUTINE_NO_SEPARATE_CALL_SITES
         swapcontext_stack3(&from.m_sp, to.m_sp);
@@ -319,6 +385,14 @@ namespace hpx { namespace util { namespace coroutines
   }
 
 }}}}
+
+#if defined(HPX_HAVE_VALGRIND)
+#if defined(__GNUG__) && !defined(__INTEL_COMPILER)
+#if defined(HPX_GCC_DIAGNOSTIC_PRAGMA_CONTEXTS)
+#pragma GCC diagnostic pop
+#endif
+#endif
+#endif
 
 #else
 

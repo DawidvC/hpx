@@ -1,4 +1,5 @@
 //  Copyright (c) 2011 Thomas Heller
+//  Copyright (c) 2013 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -52,17 +53,17 @@ struct movable_functor
         : obj(other.obj)
     {}
 
-    movable_functor(BOOST_RV_REF(movable_functor) other)
+    movable_functor(movable_functor && other)
         : obj(boost::move(other.obj))
     {}
 
-    movable_functor& operator=(BOOST_COPY_ASSIGN_REF(movable_functor) other)
+    movable_functor& operator=(movable_functor const & other)
     {
         obj = other.obj;
         return *this;
     }
 
-    movable_functor& operator=(BOOST_RV_REF(movable_functor) other)
+    movable_functor& operator=(movable_functor && other)
     {
         obj = boost::move(other.obj);
         return *this;
@@ -80,7 +81,7 @@ struct movable_functor
     }
 
     private:
-        BOOST_COPYABLE_AND_MOVABLE(movable_functor)
+        
 };
 
 template <typename Object>
@@ -117,32 +118,132 @@ struct non_movable_functor
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-int hpx_main(variables_map&)
+void test_object()
 {
     std::vector<id_type> localities = hpx::find_all_localities();
 
     BOOST_FOREACH(id_type id, localities)
     {
-        bool is_local = (id == hpx::find_here()) ? true : false;
+        bool is_local = id == hpx::find_here();
+
+        dataflow_object<foo> f(new_<foo>(id).get());
+
+        // test movable_functor<movable_object>()
+        if (is_local)
         {
-            object<foo> f = new_<foo>(id).get();
-
-            HPX_TEST_EQ((f <= movable_functor<movable_object>()).get(), 0u);
-            HPX_TEST_EQ((f <= movable_functor<non_movable_object>()).get(), is_local ? 6u : 6u);
-
-            HPX_TEST_EQ((f <= non_movable_functor<movable_object>()).get(), is_local ? 6u : 6u);
-            HPX_TEST_EQ((f <= non_movable_functor<non_movable_object>()).get(), is_local ? 6u : 6u);
+            HPX_TEST_EQ((
+                f.apply(movable_functor<movable_object>()).get_future().get()
+            ), 1u);
+        } else {
+            HPX_TEST_EQ((
+                f.apply(movable_functor<movable_object>()).get_future().get()
+            ), 1u);
         }
+
+        // test movable_functor<non_movable_object>()
+        if (is_local)
         {
-            dataflow_object<foo> f(new_<foo>(id).get());
+            HPX_TEST_EQ((
+                f.apply(movable_functor<non_movable_object>()).get_future().get()
+            ), 3u);
+        } else {
+            HPX_TEST_EQ((
+                f.apply(movable_functor<non_movable_object>()).get_future().get()
+            ), 3u);
+        }
 
-            HPX_TEST_EQ(f.apply(movable_functor<movable_object>()).get_future().get(), 1u);
-            HPX_TEST_EQ(f.apply(movable_functor<non_movable_object>()).get_future().get(), is_local ? 5u : 5u);
+        // test non_movable_functor<movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                f.apply(non_movable_functor<movable_object>()).get_future().get()
+            ), 3u);
+        } else {
+            HPX_TEST_EQ((
+                f.apply(non_movable_functor<movable_object>()).get_future().get()
+            ), 3u);
+        }
 
-            HPX_TEST_EQ(f.apply(non_movable_functor<movable_object>()).get_future().get(), is_local ? 5u : 5u);
-            HPX_TEST_EQ(f.apply(non_movable_functor<non_movable_object>()).get_future().get(), is_local ? 5u : 5u);
+        // test non_movable_functor<non_movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                f.apply(non_movable_functor<non_movable_object>()).get_future().get()
+            ), 3u);
+        } else {
+            HPX_TEST_EQ((
+                f.apply(non_movable_functor<non_movable_object>()).get_future().get()
+            ), 3u);
         }
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_dataflow_object()
+{
+    std::vector<id_type> localities = hpx::find_all_localities();
+
+    BOOST_FOREACH(id_type id, localities)
+    {
+        bool is_local = id == hpx::find_here();
+
+        object<foo> f = new_<foo>(id).get();
+
+        // test movable_functor<movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                (f <= movable_functor<movable_object>()).get()
+            ), 0u);
+        } else {
+            HPX_TEST_EQ((
+                (f <= movable_functor<movable_object>()).get()
+            ), 0u);
+        }
+
+        // test movable_functor<non_movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                (f <= movable_functor<non_movable_object>()).get()
+            ), 4u);
+        } else {
+            HPX_TEST_EQ((
+                (f <= movable_functor<non_movable_object>()).get()
+            ), 5u);
+        }
+
+        // test non_movable_functor<movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                (f <= non_movable_functor<movable_object>()).get()
+            ), 4u);
+        } else {
+            HPX_TEST_EQ((
+                (f <= non_movable_functor<movable_object>()).get()
+            ), 5u);
+        }
+
+        // test non_movable_functor<non_movable_object>()
+        if (is_local)
+        {
+            HPX_TEST_EQ((
+                (f <= non_movable_functor<non_movable_object>()).get()
+            ), 4u);
+        } else {
+            HPX_TEST_EQ((
+                (f <= non_movable_functor<non_movable_object>()).get()
+            ), 5u);
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+int hpx_main(variables_map&)
+{
+    test_object();
+    test_dataflow_object();
 
     finalize();
 
@@ -159,4 +260,3 @@ int main(int argc, char* argv[])
     // Initialize and run HPX.
     return init(desc_commandline, argc, argv);
 }
-

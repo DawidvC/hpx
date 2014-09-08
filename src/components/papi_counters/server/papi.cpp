@@ -7,6 +7,7 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/components/derived_component_factory.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
+#include <hpx/util/thread_mapper.hpp>
 #include <hpx/util/high_resolution_clock.hpp>
 #include <hpx/components/papi/server/papi.hpp>
 #include <hpx/components/papi/util/papi.hpp>
@@ -24,7 +25,7 @@ typedef hpx::components::managed_component<
     papi_ns::server::papi_counter
 > papi_counter_type;
 
-HPX_REGISTER_DERIVED_COMPONENT_FACTORY(
+HPX_REGISTER_DERIVED_COMPONENT_FACTORY_DYNAMIC(
     papi_counter_type, papi_counter, "base_performance_counter");
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -118,12 +119,15 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         return start_all();
     }
 
-	bool thread_counters::read_value(papi_counter *cnt, bool reset)
+    bool thread_counters::read_value(papi_counter *cnt, bool reset)
     {
-        if (PAPI_accum(evset_, &counts_[0]) != PAPI_OK) return false;
+        {
+            papi_counter_base::mutex_type::scoped_lock lk(cnt->get_global_mtx());
+
+            if (PAPI_read(evset_, &counts_[0]) != PAPI_OK) return false;
+        }
         timestamp_ = static_cast<boost::int64_t>(hpx::get_system_uptime());
         cnt->update_state(timestamp_, counts_[cnt->get_counter_index()]);
-	if (reset) counts_[cnt->get_counter_index()] = 0;
         return true;
     }
 
@@ -147,9 +151,11 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         if ((stat & PAPI_RUNNING) != 0)
         {
             std::vector<long long> tmp(counts_.size());
-            if (PAPI_stop(evset_, &tmp[0]) != PAPI_OK) return false;
-            // accumulate existing counts before modifying event set
-            if (PAPI_accum(evset_, &counts_[0]) != PAPI_OK) return false;
+            {
+                if (PAPI_stop(evset_, &tmp[0]) != PAPI_OK) return false;
+                // accumulate existing counts before modifying event set
+                if (PAPI_accum(evset_, &counts_[0]) != PAPI_OK) return false;
+            }
             timestamp_ = static_cast<boost::int64_t>(hpx::get_system_uptime());
         }
         return true;
@@ -199,11 +205,19 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         counter_path_elements cpe;
         get_counter_path_elements(info.fullname_, cpe);
         // convert event name to code and check availability
-        papi_call(PAPI_event_name_to_code(const_cast<char *>(cpe.countername_.c_str()),
-                                          const_cast<int *>(&event_)),
-            cpe.countername_+" does not seem to be a valid event name", locstr);
-        papi_call(PAPI_query_event(event_),
-            "event "+cpe.countername_+" is not available on this platform", locstr);
+        {
+            papi_counter_base::mutex_type::scoped_lock lk(this->get_global_mtx());
+
+            papi_call(PAPI_event_name_to_code(
+                const_cast<char *>(cpe.countername_.c_str()),
+                const_cast<int *>(&event_)),
+                cpe.countername_+" does not seem to be a valid event name",
+                locstr);
+            papi_call(  
+                PAPI_query_event(event_),
+                "event "+cpe.countername_+" is not available on this platform",
+                locstr);
+        }
         // find OS thread associated with the counter
         std::string label;
         boost::uint32_t tix = util::get_counter_thread(cpe, label);
@@ -234,7 +248,7 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
         if (timestamp_ != -1) copy_value(value);
         else value.status_ = hpx::performance_counters::status_invalid_data;
 
-	// clear local copy
+        // clear local copy
         if (reset) value_ = 0;
 
         value.count_ = ++invocation_count_;
@@ -244,7 +258,7 @@ namespace hpx { namespace performance_counters { namespace papi { namespace serv
 
     bool papi_counter::start()
     {
-        thread_counters::mutex_type::scoped_lock m(counters_->get_lock());
+        papi_counter_base::mutex_type::scoped_lock lk(get_global_mtx());
 
         if (status_ == PAPI_COUNTER_ACTIVE) return true;
         if (counters_->add_event(this))

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2013 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,18 +9,23 @@
 #if !defined(HPX_HPX_FWD_MAR_24_2008_1119AM)
 #define HPX_HPX_FWD_MAR_24_2008_1119AM
 
+#include <hpx/config.hpp>
+
 #include <cstdlib>
 #include <vector>
 
 #include <boost/config.hpp>
 #include <boost/version.hpp>
 
-#if BOOST_VERSION < 104200
+#if BOOST_VERSION < 104900
 // Please update your Boost installation (see www.boost.org for details).
-#error HPX cannot be compiled with a Boost version earlier than V1.42.
+#error HPX cannot be compiled with a Boost version earlier than V1.49.
 #endif
 
 #if defined(BOOST_WINDOWS)
+#if !defined(WIN32)
+#  define WIN32
+#endif
 #include <winsock2.h>
 #include <windows.h>
 #endif
@@ -28,17 +33,26 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/cstdint.hpp>
+#include <boost/thread/mutex.hpp>
 #include <boost/detail/scoped_enum_emulation.hpp>
+#include <boost/system/error_code.hpp>
+#include <boost/type_traits/remove_reference.hpp>
 
-#include <hpx/config.hpp>
 #include <hpx/config/function.hpp>
 #include <hpx/traits.hpp>
 #include <hpx/lcos/local/once_fwd.hpp>
-#include <hpx/util/unused.hpp>
+#include <hpx/runtime/naming/id_type.hpp>
 #include <hpx/util/move.hpp>
-#include <hpx/util/coroutine/coroutine.hpp>
-#include <hpx/util/detail/remove_reference.hpp>
+#include <hpx/util/unique_function.hpp>
+#include <hpx/util/unused.hpp>
+#include <hpx/util/coroutine/detail/default_context_impl.hpp>
+#include <hpx/util/coroutine/detail/coroutine_impl.hpp>
 #include <hpx/runtime/threads/detail/tagged_thread_state.hpp>
+
+namespace boost
+{
+    class exception_ptr;
+}
 
 /// \namespace hpx
 ///
@@ -87,7 +101,8 @@ namespace hpx
         typedef agas::addressing_service resolver_client;
 
         struct HPX_API_EXPORT gid_type;
-        struct HPX_API_EXPORT id_type;
+        // NOTE: we do not export the symbol here as id_type was already exported and generates a warning on gcc otherwise
+        struct id_type;
         struct HPX_API_EXPORT address;
         class HPX_API_EXPORT locality;
 
@@ -101,10 +116,11 @@ namespace hpx
         enum connection_type
         {
             connection_unknown = -1,
-            connection_tcpip = 0,
-            connection_shmem = 1,
+            connection_tcp = 0,
+            connection_ipc = 1,
             connection_portals4 = 2,
             connection_ibverbs = 3,
+            connection_mpi = 4,
             connection_last
         };
 
@@ -128,59 +144,129 @@ namespace hpx
         }
 
         HPX_API_EXPORT std::string get_connection_type_name(connection_type);
+        HPX_API_EXPORT connection_type get_connection_type_from_name(std::string const&);
+
         HPX_API_EXPORT policies::message_handler* get_message_handler(
             parcelhandler* ph, char const* name, char const* type, std::size_t num,
             std::size_t interval, naming::locality const& l, connection_type t,
             error_code& ec = throws);
 
-        HPX_API_EXPORT void flush_buffers();
+        HPX_API_EXPORT void do_background_work();
+    }
+
+    namespace util
+    {
+        namespace coroutines
+        {
+            namespace detail
+            {
+                template <typename Coroutine>
+                class coroutine_self;
+
+                template <typename CoroutineImpl>
+                struct coroutine_allocator;
+                template<typename CoroutineType, typename ContextImpl,
+                    template <typename> class Heap>
+                class coroutine_impl;
+            }
+
+            template<typename Signature,
+                template <typename> class Heap,
+                typename ContextImpl = detail::default_context_impl>
+            class coroutine;
+        }
     }
 
     /// \namespace threads
     ///
-    /// The namespace \a threadmanager contains all the definitions required
+    /// The namespace \a thread-manager contains all the definitions required
     /// for the scheduling, execution and general management of \a
     /// hpx#threadmanager#thread's.
     namespace threads
     {
         namespace policies
         {
-#if defined(HPX_GLOBAL_SCHEDULER)
-            class HPX_API_EXPORT global_queue_scheduler;
-#endif
-#if defined(HPX_LOCAL_SCHEDULER)
-            class HPX_API_EXPORT local_queue_scheduler;
-#endif
-#if defined(HPX_ABP_SCHEDULER)
-            struct HPX_API_EXPORT abp_queue_scheduler;
-#endif
-#if defined(HPX_ABP_PRIORITY_SCHEDULER)
-            class HPX_API_EXPORT abp_priority_queue_scheduler;
+            struct scheduler_base;
+
+            struct lockfree_fifo;
+            struct lockfree_lifo;
+
+            template <typename Mutex = boost::mutex
+                    , typename PendingQueuing = lockfree_fifo
+                    , typename StagedQueuing = lockfree_fifo
+                    , typename TerminatedQueuing = lockfree_lifo
+                     >
+            class HPX_EXPORT local_priority_queue_scheduler;
+
+            template <typename Mutex = boost::mutex
+                    , typename PendingQueuing = lockfree_fifo
+                    , typename StagedQueuing = lockfree_fifo
+                    , typename TerminatedQueuing = lockfree_lifo
+                     >
+            class HPX_EXPORT local_queue_scheduler;
+
+#if defined(HPX_PERIODIC_PRIORITY_SCHEDULER)
+            template <typename Mutex = boost::mutex
+                    , typename PendingQueuing = lockfree_fifo
+                    , typename StagedQueuing = lockfree_fifo
+                    , typename TerminatedQueuing = lockfree_lifo
+                     >
+            class HPX_EXPORT periodic_priority_queue_scheduler;
 #endif
 
-            class HPX_API_EXPORT local_priority_queue_scheduler;
+#if defined(HPX_STATIC_PRIORITY_SCHEDULER)
+            template <typename Mutex = boost::mutex
+                    , typename PendingQueuing = lockfree_fifo
+                    , typename StagedQueuing = lockfree_fifo
+                    , typename TerminatedQueuing = lockfree_lifo
+                     >
+            class HPX_EXPORT static_priority_queue_scheduler;
+#endif
 
 #if defined(HPX_HIERARCHY_SCHEDULER)
-            class HPX_API_EXPORT hierarchy_scheduler;
-#endif
-#if defined(HPX_PERIODIC_PRIORITY_SCHEDULER)
-            class HPX_API_EXPORT periodic_priority_scheduler;
+            template <typename Mutex = boost::mutex
+                    , typename PendingQueuing = lockfree_fifo
+                    , typename StagedQueuing = lockfree_fifo
+                    , typename TerminatedQueuing = lockfree_lifo
+                     >
+            class HPX_EXPORT hierarchy_scheduler;
 #endif
 
-            class HPX_API_EXPORT callback_notifier;
+            typedef local_priority_queue_scheduler<
+                boost::mutex,
+                lockfree_fifo, // FIFO pending queuing
+                lockfree_fifo, // FIFO staged queuing
+                lockfree_lifo  // LIFO terminated queuing
+            > fifo_priority_queue_scheduler;
+
+#if defined(HPX_ABP_SCHEDULER)
+            struct lockfree_abp_fifo;
+            struct lockfree_abp_lifo;
+
+            typedef local_priority_queue_scheduler<
+                boost::mutex,
+                lockfree_abp_fifo, // FIFO + ABP pending queuing
+                lockfree_abp_fifo, // FIFO + ABP staged queuing
+                lockfree_lifo  // LIFO terminated queuing
+            > abp_fifo_priority_queue_scheduler;
+#endif
 
             // define the default scheduler to use
-            typedef local_priority_queue_scheduler queue_scheduler;
+            typedef fifo_priority_queue_scheduler queue_scheduler;
+
+            class HPX_EXPORT callback_notifier;
         }
 
-        struct HPX_API_EXPORT threadmanager_base;
-        class HPX_API_EXPORT thread_data;
+        struct HPX_EXPORT threadmanager_base;
+        class HPX_EXPORT thread_data_base;
+        class HPX_EXPORT thread_data;
 
         template <
             typename SchedulingPolicy,
             typename NotificationPolicy = threads::policies::callback_notifier>
-        class HPX_API_EXPORT threadmanager_impl;
+        class HPX_EXPORT threadmanager_impl;
 
+        ///////////////////////////////////////////////////////////////////////
         /// \enum thread_state_enum
         ///
         /// The \a thread_state_enum enumerator encodes the current state of a
@@ -195,10 +281,10 @@ namespace hpx
             suspended = 3,      /*!< thread has been suspended (waiting for
                                      synchronization event, but still
                                      known and under control of the
-                                     threadmanager) */
+                                     thread-manager) */
             depleted = 4,       /*!< thread has been depleted (deeply
                                      suspended, it is not known to the
-                                     thread manager) */
+                                     thread-manager) */
             terminated = 5,     /*!< thread has been stopped an may be
                                      garbage collected */
             staged = 6          /*!< this is not a real thread state, but
@@ -207,12 +293,15 @@ namespace hpx
                                      thread objects */
         };
 
+        HPX_API_EXPORT char const* get_thread_state_name(thread_state_enum state);
+
         /// \ cond NODETAIL
         ///   Please note that if you change the value of threads::terminated
         ///   above, you will need to adjust do_call(dummy<1> = 1) in
         ///   util/coroutine/detail/coroutine_impl.hpp as well.
         /// \ endcond
 
+        ///////////////////////////////////////////////////////////////////////
         /// \enum thread_priority
         enum thread_priority
         {
@@ -220,14 +309,15 @@ namespace hpx
             thread_priority_default = 0,      ///< use default priority
             thread_priority_low = 1,          ///< low thread priority
             thread_priority_normal = 2,       ///< normal thread priority (default)
-            thread_priority_critical = 3      ///< high thread priority
+            thread_priority_critical = 3,     ///< high thread priority
+            thread_priority_boost = 4         ///< high thread priority for first invocation, normal afterwards
         };
 
         typedef threads::detail::tagged_thread_state<thread_state_enum> thread_state;
 
-        HPX_API_EXPORT char const* get_thread_state_name(thread_state_enum state);
         HPX_API_EXPORT char const* get_thread_priority_name(thread_priority priority);
 
+        ///////////////////////////////////////////////////////////////////////
         /// \enum thread_state_ex_enum
         ///
         /// The \a thread_state_ex_enum enumerator encodes the reason why a
@@ -243,20 +333,28 @@ namespace hpx
 
         typedef threads::detail::tagged_thread_state<thread_state_ex_enum> thread_state_ex;
 
-        typedef thread_state_enum thread_function_type(thread_state_ex_enum);
+        typedef thread_state_enum thread_function_sig(thread_state_ex_enum);
+        typedef util::unique_function_nonser<thread_function_sig> thread_function_type;
 
+        ///////////////////////////////////////////////////////////////////////
         /// \enum thread_stacksize
         enum thread_stacksize
         {
+            thread_stacksize_unknown = -1,
             thread_stacksize_small = 1,         ///< use small stack size
             thread_stacksize_medium = 2,        ///< use medium sized stack size
             thread_stacksize_large = 3,         ///< use large stack size
             thread_stacksize_huge = 4,          ///< use very large stack size
+            thread_stacksize_nostack = 5,       ///< this thread does not suspend (does not need a stack)
 
             thread_stacksize_default = thread_stacksize_small,  ///< use default stack size
             thread_stacksize_minimal = thread_stacksize_small,  ///< use minimally possible stack size
-            thread_stacksize_maximal = thread_stacksize_huge    ///< use maximally possible stack size
+            thread_stacksize_maximal = thread_stacksize_huge,   ///< use maximally possible stack size
         };
+
+        HPX_API_EXPORT char const* get_stack_size_name(std::ptrdiff_t size);
+
+        class HPX_EXPORT executor;
 
         ///////////////////////////////////////////////////////////////////////
         /// \ cond NODETAIL
@@ -265,50 +363,63 @@ namespace hpx
             template <typename CoroutineImpl> struct coroutine_allocator;
         }
         /// \ endcond
-
         typedef util::coroutines::coroutine<
-            thread_function_type, detail::coroutine_allocator> coroutine_type;
-        typedef coroutine_type::thread_id_type thread_id_type;
-        typedef coroutine_type::self thread_self;
+            thread_function_sig, detail::coroutine_allocator> coroutine_type;
+
+        typedef util::coroutines::detail::coroutine_self<coroutine_type>
+            thread_self;
+        typedef
+            util::coroutines::detail::coroutine_impl<
+                coroutine_type
+              , util::coroutines::detail::default_context_impl
+              , detail::coroutine_allocator
+            >
+            thread_self_impl_type;
+        typedef void * thread_id_repr_type;
+
+        typedef boost::intrusive_ptr<thread_data_base> thread_id_type;
+
+        HPX_EXPORT void intrusive_ptr_add_ref(thread_data_base* p);
+        HPX_EXPORT void intrusive_ptr_release(thread_data_base* p);
 
         ///////////////////////////////////////////////////////////////////////
         /// \ cond NODETAIL
-        thread_id_type const invalid_thread_id =
-            reinterpret_cast<thread_id_type>(-1);
+        BOOST_CONSTEXPR_OR_CONST thread_id_repr_type invalid_thread_id_repr = 0;
+        thread_id_type const invalid_thread_id = thread_id_type();
         /// \ endcond
 
         /// The function \a get_self returns a reference to the (OS thread
-        /// specific) self reference to the current PX thread.
+        /// specific) self reference to the current HPX thread.
         HPX_API_EXPORT thread_self& get_self();
 
         /// The function \a get_self_ptr returns a pointer to the (OS thread
-        /// specific) self reference to the current PX thread.
+        /// specific) self reference to the current HPX thread.
         HPX_API_EXPORT thread_self* get_self_ptr();
 
         /// The function \a get_ctx_ptr returns a pointer to the internal data
         /// associated with each coroutine.
-        HPX_API_EXPORT thread_self::impl_type* get_ctx_ptr();
+        HPX_API_EXPORT thread_self_impl_type* get_ctx_ptr();
 
         /// The function \a get_self_ptr_checked returns a pointer to the (OS
         /// thread specific) self reference to the current HPX thread.
         HPX_API_EXPORT thread_self* get_self_ptr_checked(error_code& ec = throws);
 
         /// The function \a get_self_id returns the HPX thread id of the current
-        /// thread (or zero if the current thread is not a PX thread).
+        /// thread (or zero if the current thread is not a HPX thread).
         HPX_API_EXPORT thread_id_type get_self_id();
 
         /// The function \a get_parent_id returns the HPX thread id of the
-        /// current's thread parent (or zero if the current thread is not a
-        /// PX thread).
+        /// current thread's parent (or zero if the current thread is not a
+        /// HPX thread).
         ///
         /// \note This function will return a meaningful value only if the
         ///       code was compiled with HPX_THREAD_MAINTAIN_PARENT_REFERENCE
         ///       being defined.
-        HPX_API_EXPORT thread_id_type get_parent_id();
+        HPX_API_EXPORT thread_id_repr_type get_parent_id();
 
         /// The function \a get_parent_phase returns the HPX phase of the
-        /// current's thread parent (or zero if the current thread is not a
-        /// PX thread).
+        /// current thread's parent (or zero if the current thread is not a
+        /// HPX thread).
         ///
         /// \note This function will return a meaningful value only if the
         ///       code was compiled with HPX_THREAD_MAINTAIN_PARENT_REFERENCE
@@ -316,8 +427,8 @@ namespace hpx
         HPX_API_EXPORT std::size_t get_parent_phase();
 
         /// The function \a get_parent_locality_id returns the id of the locality of
-        /// the current's thread parent (or zero if the current thread is not a
-        /// PX thread).
+        /// the current thread's parent (or zero if the current thread is not a
+        /// HPX thread).
         ///
         /// \note This function will return a meaningful value only if the
         ///       code was compiled with HPX_THREAD_MAINTAIN_PARENT_REFERENCE
@@ -425,38 +536,20 @@ namespace hpx
     HPX_API_EXPORT void report_error(boost::exception_ptr const& e);
 
     /// Register a function to be called during system shutdown
-    HPX_API_EXPORT bool register_on_exit(HPX_STD_FUNCTION<void()>);
+    HPX_API_EXPORT bool register_on_exit(HPX_STD_FUNCTION<void()> const&);
 
     enum logging_destination
     {
         destination_hpx = 0,
         destination_timing = 1,
         destination_agas = 2,
-        destination_app = 3
+        destination_app = 3,
+        destination_debuglog = 4
     };
 
     /// \namespace components
     namespace components
     {
-        enum factory_state_enum
-        {
-            factory_enabled  = 0,
-            factory_disabled = 1,
-            factory_check    = 2
-        };
-
-        /// \ cond NODETAIL
-        namespace detail
-        {
-            struct this_type {};
-            struct fixed_component_tag {};
-            struct simple_component_tag {};
-            struct managed_component_tag {};
-        }
-        /// \ endcond
-
-        ///////////////////////////////////////////////////////////////////////
-        typedef boost::int32_t component_type;
         enum component_enum_type
         {
             component_invalid = -1,
@@ -495,6 +588,13 @@ namespace hpx
             // AGAS symbolic naming services.
             component_agas_symbol_namespace = 10,
 
+#if defined(HPX_HAVE_SODIUM)
+            // root CA, subordinate CA
+            signed_certificate_promise = ((11 << 16) | component_base_lco_with_value),
+            component_root_certificate_authority = 12,
+            component_subordinate_certificate_authority = 13,
+#endif
+
             component_last,
             component_first_dynamic = component_last,
 
@@ -502,6 +602,25 @@ namespace hpx
             component_upper_bound = 0x7fffffffL //-V112
         };
 
+        enum factory_state_enum
+        {
+            factory_enabled  = 0,
+            factory_disabled = 1,
+            factory_check    = 2
+        };
+
+        /// \ cond NODETAIL
+        namespace detail
+        {
+            struct this_type {};
+            struct fixed_component_tag {};
+            struct simple_component_tag {};
+            struct managed_component_tag {};
+        }
+        /// \ endcond
+
+        ///////////////////////////////////////////////////////////////////////
+        typedef boost::int32_t component_type;
         ///////////////////////////////////////////////////////////////////////
         template <typename Component = detail::this_type>
         class fixed_component_base;
@@ -574,24 +693,20 @@ namespace hpx
 
         template <typename Action,
             typename Result = typename traits::promise_local_result<
-                typename Action::result_type>::type,
+                typename Action::remote_result_type>::type,
             typename DirectExecute = typename Action::direct_execution>
         class packaged_action;
 
-        template <typename Action,
-            typename Result = typename traits::promise_local_result<
-                typename Action::result_type>::type,
-            typename DirectExecute = typename Action::direct_execution>
-        class deferred_packaged_task;
-
-        template <typename Result>
+        template <typename R>
         class future;
 
-        template <typename Result>
-        future<typename util::detail::remove_reference<Result>::type> 
-        make_ready_future(BOOST_FWD_REF(Result));
+        template <typename R>
+        class shared_future;
 
-        future<void> make_ready_future();
+#if defined(HPX_UNIQUE_FUTURE_ALIAS)
+        template <typename R>
+        using unique_future = future<R>;
+#endif
 
         template <typename ValueType>
         struct object_semaphore;
@@ -606,6 +721,20 @@ namespace hpx
         {
             template <typename ValueType>
             struct object_semaphore;
+        }
+
+        namespace detail
+        {
+            enum full_empty_state
+            {
+                empty = false,
+                full = true
+            };
+        }
+
+        namespace local
+        {
+            class barrier;
         }
     }
 
@@ -638,20 +767,36 @@ namespace hpx
         deferred = 0x02,
         task = 0x04,        // see N3632
         sync = 0x08,
-        all = 0x0f          // async | deferred | task | sync
+        fork = 0x10,        // same as async, but forces continuation stealing
+
+        sync_policies = 0x0a,       // sync | deferred
+        async_policies = 0x15,      // async | task | fork
+        all = 0x1f                  // async | deferred | task | sync | fork
     };
     BOOST_SCOPED_ENUM_END
 
     inline bool
     operator&(BOOST_SCOPED_ENUM(launch) lhs, BOOST_SCOPED_ENUM(launch) rhs)
     {
-        return static_cast<int>(lhs) & static_cast<int>(rhs) ? true : false;
+        return (static_cast<int>(lhs) & static_cast<int>(rhs)) != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Return the number of OS-threads running in the runtime instance
     ///        the current HPX-thread is associated with.
     HPX_API_EXPORT std::size_t get_os_thread_count();
+
+    /// \brief Return the number of worker OS- threads used by the given
+    ///        executor to execute HPX threads
+    ///
+    /// This function returns the number of cores used to execute HPX
+    /// threads for the given executor. If the function is called while no HPX
+    /// runtime system is active, it will return zero. If the executor is not
+    /// valid, this function will fall back to retrieving the number of OS
+    /// threads used by HPX.
+    ///
+    /// \param id [in] The id of the object to locate.
+    HPX_API_EXPORT std::size_t get_os_thread_count(threads::executor& exec);
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_API_EXPORT bool is_scheduler_numa_sensitive();
@@ -665,8 +810,13 @@ namespace hpx
     ///////////////////////////////////////////////////////////////////////////
     // Pulling important types into the main namespace
     using naming::id_type;
+    using naming::invalid_id;
+
     using lcos::future;
-    using lcos::make_ready_future;
+    using lcos::shared_future;
+#if defined(HPX_UNIQUE_FUTURE_ALIAS)
+    using lcos::unique_future;
+#endif
     using lcos::promise;
 
     /// \endcond
@@ -706,8 +856,9 @@ namespace hpx
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Return the global id representing the root locality
     ///
-    /// The function \a find_root_locality() can be used to retrieve the global 
-    /// id usable to refer to the root locality locality.
+    /// The function \a find_root_locality() can be used to retrieve the global
+    /// id usable to refer to the root locality. The root locality is the
+    /// locality where the main AGAS service is hosted.
     ///
     /// \param ec [in,out] this represents the error status on exit, if this
     ///           is pre-initialized to \a hpx#throws the function will throw
@@ -717,7 +868,7 @@ namespace hpx
     ///           create new instances of components and to invoke plain actions
     ///           (global functions).
     ///
-    /// \returns  The global id representing the root locality for this 
+    /// \returns  The global id representing the root locality for this
     ///           application.
     ///
     /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
@@ -827,7 +978,8 @@ namespace hpx
     ///           from an HPX-thread. It will return an empty vector otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
-    HPX_API_EXPORT std::vector<naming::id_type> find_remote_localities();
+    HPX_API_EXPORT std::vector<naming::id_type> find_remote_localities(
+        error_code& ec = throws);
 
     /// \brief Return the list of locality ids of remote localities supporting
     ///        the given component type. By default this function will return
@@ -861,14 +1013,14 @@ namespace hpx
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
     HPX_API_EXPORT std::vector<naming::id_type> find_remote_localities(
-        components::component_type);
+        components::component_type type, error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Return the global id representing an arbitrary locality which
     ///        supports the given component type.
     ///
     /// The function \a find_locality() can be used to retrieve the
-    /// global id of an arbitrary localities currently available to this
+    /// global id of an arbitrary locality currently available to this
     /// application which supports the creation of instances of the given
     /// component type.
     ///
@@ -902,6 +1054,113 @@ namespace hpx
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
+    /// \brief Return all registered ids from all localities from the given
+    ///        base name.
+    ///
+    /// This function locates all ids which were registered with the given
+    /// base name. It returns a list of futures representing those ids.
+    ///
+    /// \param base_name    [in] The base name for which to retrieve the
+    ///                     registered ids.
+    /// \param num_ids      [in] The number of registered ids to expect.
+    ///
+    /// \returns A list of futures representing the ids which were registered
+    ///          using the given base name.
+    ///
+    /// \note   The future will become ready even if the event (for instance,
+    ///         binding the name to an id) has already happened in the past.
+    ///         This is important in order to reliably retrieve ids from a
+    ///         name, even if the name was already registered.
+    ///
+    HPX_API_EXPORT std::vector<hpx::future<hpx::id_type> >
+        find_all_ids_from_basename(char const* base_name, std::size_t num_ids);
+
+    /// \brief Return registered ids from the given base name and sequence numbers.
+    ///
+    /// This function locates the ids which were registered with the given
+    /// base name and the given sequence numbers. It returns a list of futures
+    /// representing those ids.
+    ///
+    /// \param base_name    [in] The base name for which to retrieve the
+    ///                     registered ids.
+    /// \param ids          [in] The sequence numbers of the registered ids.
+    ///
+    /// \returns A list of futures representing the ids which were registered
+    ///          using the given base name and sequence numbers.
+    ///
+    /// \note   The future will become ready even if the event (for instance,
+    ///         binding the name to an id) has already happened in the past.
+    ///         This is important in order to reliably retrieve ids from a
+    ///         name, even if the name was already registered.
+    ///
+    HPX_API_EXPORT std::vector<hpx::future<hpx::id_type> >
+        find_ids_from_basename(char const* base_name,
+            std::vector<std::size_t> const& ids);
+
+    /// \brief Return registered id from the given base name and sequence number.
+    ///
+    /// This function locates the id which was registered with the given
+    /// base name and the given sequence number. It returns a future
+    /// representing those id.
+    ///
+    /// \param base_name    [in] The base name for which to retrieve the
+    ///                     registered ids.
+    /// \param sequence_nr  [in] The sequence number of the registered id.
+    ///
+    /// \returns A representing the id which was registered using the given
+    ///          base name and sequence numbers.
+    ///
+    /// \note   The future will become ready even if the event (for instance,
+    ///         binding the name to an id) has already happened in the past.
+    ///         This is important in order to reliably retrieve ids from a
+    ///         name, even if the name was already registered.
+    ///
+    HPX_API_EXPORT hpx::future<hpx::id_type>
+        find_id_from_basename(char const* base_name,
+            std::size_t sequence_nr = ~0U);
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// \brief Register the given id using the given base name.
+    ///
+    /// The function registers the given ids using the provided base name.
+    ///
+    /// \param base_name    [in] The base name for which to retrieve the
+    ///                     registered ids.
+    /// \param id           [in] The id to register using the given base name.
+    /// \param sequence_nr  [in, optional] The sequential number to use for the
+    ///                     registration of the id. This number has to be
+    ///                     unique system wide for each registration using the
+    ///                     same base name. The default is the current locality
+    ///                     identifier. Also, the sequence numbers have to be
+    ///                     consecutive starting from zero.
+    ///
+    /// \returns A future representing the result of the registration operation
+    ///          itself.
+    ///
+    /// \note    The operation will fail if the given sequence number is not
+    ///          unique.
+    ///
+    HPX_API_EXPORT hpx::future<bool> register_id_with_basename(
+        char const* base_name, hpx::id_type id, std::size_t sequence_nr = ~0U);
+
+    /// \brief Unregister the given id using the given base name.
+    ///
+    /// The function unregisters the given ids using the provided base name.
+    ///
+    /// \param base_name    [in] The base name for which to retrieve the
+    ///                     registered ids.
+    /// \param sequence_nr  [in, optional] The sequential number to use for the
+    ///                     un-registration. This number has to be the same
+    ///                     as has been used with \a register_id_with_basename
+    ///                     before.
+    ///
+    /// \returns A future representing the result of the un-registration
+    ///          operation itself.
+    ///
+    HPX_API_EXPORT hpx::future<hpx::id_type> unregister_id_with_basename(
+        char const* base_name, std::size_t sequence_nr = ~0U);
+
+    ///////////////////////////////////////////////////////////////////////////
     /// \brief Return the number of localities which are currently registered
     ///        for the running application.
     ///
@@ -916,9 +1175,36 @@ namespace hpx
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
     ///
-    /// \see      \a hpx::find_all_localities
-    HPX_API_EXPORT boost::uint32_t get_num_localities(error_code& ec = throws);
-    HPX_API_EXPORT lcos::future<boost::uint32_t> get_num_localities_async();
+    /// \see      \a hpx::find_all_localities_sync, \a hpx::get_num_localities
+    HPX_API_EXPORT boost::uint32_t get_num_localities_sync(error_code& ec = throws);
+
+    /// \brief Return the number of localities which were registered at startup
+    ///        for the running application.
+    ///
+    /// The function \a get_initial_num_localities returns the number of localities
+    /// which were connected to the console at application startup.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
+    HPX_API_EXPORT boost::uint32_t get_initial_num_localities();
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// \brief Asynchronously return the number of localities which are
+    ///        currently registered for the running application.
+    ///
+    /// The function \a get_num_localities asynchronously returns the
+    /// number of localities currently connected to the console. The returned
+    /// future represents the actual result.
+    ///
+    /// \note     This function will return meaningful results only if called
+    ///           from an HPX-thread. It will return 0 otherwise.
+    ///
+    /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
+    HPX_API_EXPORT lcos::future<boost::uint32_t> get_num_localities();
 
     /// \brief Return the number of localities which are currently registered
     ///        for the running application.
@@ -941,10 +1227,26 @@ namespace hpx
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
     ///
-    /// \see      \a hpx::find_all_localities
-    HPX_API_EXPORT boost::uint32_t get_num_localities(
+    /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
+    HPX_API_EXPORT boost::uint32_t get_num_localities_sync(
         components::component_type t, error_code& ec = throws);
-    HPX_API_EXPORT lcos::future<boost::uint32_t> get_num_localities_async(
+
+    /// \brief Asynchronously return the number of localities which are
+    ///        currently registered for the running application.
+    ///
+    /// The function \a get_num_localities asynchronously returns the
+    /// number of localities currently connected to the console which support
+    /// the creation of the given component type. The returned future represents
+    /// the actual result.
+    ///
+    /// \param t  The component type for which the number of connected
+    ///           localities should be retrieved.
+    ///
+    /// \note     This function will return meaningful results only if called
+    ///           from an HPX-thread. It will return 0 otherwise.
+    ///
+    /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
+    HPX_API_EXPORT lcos::future<boost::uint32_t> get_num_localities(
         components::component_type t);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1017,8 +1319,7 @@ namespace hpx
     /// \param f  [in] The function to be registered to run by an HPX thread as
     ///           a pre-shutdown function.
     ///
-    /// \note If this function is called before the runtime system is
-    ///       initialized, or while the pre-shutdown functions are
+    /// \note If this function is called while the pre-shutdown functions are
     ///       being executed, or after that point, it will raise a invalid_status
     ///       exception.
     ///
@@ -1037,8 +1338,7 @@ namespace hpx
     /// \param f  [in] The function to be registered to run by an HPX thread as
     ///           a shutdown function.
     ///
-    /// \note If this function is called before the runtime system is
-    ///       initialized, or while the shutdown functions are
+    /// \note If this function is called while the shutdown functions are
     ///       being executed, or after that point, it will raise a invalid_status
     ///       exception.
     ///
@@ -1052,7 +1352,7 @@ namespace hpx
     /// This function returns the zero based index of the OS-thread which
     /// executes the current HPX-thread.
     ///
-    /// \note   The returned value is zero based and it's maximum value is
+    /// \note   The returned value is zero based and its maximum value is
     ///         smaller than the overall number of OS-threads executed (as
     ///         returned by \a get_os_thread_count().
     ///
@@ -1070,7 +1370,7 @@ namespace hpx
     ///           is pre-initialized to \a hpx#throws the function will throw
     ///           on error instead.
     ///
-    /// \note     The returned value is zero based and it's maximum value is
+    /// \note     The returned value is zero based and its maximum value is
     ///           smaller than the overall number of localities the current
     ///           application is running on (as returned by
     ///           \a get_num_localities()).
@@ -1100,15 +1400,15 @@ namespace hpx
     ///
     /// This function returns the name of the calling thread. This name uniquely
     /// identifies the thread in the context of HPX. If the function is called
-    /// while no HPX runtime system is active, it will return zero.
-    HPX_API_EXPORT std::string const* get_thread_name();
+    /// while no HPX runtime system is active, the result will be "<unknown>".
+    HPX_API_EXPORT std::string get_thread_name();
 
     ///////////////////////////////////////////////////////////////////////////
-    /// \brief Return the number of worker OS- threads used to execute HPX 
+    /// \brief Return the number of worker OS- threads used to execute HPX
     ///        threads
     ///
-    /// This function returns the number of OS-threads used to execute HPX 
-    /// threads. If the function is called while no HPX runtime system is active, 
+    /// This function returns the number of OS-threads used to execute HPX
+    /// threads. If the function is called while no HPX runtime system is active,
     /// it will return zero.
     HPX_API_EXPORT std::size_t get_num_worker_threads();
 
@@ -1124,6 +1424,10 @@ namespace hpx
     /// \brief Return the id of the locality where the object referenced by the
     ///        given id is currently located on
     ///
+    /// The function hpx::get_colocation_id() returns the id of the locality
+    /// where the given object is currently located.
+    ///
+    /// \param id [in] The id of the object to locate.
     /// \param ec [in,out] this represents the error status on exit, if this
     ///           is pre-initialized to \a hpx#throws the function will throw
     ///           on error instead.
@@ -1132,38 +1436,110 @@ namespace hpx
     ///           function doesn't throw but returns the result code using the
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
-    HPX_API_EXPORT naming::id_type get_colocation_id(naming::id_type id,
-        error_code& ec = throws);
-    HPX_API_EXPORT lcos::future<naming::id_type> get_colocation_id_async(
-        naming::id_type id);
+    ///
+    /// \see    \a hpx::get_colocation_id()
+    HPX_API_EXPORT naming::id_type get_colocation_id_sync(
+        naming::id_type const& id, error_code& ec = throws);
+
+    /// \brief Asynchronously return the id of the locality where the object
+    ///        referenced by the given id is currently located on
+    ///
+    /// \see    \a hpx::get_colocation_id_sync()
+    HPX_API_EXPORT lcos::future<naming::id_type> get_colocation_id(
+        naming::id_type const& id);
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// \fn std::string get_locality_name()
+    ///
+    /// \brief Return the name of the locality this function is called on.
+    ///
+    /// This function returns the name for the locality on which this function
+    /// is called.
+    ///
+    /// \returns  This function returns the name for the locality on which the
+    ///           function is called. The name is retrieved from the underlying
+    ///           networking layer and may be different for different parcelports.
+    ///
+    /// \see      \a future<std::string> get_locality_name(naming::id_type const& id)
+    HPX_API_EXPORT std::string get_locality_name();
+
+    /// \fn future<std::string> get_locality_name(naming::id_type const& id)
+    ///
+    /// \brief Return the name of the referenced locality.
+    ///
+    /// This function returns a future referring to the name for the locality
+    /// of the given id.
+    ///
+    /// \param id [in] The global id of the locality for which the name should
+    ///           be retrieved
+    ///
+    /// \returns  This function returns the name for the locality of the given
+    ///           id. The name is retrieved from the underlying networking layer
+    ///           and may be different for different parcel ports.
+    ///
+    /// \see      \a std::string get_locality_name()
+    HPX_API_EXPORT future<std::string> get_locality_name(
+        naming::id_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Trigger the LCO referenced by the given id
     ///
-    /// \param id [in] this represents the id of the LCO which should be
-    ///           triggered.
+    /// \param id [in] This represents the id of the LCO which should be
+    ///                triggered.
     HPX_API_EXPORT void trigger_lco_event(naming::id_type const& id);
+
+    /// \brief Trigger the LCO referenced by the given id
+    ///
+    /// \param id   [in] This represents the id of the LCO which should be
+    ///                  triggered.
+    /// \param cont [in] This represents the LCO to trigger after completion.
+    HPX_API_EXPORT void trigger_lco_event(naming::id_type const& id,
+        naming::id_type const& cont);
 
     /// \brief Set the result value for the LCO referenced by the given id
     ///
-    /// \param id [in] this represents the id of the LCO which should
-    ///           receive the given value.
-    /// \param t  [in] this is the value which should be sent to the LCO.
+    /// \param id [in] This represents the id of the LCO which should
+    ///                receive the given value.
+    /// \param t  [in] This is the value which should be sent to the LCO.
     template <typename T>
-    void set_lco_value(naming::id_type const& id, BOOST_FWD_REF(T) t);
+    void set_lco_value(naming::id_type const& id, T && t);
+
+    /// \brief Set the result value for the LCO referenced by the given id
+    ///
+    /// \param id   [in] This represents the id of the LCO which should
+    ///                  receive the given value.
+    /// \param t    [in] This is the value which should be sent to the LCO.
+    /// \param cont [in] This represents the LCO to trigger after completion.
+    template <typename T>
+    void set_lco_value(naming::id_type const& id, T && t,
+        naming::id_type const& cont);
 
     /// \brief Set the error state for the LCO referenced by the given id
     ///
-    /// \param id [in] this represents the id of the LCO which should
-    ///           eceive the error value.
-    /// \param e  [in] this is the error value which should be sent to
-    ///           the LCO.
+    /// \param id [in] This represents the id of the LCO which should
+    ///                receive the error value.
+    /// \param e  [in] This is the error value which should be sent to
+    ///                the LCO.
     HPX_API_EXPORT void set_lco_error(naming::id_type const& id,
         boost::exception_ptr const& e);
 
     /// \copydoc hpx::set_lco_error(naming::id_type const& id, boost::exception_ptr const& e)
     HPX_API_EXPORT void set_lco_error(naming::id_type const& id,
-        BOOST_RV_REF(boost::exception_ptr) e);
+        boost::exception_ptr && e);
+
+    /// \brief Set the error state for the LCO referenced by the given id
+    ///
+    /// \param id   [in] This represents the id of the LCO which should
+    ///                  receive the error value.
+    /// \param e    [in] This is the error value which should be sent to
+    ///                  the LCO.
+    /// \param cont [in] This represents the LCO to trigger after completion.
+    HPX_API_EXPORT void set_lco_error(naming::id_type const& id,
+        boost::exception_ptr const& e, naming::id_type const& cont);
+
+    /// \copydoc hpx::set_lco_error(naming::id_type const& id, boost::exception_ptr const& e, naming::id_type const& cont)
+    HPX_API_EXPORT void set_lco_error(naming::id_type const& id,
+        boost::exception_ptr && e, naming::id_type const& cont);
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Start all active performance counters, optionally naming the
@@ -1244,6 +1620,14 @@ namespace hpx
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Create an instance of a message handler plugin
     ///
+    /// The function hpx::create_message_handler() creates an instance of a
+    /// message handler plugin based on the parameters specified.
+    ///
+    /// \param message_handler_type
+    /// \param action
+    /// \param pp
+    /// \param num_messages
+    /// \param interval
     /// \param ec [in,out] this represents the error status on exit, if this
     ///           is pre-initialized to \a hpx#throws the function will throw
     ///           on error instead.
@@ -1269,7 +1653,50 @@ namespace hpx
     ///           parameter \a ec. Otherwise it throws an instance of
     ///           hpx::exception.
     HPX_API_EXPORT util::binary_filter* create_binary_filter(
-        char const* binary_filter_type, bool compress, error_code& ec = throws);
+        char const* binary_filter_type, bool compress,
+        util::binary_filter* next_filter = 0, error_code& ec = throws);
+
+#if defined(HPX_HAVE_SODIUM)
+    namespace components { namespace security
+    {
+        class certificate;
+        class certificate_signing_request;
+        class parcel_suffix;
+        class hash;
+
+        template <typename T> class signed_type;
+        typedef signed_type<certificate> signed_certificate;
+        typedef signed_type<certificate_signing_request>
+            signed_certificate_signing_request;
+        typedef signed_type<parcel_suffix> signed_parcel_suffix;
+    }}
+
+#if defined(HPX_HAVE_SECURITY)
+    /// \brief Return the certificate for this locality
+    ///
+    /// \returns This function returns the signed certificate for this locality.
+    HPX_API_EXPORT components::security::signed_certificate const&
+        get_locality_certificate(error_code& ec = throws);
+
+    /// \brief Return the certificate for the given locality
+    ///
+    /// \param id The id representing the locality for which to retrieve
+    ///           the signed certificate.
+    ///
+    /// \returns This function returns the signed certificate for the locality
+    ///          identified by the parameter \a id.
+    HPX_API_EXPORT components::security::signed_certificate const&
+        get_locality_certificate(boost::uint32_t locality_id, error_code& ec = throws);
+
+    /// \brief Add the given certificate to the certificate store of this locality.
+    ///
+    /// \param cert The certificate to add to the certificate store of this
+    ///             locality
+    HPX_API_EXPORT void add_locality_certificate(
+        components::security::signed_certificate const& cert,
+        error_code& ec = throws);
+#endif
+#endif
 }
 
 #include <hpx/lcos/async_fwd.hpp>

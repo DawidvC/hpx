@@ -5,22 +5,20 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/components/component_factory.hpp>
+#include <hpx/runtime/components/base_lco_factory.hpp>
 #include <hpx/runtime/components/server/memory_block.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/runtime/actions/manage_object_action.hpp>
 #include <hpx/runtime/get_lva.hpp>
+#include <hpx/util/assert.hpp>
 
 #include <hpx/util/portable_binary_iarchive.hpp>
 #include <hpx/util/portable_binary_oarchive.hpp>
 
-#include <boost/assert.hpp>
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/serialization/export.hpp>
-
-///////////////////////////////////////////////////////////////////////////////
-HPX_REGISTER_COMPONENT_MODULE()
 
 ///////////////////////////////////////////////////////////////////////////////
 // Serialization support for the memory_block actions
@@ -29,7 +27,7 @@ HPX_REGISTER_ACTION(
     memory_block_get_action)
 HPX_REGISTER_ACTION(
     hpx::components::server::detail::memory_block::get_config_action,
-    memory_block_get_action)
+    memory_block_get_config_action)
 HPX_REGISTER_ACTION(
     hpx::components::server::detail::memory_block::checkout_action,
     memory_block_checkout_action)
@@ -50,7 +48,6 @@ HPX_DEFINE_GET_COMPONENT_TYPE_STATIC(
     hpx::components::server::memory_block,
     hpx::components::component_memory_block)
 
-typedef hpx::components::memory_block_data memory_data_type;
 HPX_REGISTER_BASE_LCO_WITH_VALUE(
     hpx::components::memory_block_data,
     memory_data_type)

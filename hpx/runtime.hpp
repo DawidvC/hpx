@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,24 +8,62 @@
 #define HPX_RUNTIME_RUNTIME_JUN_10_2008_1012AM
 
 #include <hpx/hpx_fwd.hpp>
+#include <hpx/runtime/threads/policies/affinity_data.hpp>
 #include <hpx/runtime/threads/topology.hpp>
-#include <hpx/runtime/components/server/runtime_support.hpp>
-#include <hpx/runtime/components/server/memory.hpp>
-#include <hpx/performance_counters/registry.hpp>
-#include <hpx/util/thread_mapper.hpp>
+#include <hpx/lcos/local/spinlock.hpp>
 #include <hpx/util/static_reinit.hpp>
-#include <hpx/util/query_counters.hpp>
+#include <hpx/util/runtime_configuration.hpp>
+#include <hpx/util/one_size_heap_list_base.hpp>
+#include <hpx/util/thread_specific_ptr.hpp>
+#if defined(HPX_HAVE_SECURITY)
+#include <hpx/lcos/local/spinlock.hpp>
+#endif
+
+#if defined(HPX_HAVE_SECURITY)
+#include <hpx/components/security/certificate_store.hpp>
+#endif
 
 #include <hpx/config/warnings_prefix.hpp>
+
+#include <boost/foreach.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx
 {
+    namespace util
+    {
+        class thread_mapper;
+        class query_counters;
+        class unique_id_ranges;
+    }
+    namespace components
+    {
+        struct static_factory_load_data_type;
+
+        namespace server
+        {
+            class runtime_support;
+            class memory;
+        }
+    }
+
+    namespace performance_counters
+    {
+        class registry;
+    }
+
     bool pre_main(runtime_mode);
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename SchedulingPolicy, typename NotificationPolicy>
     class HPX_EXPORT runtime_impl;
+
+#if defined(HPX_HAVE_SECURITY)
+    namespace detail
+    {
+        struct manage_security_data;
+    }
+#endif
 
     class HPX_EXPORT runtime
     {
@@ -38,10 +76,13 @@ namespace hpx
             state_startup = 2,
             state_pre_main = 3,
             state_running = 4,
-            state_stopped = 5
+            state_pre_shutdown = 5,
+            state_shutdown = 6,
+            state_stopped = 7,
+            state_last = state_stopped
         };
 
-        state get_state() const { return state_; }
+        state get_state() const { return state_.load(); }
 
         /// The \a hpx_main_function_type is the default function type usable
         /// as the main HPX thread function.
@@ -52,36 +93,33 @@ namespace hpx
             boost::uint32_t, std::string const&);
 
         /// construct a new instance of a runtime
-        runtime(util::runtime_configuration const& rtcfg);
+        runtime(
+            util::runtime_configuration const& rtcfg
+          , threads::policies::init_affinity_data const& affinity_init);
 
-        virtual ~runtime()
-        {
-            // allow to reuse instance number if this was the only instance
-            if (0 == instance_number_counter_)
-                --instance_number_counter_;
-        }
+        virtual ~runtime();
 
         /// \brief Manage list of functions to call on exit
-        void on_exit(HPX_STD_FUNCTION<void()> f)
+        void on_exit(HPX_STD_FUNCTION<void()> const& f)
         {
-            boost::mutex::scoped_lock l(on_exit_functions_mtx_);
+            boost::mutex::scoped_lock l(mtx_);
             on_exit_functions_.push_back(f);
         }
 
         /// \brief Manage runtime 'stopped' state
         void starting()
         {
-            state_ = state_pre_main;
+            state_.store(state_pre_main);
         }
 
         /// \brief Call all registered on_exit functions
         void stopping()
         {
-            state_ = state_stopped;
+            state_.store(state_stopped);
 
             typedef HPX_STD_FUNCTION<void()> value_type;
 
-            boost::mutex::scoped_lock l(on_exit_functions_mtx_);
+            boost::mutex::scoped_lock l(mtx_);
             BOOST_FOREACH(value_type f, on_exit_functions_)
                 f();
         }
@@ -89,7 +127,7 @@ namespace hpx
         /// This accessor returns whether the runtime instance has been stopped
         bool stopped() const
         {
-            return state_ == state_stopped;
+            return state_.load() == state_stopped;
         }
 
         // the TSS holds a pointer to the runtime associated with a given
@@ -115,35 +153,41 @@ namespace hpx
         }
 
         /// \brief Return the name of the calling thread.
-        static std::string const* get_thread_name();
+        static std::string get_thread_name();
 
         /// \brief Return the system uptime measure on the thread executing this call
         static boost::uint64_t get_system_uptime();
 
         /// \brief Allow access to the registry counter registry instance used
         ///        by the HPX runtime.
-        performance_counters::registry& get_counter_registry()
+        performance_counters::registry& get_counter_registry();
+        /*
         {
             return *counters_;
         }
+        */
 
         /// \brief Allow access to the registry counter registry instance used
         ///        by the HPX runtime.
-        performance_counters::registry const& get_counter_registry() const
+        performance_counters::registry const& get_counter_registry() const;
+        /*
         {
             return *counters_;
         }
+        */
 
         /// \brief Return a reference to the internal PAPI thread manager
-        util::thread_mapper& get_thread_mapper()
-        {
-            return thread_support_;
-        }
+        util::thread_mapper& get_thread_mapper();
 
         threads::topology const& get_topology() const
         {
-            return *topology_;
+            return topology_;
         }
+
+        boost::uint32_t assign_cores(std::string const& locality_basename,
+            boost::uint32_t num_threads);
+
+        boost::uint32_t assign_cores();
 
         /// \brief Install all performance counters related to this runtime
         ///        instance
@@ -164,6 +208,7 @@ namespace hpx
         virtual void stop(bool blocking = true) = 0;
 
         virtual parcelset::parcelhandler& get_parcel_handler() = 0;
+        virtual parcelset::parcelhandler const& get_parcel_handler() const = 0;
 
         virtual threads::threadmanager_base& get_thread_manager() = 0;
 
@@ -182,9 +227,9 @@ namespace hpx
 
         virtual void report_error(boost::exception_ptr const& e) = 0;
 
-        virtual naming::gid_type get_next_id() = 0;
+        virtual naming::gid_type get_next_id(std::size_t count = 1) = 0;
 
-        virtual util::unique_ids& get_id_pool() = 0;
+        virtual util::unique_id_ranges& get_id_pool() = 0;
 
         virtual void add_pre_startup_function(HPX_STD_FUNCTION<void()> const& f) = 0;
 
@@ -207,13 +252,64 @@ namespace hpx
         /// return zero.
         virtual hpx::util::io_service_pool* get_thread_pool(char const* name) = 0;
 
+        /// \brief Register an external OS-thread with HPX
+        ///
+        /// This function should be called from any OS-thread which is external to
+        /// HPX (not created by HPX), but which needs to access HPX functionality,
+        /// such as setting a value on a promise or similar.
+        ///
+        /// \param name             [in] The name to use for thread registration.
+        /// \param num              [in] The sequence number to use for thread
+        ///                         registration. The default for this parameter
+        ///                         is zero.
+        /// \param service_thread   [in] The thread should be registered as a
+        ///                         service thread. The default for this parameter
+        ///                         is 'true'. Any service threads will be pinned
+        ///                         to cores not currently used by any of the HPX
+        ///                         worker threads.
+        ///
+        /// \note The function will compose a thread name of the form
+        ///       '<name>-thread#<num>' which is used to register the thread. It
+        ///       is the user's responsibility to ensure that each (composed)
+        ///       thread name is unique. HPX internally uses the following names
+        ///       for the threads it creates, do not reuse those:
+        ///
+        ///         'main', 'io', 'timer', 'parcel', 'worker'
+        ///
+        /// \note This function should be called for each thread exactly once. It
+        ///       will fail if it is called more than once.
+        ///
+        /// \returns This function will return whether th erequested operation
+        ///          succeeded or not.
+        ///
+        virtual bool register_thread(char const* name, std::size_t num = 0,
+            bool service_thread = true) = 0;
+
+        /// \brief Unregister an external OS-thread with HPX
+        ///
+        /// This function will unregister any external OS-thread from HPX.
+        ///
+        /// \note This function should be called for each thread exactly once. It
+        ///       will fail if it is called more than once. It will fail as well
+        ///       if the thread has not been registered before (see
+        ///       \a register_thread).
+        ///
+        /// \returns This function will return whether th erequested operation
+        ///          succeeded or not.
+        ///
+        virtual bool unregister_thread() = 0;
+
+        /// This function creates anew base_lco_factory (if none is available
+        /// for the given type yet), registers this factory with the
+        /// runtime_support object and asks the factory for it's heap object
+        // which can be used to create new promises of the given type.
+        boost::shared_ptr<util::one_size_heap_list_base> get_promise_heap(
+            components::component_type type);
+
         ///////////////////////////////////////////////////////////////////////
         // management API for active performance counters
         void register_query_counters(
-            boost::shared_ptr<util::query_counters> active_counters)
-        {
-            active_counters_ = active_counters;
-        }
+            boost::shared_ptr<util::query_counters> const& active_counters);
 
         void start_active_counters(error_code& ec = throws);
         void stop_active_counters(error_code& ec = throws);
@@ -221,20 +317,64 @@ namespace hpx
         void evaluate_active_counters(bool reset = false,
             char const* description = 0, error_code& ec = throws);
 
+        // stop periodic evaluation of counters during shutdown
+        void stop_evaluating_counters();
+
         parcelset::policies::message_handler* create_message_handler(
             char const* message_handler_type, char const* action,
             parcelset::parcelport* pp, std::size_t num_messages,
             std::size_t interval, error_code& ec = throws);
         util::binary_filter* create_binary_filter(
             char const* binary_filter_type, bool compress,
-            error_code& ec = throws);
+            util::binary_filter* next_filter, error_code& ec = throws);
+
+#if defined(HPX_HAVE_SECURITY)
+        components::security::signed_certificate
+            get_root_certificate(error_code& ec = throws) const;
+        components::security::signed_certificate
+            get_certificate(error_code& ec = throws) const;
+
+        // add a certificate for another locality
+        void add_locality_certificate(
+            components::security::signed_certificate const& cert);
+
+        components::security::signed_certificate const&
+            get_locality_certificate(error_code& ec) const;
+        components::security::signed_certificate const&
+            get_locality_certificate(boost::uint32_t locality_id, error_code& ec) const;
+
+        void sign_parcel_suffix(
+            components::security::parcel_suffix const& suffix,
+            components::security::signed_parcel_suffix& signed_suffix,
+            error_code& ec) const;
+
+        template <typename Buffer>
+        bool verify_parcel_suffix(Buffer const& data,
+            naming::gid_type& parcel_id, error_code& ec) const;
+
+        components::security::signed_certificate_signing_request
+            get_certificate_signing_request() const;
+        components::security::signed_certificate
+            sign_certificate_signing_request(
+                components::security::signed_certificate_signing_request csr);
+
+        void store_root_certificate(
+            components::security::signed_certificate const& root_cert);
+
+        void store_subordinate_certificate(
+            components::security::signed_certificate const& root_subca_cert,
+            components::security::signed_certificate const& subca_cert);
+
+    protected:
+        void init_security();
+#endif
 
     protected:
         void init_tss();
         void deinit_tss();
 
-        friend bool hpx::pre_main(runtime_mode);
-        void set_state(state s) { state_ = s; }
+    public:
+        void set_state(state s) { state_.store(s); }
 
     protected:
         util::reinit_helper reinit_;
@@ -242,7 +382,7 @@ namespace hpx
         // list of functions to call on exit
         typedef std::vector<HPX_STD_FUNCTION<void()> > on_exit_type;
         on_exit_type on_exit_functions_;
-        boost::mutex on_exit_functions_mtx_;
+        mutable boost::mutex mtx_;
 
         util::runtime_configuration ini_;
         boost::shared_ptr<performance_counters::registry> counters_;
@@ -253,14 +393,26 @@ namespace hpx
 
         // certain components (such as PAPI) require all threads to be
         // registered with the library
-        util::thread_mapper thread_support_;
+        boost::scoped_ptr<util::thread_mapper> thread_support_;
 
-        boost::scoped_ptr<threads::topology> topology_;
+        threads::policies::init_affinity_data affinity_init_;
+        threads::topology& topology_;
 
-        state state_;
+        // locality basename -> used cores
+        typedef std::map<std::string, boost::uint32_t> used_cores_map_type;
+        used_cores_map_type used_cores_map_;
 
-        components::server::memory memory_;
-        components::server::runtime_support runtime_support_;
+        boost::atomic<state> state_;
+
+        boost::scoped_ptr<components::server::memory> memory_;
+        boost::scoped_ptr<components::server::runtime_support> runtime_support_;
+
+#if defined(HPX_HAVE_SECURITY)
+        // allocate dynamically to reduce dependencies
+        mutable lcos::local::spinlock security_mtx_;
+        HPX_STD_UNIQUE_PTR<detail::manage_security_data> security_data_;
+        components::security::certificate_store const * cert_store(error_code& ec) const;
+#endif
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -270,6 +422,19 @@ namespace hpx
     /// loading of external libraries.
     HPX_EXPORT bool keep_factory_alive(components::component_type type);
 }   // namespace hpx
+
+#if defined(HPX_HAVE_SECURITY)
+#include <hpx/components/security/verify.hpp>
+namespace hpx {
+    template <typename Buffer>
+    bool runtime::verify_parcel_suffix(Buffer const& data,
+        naming::gid_type& parcel_id, error_code& ec) const
+    {
+        lcos::local::spinlock::scoped_lock l(security_mtx_);
+        return components::security::verify(*cert_store(ec), data, parcel_id);
+    }
+}
+#endif
 
 #include <hpx/config/warnings_suffix.hpp>
 

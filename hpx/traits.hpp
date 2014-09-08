@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2013 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -21,7 +21,13 @@ namespace hpx { namespace traits
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Component, typename Enable = void>
+    struct is_component;
+
+    template <typename Component, typename Enable = void>
     struct component_type_database;
+
+    template <typename Component, typename Enable = void>
+    struct component_type_is_compatible;
 
     ///////////////////////////////////////////////////////////////////////////
     // control the way managed_components are constructed
@@ -68,6 +74,29 @@ namespace hpx { namespace traits
     template <typename Action, typename Enable = void>
     struct action_message_handler;
 
+#if defined(HPX_HAVE_SECURITY)
+    template <typename Action, typename Enable = void>
+    struct action_capability_provider;
+#endif
+
+    template <typename Action, typename Enable = void>
+    struct action_may_require_id_splitting;
+
+    template <typename Action, typename Enable = void>
+    struct action_is_target_valid;
+
+    template <typename Action, typename Enable = void>
+    struct action_does_termination_detection;
+
+    template <typename Action, typename Enable = void>
+    struct action_decorate_function;
+
+    template <typename Action, typename Enable = void>
+    struct action_decorate_continuation;
+
+    template <typename Action, typename Enable = void>
+    struct action_schedule_thread;
+
     ///////////////////////////////////////////////////////////////////////////
     // Customization point for type_size
     template <typename T, typename Enable = void>
@@ -77,16 +106,33 @@ namespace hpx { namespace traits
     template <typename Future, typename Enable = void>
     struct is_future;
 
-    ///////////////////////////////////////////////////////////////////////////
-    template <typename Component, typename Enable = void>
-    struct is_component;
+    template <typename Future, typename Enable = void>
+    struct future_traits;
 
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename Range, typename Enable = void>
+    struct is_future_range;
+
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename Tuple, typename Enable = void>
+    struct is_future_tuple;
+
+    ///////////////////////////////////////////////////////////////////////////
+    template <typename Future, typename Enable = void>
+    struct serialize_as_future;
+
+    ///////////////////////////////////////////////////////////////////////////
     template <typename Plugin, typename Enable = void>
     struct component_config_data;
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Plugin, typename Enable = void>
     struct plugin_config_data;
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Customization point for streaming with util::any
+    template <typename T, typename Enable = void>
+    struct supports_streaming_with_any;
 }}
 
 #endif

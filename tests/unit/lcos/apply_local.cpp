@@ -3,6 +3,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/lcos.hpp>
 #include <hpx/include/apply.hpp>
@@ -10,10 +11,18 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 boost::atomic<boost::int32_t> accumulator;
+hpx::lcos::local::condition_variable result_cv;
 
 void increment(boost::int32_t i)
 {
     accumulator += i;
+    result_cv.notify_one();
+}
+
+void increment_with_future(hpx::shared_future<boost::int32_t> fi)
+{
+    accumulator += fi.get();
+    result_cv.notify_one();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,6 +54,10 @@ struct increment_type
     }
 };
 
+#if !defined(BOOST_NO_CXX11_LAMBDAS) && !defined(BOOST_NO_CXX11_AUTO_DECLARATIONS)
+auto increment_lambda = [](boost::int32_t i){ accumulator += i; };
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -54,6 +67,19 @@ int hpx_main()
         hpx::apply(&increment, 1);
         hpx::apply(hpx::util::bind(&increment, 1));
         hpx::apply(hpx::util::bind(&increment, _1), 1);
+    }
+
+    {
+        hpx::promise<boost::int32_t> p;
+        hpx::shared_future<boost::int32_t> f = p.get_future();
+
+        using hpx::util::placeholders::_1;
+
+        hpx::apply(&increment_with_future, f);
+        hpx::apply(hpx::util::bind(&increment_with_future, f));
+        hpx::apply(hpx::util::bind(&increment_with_future, _1), f);
+
+        p.set_value(1);
     }
 
     {
@@ -81,15 +107,35 @@ int hpx_main()
         using hpx::util::placeholders::_1;
         using hpx::util::placeholders::_2;
 
-// We are currently not able to detect whether a type is callable. We need the
-// C++11 is_callable trait for this. For now, please use hpx::util::bind to
-// wrap your function object in order to pass it to async (see below).
-//
-//         hpx::apply(obj, 1);
-
+        hpx::apply(obj, 1);
         hpx::apply(hpx::util::bind(obj, 1));
         hpx::apply(hpx::util::bind(obj, _1), 1);
     }
+    
+#   if !defined(BOOST_NO_CXX11_LAMBDAS) && !defined(BOOST_NO_CXX11_AUTO_DECLARATIONS)
+    {
+        using hpx::util::placeholders::_1;
+        using hpx::util::placeholders::_2;
+
+        hpx::apply(increment_lambda, 1);
+        hpx::apply(hpx::util::bind(increment_lambda, 1));
+        hpx::apply(hpx::util::bind(increment_lambda, _1), 1);
+    }
+#   endif
+
+    hpx::lcos::local::no_mutex result_mutex;
+    hpx::lcos::local::no_mutex::scoped_lock l(result_mutex);
+#   if !defined(BOOST_NO_CXX11_LAMBDAS) && !defined(BOOST_NO_CXX11_AUTO_DECLARATIONS)
+    result_cv.wait_for(result_mutex, boost::chrono::seconds(1),
+        hpx::util::bind(std::equal_to<boost::int32_t>(), boost::ref(accumulator), 18));
+
+    HPX_TEST_EQ(accumulator.load(), 18);
+#   else
+    result_cv.wait_for(result_mutex, boost::chrono::seconds(1),
+        hpx::util::bind(std::equal_to<boost::int32_t>(), boost::ref(accumulator), 15));
+
+    HPX_TEST_EQ(accumulator.load(), 15);
+#   endif
 
     return hpx::finalize();
 }
@@ -101,8 +147,6 @@ int main(int argc, char* argv[])
     // Initialize and run HPX
     HPX_TEST_EQ_MSG(hpx::init(argc, argv), 0,
         "HPX main exited with non-zero status");
-
-    HPX_TEST_EQ(accumulator.load(), 11);
 
     return hpx::util::report_errors();
 }

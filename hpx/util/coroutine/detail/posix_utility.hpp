@@ -29,6 +29,9 @@
 
 #ifndef HPX_COROUTINE_DETAIL_POSIX_UTILITY_HPP_02012006
 #define HPX_COROUTINE_DETAIL_POSIX_UTILITY_HPP_02012006
+
+#include <hpx/util/assert.hpp>
+
 #include <boost/config.hpp>
 
 #if defined(_POSIX_VERSION)
@@ -44,7 +47,6 @@
 #include <new>
 #include <iostream>
 #include <boost/type_traits.hpp>
-#include <boost/assert.hpp>
 
 #if defined(_POSIX_MAPPED_FILES) && _POSIX_MAPPED_FILES > 0
 #include <sys/mman.h>
@@ -64,7 +66,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail { names
 
 HPX_EXPORT extern bool use_guard_pages;
 
-#if defined(_POSIX_MAPPED_FILES) && _POSIX_MAPPED_FILES > 0
+#if defined(HPX_USE_MMAP) && defined(_POSIX_MAPPED_FILES) && _POSIX_MAPPED_FILES > 0
 
   inline
   void*
@@ -87,7 +89,7 @@ HPX_EXPORT extern bool use_guard_pages;
         throw std::runtime_error("mmap() failed to allocate thread stack");
     }
 
-#if HPX_THREAD_GUARD_PAGE
+#if defined(HPX_THREAD_GUARD_PAGE)
     if (use_guard_pages) {
         // Add a guard page.
         ::mprotect(real_stack, EXEC_PAGESIZE, PROT_NONE);
@@ -103,7 +105,7 @@ HPX_EXPORT extern bool use_guard_pages;
 
   inline
   void watermark_stack(void* stack, std::size_t size) {
-    BOOST_ASSERT(size > EXEC_PAGESIZE);
+    HPX_ASSERT(size > EXEC_PAGESIZE);
 
     // Fill the bottom 8 bytes of the first page with 1s.
     void** watermark = static_cast<void**>(stack) + ((size - EXEC_PAGESIZE) / sizeof(void*));
@@ -129,7 +131,7 @@ HPX_EXPORT extern bool use_guard_pages;
 
   inline
   void free_stack(void* stack, std::size_t size) {
-#if HPX_THREAD_GUARD_PAGE
+#if defined(HPX_THREAD_GUARD_PAGE)
     if (use_guard_pages) {
         void** real_stack = static_cast<void**>(stack) - (EXEC_PAGESIZE / sizeof(void*));
         ::munmap(static_cast<void*>(real_stack), size + EXEC_PAGESIZE);

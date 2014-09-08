@@ -29,15 +29,38 @@ namespace hpx { namespace threads
         std::size_t get_socket_number(
             std::size_t num_thread
           , error_code& ec = throws
-            ) const;
+            ) const
+        {
+            return socket_numbers_[num_thread % num_of_pus_];
+        }
 
         std::size_t get_numa_node_number(
             std::size_t num_thread
           , error_code& ec = throws
-            ) const;
+            ) const
+        {
+            return numa_node_numbers_[num_thread % num_of_pus_];
+        }
 
         std::size_t get_core_number(
             std::size_t num_thread
+          , error_code& ec = throws
+            ) const
+        {
+            return core_numbers_[num_thread % num_of_pus_];
+        }
+
+        std::size_t get_pu_number(
+            std::size_t num_thread
+          , error_code& ec = throws
+            ) const
+        {
+            return pu_numbers_[num_thread % num_of_pus_];
+        }
+
+        std::size_t get_pu_number(
+            std::size_t num_core
+          , std::size_t num_pu
           , error_code& ec = throws
             ) const;
 
@@ -96,6 +119,18 @@ namespace hpx { namespace threads
             std::size_t num_core, mask_cref_type default_mask
             ) const;
         mask_type init_thread_affinity_mask(std::size_t num_thread) const;
+        mask_type init_thread_affinity_mask(
+            std::size_t num_core
+          , std::size_t num_pu
+            ) const;
+
+        mask_type get_cpubind_mask(error_code& ec = throws) const;
+
+        ///////////////////////////////////////////////////////////////////////
+        std::size_t get_number_of_sockets() const;
+        std::size_t get_number_of_numa_nodes() const;
+        std::size_t get_number_of_cores() const;
+        std::size_t get_number_of_pus() const;
 
         ///////////////////////////////////////////////////////////////////////
         std::size_t get_number_of_socket_pus(
@@ -114,6 +149,11 @@ namespace hpx { namespace threads
         std::size_t get_number_of_numa_node_cores(
             std::size_t numa_node
             ) const;
+
+        void print_affinity_mask(std::ostream& os, std::size_t num_thread,
+            mask_type const& m) const;
+
+        struct hwloc_topology_tag {};
 
     private:
         static mask_type empty_mask;
@@ -161,7 +201,7 @@ namespace hpx { namespace threads
         }
         mask_type init_core_affinity_mask(std::size_t num_thread) const
         {
-            mask_type default_mask = 
+            mask_type default_mask =
                 get_numa_node_affinity_mask(num_thread, false);
             return init_core_affinity_mask_from_core(
                 get_core_number(num_thread), default_mask);
@@ -171,6 +211,17 @@ namespace hpx { namespace threads
 
         hwloc_topology_t topo;
 
+        // We need to define a constant pu offset.
+        // This is mainly to skip the first Core on the Xeon Phi
+        // which is reserved for OS related tasks
+#if !defined(HPX_NATIVE_MIC)
+        static const std::size_t pu_offset = 0;
+        static const std::size_t core_offset = 0;
+#else
+        static const std::size_t pu_offset = 4;
+        static const std::size_t core_offset = 1;
+#endif
+
         std::size_t num_of_pus_;
 
         mutable hpx::util::spinlock topo_mtx;
@@ -179,6 +230,7 @@ namespace hpx { namespace threads
         std::vector<std::size_t> socket_numbers_;
         std::vector<std::size_t> numa_node_numbers_;
         std::vector<std::size_t> core_numbers_;
+        std::vector<std::size_t> pu_numbers_;
 
         mask_type machine_affinity_mask_;
         std::vector<mask_type> socket_affinity_masks_;
@@ -188,9 +240,10 @@ namespace hpx { namespace threads
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    inline topology* create_topology()
+    inline hwloc_topology& create_topology()
     {
-        return new hwloc_topology;
+        util::static_<hwloc_topology, hwloc_topology::hwloc_topology_tag> topo;
+        return topo.get();
     }
 }}
 

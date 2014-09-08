@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,7 +12,9 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/naming/locality.hpp>
+#include <hpx/runtime/components/static_factory_data.hpp>
 #include <hpx/util/ini.hpp>
+#include <hpx/util/plugin/dll.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace util
@@ -28,7 +30,7 @@ namespace hpx { namespace util
 
     public:
         // initialize and load configuration information
-        runtime_configuration();
+        runtime_configuration(char const* argv0);
 
         // re-initialize all entries based on the additional information from
         // the given configuration file
@@ -38,30 +40,35 @@ namespace hpx { namespace util
         // any explicit command line options
         void reconfigure(std::vector<std::string> const& ini_defs);
 
-        void load_components();
+        void load_components(std::map<std::string, hpx::util::plugin::dll>& modules);
+        void load_components_static(std::vector<
+            components::static_factory_load_data_type> const& static_modules);
 
         // Returns the AGAS mode of this locality, returns either hosted (for
         // localities connecting to a remote AGAS server) or bootstrap for the
         // locality hosting the AGAS server.
         agas::service_mode get_agas_service_mode() const;
 
-        // AGAS server only: get number of localities served
-        std::size_t get_num_localities() const;
+        // initial number of localities
+        boost::uint32_t get_num_localities() const;
+        void set_num_localities(boost::uint32_t);
 
-        std::size_t get_agas_promise_pool_size() const;
+        // sequence number of first usable pu
+        boost::uint32_t get_first_used_core() const;
+        void set_first_used_core(boost::uint32_t);
 
         // Get the AGAS locality to use
         naming::locality get_agas_locality() const;
+        void set_agas_locality(naming::locality const & agas_locality);
 
         // Get the HPX network address to use
         naming::locality get_parcelport_address() const;
 
-        // Get the number of maximum concurrent connections per locality
-        std::size_t get_max_connections_per_loc() const;
-        std::size_t get_max_connections() const;
+        // Get the IP of the ibverbs adapter to use
+        std::string get_ibverbs_address() const;
 
-        // Get the size of the shmem parcelport data buffer cache
-        std::size_t get_shmem_data_buffer_cache_size() const;
+        // Get the size of the ipc parcelport data buffer cache
+        std::size_t get_ipc_data_buffer_cache_size() const;
 
         // Get AGAS client-side local cache size
         std::size_t get_agas_local_cache_size(
@@ -91,6 +98,12 @@ namespace hpx { namespace util
         // Enable lock detection during suspension
         bool enable_lock_detection() const;
 
+        // Enable global lock tracking
+        bool enable_global_lock_detection() const;
+
+        // Enable minimal deadlock detection for HPX threads
+        bool enable_minimal_deadlock_detection() const;
+
         // Returns the number of OS threads this locality is running.
         std::size_t get_os_thread_count() const;
 
@@ -112,8 +125,11 @@ namespace hpx { namespace util
         // Return the endianess to be used for out-serialization
         std::string get_endian_out() const;
 
+        // Return maximally allowed message size
+        boost::uint64_t get_max_message_size() const;
+
     private:
-        std::ptrdiff_t init_stack_size(char const* entryname, 
+        std::ptrdiff_t init_stack_size(char const* entryname,
             char const* defaultvaluestr, std::ptrdiff_t defaultvalue) const;
 
         std::ptrdiff_t init_small_stack_size() const;
@@ -126,17 +142,22 @@ namespace hpx { namespace util
 #endif
 
         void pre_initialize_ini();
-        void post_initialize_ini(std::string const& hpx_ini_file,
+        void post_initialize_ini(std::string& hpx_ini_file,
             std::vector<std::string> const& cmdline_ini_defs);
 
         void reconfigure();
 
     private:
+        mutable boost::uint32_t num_localities;
+        naming::locality agas_locality_;
         std::ptrdiff_t small_stacksize;
         std::ptrdiff_t medium_stacksize;
         std::ptrdiff_t large_stacksize;
         std::ptrdiff_t huge_stacksize;
         bool need_to_call_pre_initialize;
+#if defined(__linux) || defined(linux) || defined(__linux__)
+        char const* argv0;
+#endif
     };
 }}
 

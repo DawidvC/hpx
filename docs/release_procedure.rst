@@ -26,12 +26,12 @@ the lines as they are completed to avoid confusion.
         usage documentation, either in the form of comments or a readme. 
 
 #.  Send the list of examples and benchmarks that will be included in the
-    release to gopx@cct.lsu.edu and stellar@cct.lsu.edu, and ask for feedback.
-    Update the list as necessary.
+    release to hpx-users@stellar.cct.lsu.edu and stellar@cct.lsu.edu, and ask 
+    for feedback. Update the list as necessary.
 
 #.  Write release notes for the blog to summarize the major changes listed in
     the log. The blog article should go in the "downloads" section. The url of
-    the blog article should follow this format (where # are version numbers):::
+    the blog article should follow this format (where # are version numbers)::
 
         stellar.cct.lsu.edu/downloads/hpx-v#-#-#-release-notes
 
@@ -39,10 +39,18 @@ the lines as they are completed to avoid confusion.
     in ``docs/whats_new.qbk``.
 
 #.  Build the docs, and proof-read them. Update any documentation that may have
-    changed, and correct any typos.
+    changed, and correct any typos. Pay special attention to:
 
-    *   Pay particular attention to ``$HPX_SOURCE/README.rst`` and 
-        ``docs/whats_new.qbk``.
+    *   ``$HPX_SOURCE/README.rst`` 
+    *   Update grant information
+    *   ``docs/whats_new.qbk``
+    *   ``docs/people.qbk``
+    *   Update collaborators
+    *   Update grant information
+
+#.  If there have been any commits to the release branch since the last release
+    create a tag from the old release branch before deleting the old release
+    branch in the next step.
 
 #.  Delete the old release branch, and create a new one by branching a stable
     point from master. 
@@ -50,21 +58,29 @@ the lines as they are completed to avoid confusion.
 #.  Checkout the main branch, and bump the HPX version to the next release
     target. The following files contain version info:
 
-        *   ``hpx/version.hpp``
-        *   ``docs/hpx.qbk`` (Don't forget to update the logo)
-        *   ``CMakeLists.txt``
+    *   ``hpx/version.hpp``
+    *   ``docs/hpx.qbk``
+    *   ``CMakeLists.txt``
+
+#.  Create new logos for documentation. Update the logo size accordingly in
+    ``docs/cmakelist.txt`` lines 124/125, remove '_draft' suffix in logo file
+    name in ``docs/cmakelist.txt`` line 111.
 
 #.  Checkout the release branch, and remove the ``-trunk`` tag from
-    ``hpx/version.hpp`` (replace it with an empty string).
+    ``hpx/version.hpp`` (replace it with ``-rc1`` for the release candidate
+    and later with an empty string for the actual release).
 
 #.  Remove the examples and benchmarks that will not go into the release from
     the release branch.
 
 #.  Tag a release candidate from the release branch.
 
-#.  Notify gopx@cct.lsu.edu and stellar@cct.lsu.edu of the availability of the
-    release candidate. Ask users to test the candidate by checking out the
-    release candidate tag.
+    *   ``git tag -a [tag name] -m '[description]'``
+    *   ``git push origin [tag name]``
+
+#.  Notify hpx-users@stellar.cct.lsu.edu and stellar@cct.lsu.edu of the
+    availability of the release candidate. Ask users to test the candidate by 
+    checking out the release candidate tag.
 
 #.  Allow at least a week for testing of the release candidate. Pull in changes
     as needed from master to resolve bug fixes, etc.
@@ -72,6 +88,10 @@ the lines as they are completed to avoid confusion.
     *   Use ``git merge`` when possible, and fall back to ``git cherry-pick``
         when needed.
 
+#.  Update ``$HPX_SOURCE/README.rst`` 
+    *   Update version
+    *   Update links to documentation
+     
 #.  Tag the release.
 
 #.  Roll a release candidate using ``tools/roll_release.sh``, and add the
@@ -79,13 +99,23 @@ the lines as they are completed to avoid confusion.
 
 #.  Post the draft of the release notes.
 
-.. URL format needed.
-#.  Upload the packages and generated documentation to the website.
+#.  Upload the packages and generated documentation to the website. Use the following
+    formats::
 
-.. URL/title format needed.
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#.zip
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#.tar.gz
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#.tar.bz2
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#.7z
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#/html
+        http://stellar.cct.lsu.edu/files/hpx_#.#.#/html/code
+        http://stellar.cct.lsu.edu/downloads/hpx-v#-#-#-release-notes
+
 #.  Write a new blog post announcing the release.
 
-#.  Announce the release on gopx@cct.lsu.edu and stellar@cct.lsu.edu.
+#.  Announce the release on hpx-users@stellar.cct.lsu.edu, 
+    stellar@cct.lsu.edu, allcct@cct.lsu.edu, faculty@csc.lsu.edu, faculty@ece.lsu.edu,
+    xpress@crest.iu.edu, Sonia Sachs, our list of external collaborators,
+    isocpp.org, HPC Wire, Inside HPC, and a CCT press release.
 
 #.  Beer and pizza.
 

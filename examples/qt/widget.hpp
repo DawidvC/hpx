@@ -1,13 +1,14 @@
-
-//  Copyright (c) 2012 Thomas Heller
+//  Copyright (c) 2012-2014 Thomas Heller
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <QtGui/QDialog>
-#include <QMutex>
 
+#ifndef Q_MOC_RUN
+#include <hpx/lcos/local/spinlock.hpp>
 #include <boost/function.hpp>
+#endif
 
 class QWidget;
 class QListWidget;
@@ -32,7 +33,7 @@ class widget
 
     private:
         std::size_t no_threads;
-        QMutex mutex;
+        hpx::lcos::local::spinlock mutex;
         QListWidget *list;
         QPushButton * run_button;
         boost::function<void(widget *, std::size_t)> callback_;

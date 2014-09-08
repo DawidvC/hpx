@@ -36,17 +36,17 @@ std::size_t thread_affinity_worker(std::size_t desired)
     // Returns the OS-thread number of the worker that is running this
     // PX-thread.
     std::size_t current = hpx::get_worker_thread_num();
-    bool numa_sensitive = hpx::is_scheduler_numa_sensitive();
-
     if (current == desired)
     {
+#if defined(HPX_HAVE_HWLOC)
+        bool numa_sensitive = hpx::is_scheduler_numa_sensitive();
+
         // extract the desired affinity mask
         hpx::threads::topology const& t = hpx::get_runtime().get_topology();
         hpx::threads::mask_type desired_mask = t.get_thread_affinity_mask(current, numa_sensitive);
 
         std::size_t idx = hpx::threads::find_first(desired_mask);
 
-#if defined(HPX_HAVE_HWLOC)
         hwloc_topology_t topo;
         hwloc_topology_init(&topo);
         hwloc_topology_load(topo);
@@ -80,7 +80,7 @@ std::size_t thread_affinity_worker(std::size_t desired)
 
 HPX_PLAIN_ACTION(thread_affinity_worker, thread_affinity_worker_action)
 
-void check_in(std::set<std::size_t>& attendance, std::size_t, std::size_t t)
+void check_in(std::set<std::size_t>& attendance, std::size_t t)
 {
     if (std::size_t(-1) != t)
         attendance.erase(t);
@@ -128,8 +128,8 @@ void thread_affinity_foreman()
         // is the index of the future in the vector, and the second is the
         // return value of the future. hpx::lcos::wait doesn't return until
         // all the futures in the vector have returned.
-        hpx::lcos::wait(futures,
-            boost::bind(&check_in, boost::ref(attendance), ::_1, ::_2));
+        hpx::lcos::wait_each(futures, hpx::util::unwrapped(
+            boost::bind(&check_in, boost::ref(attendance), ::_1)));
     }
 }
 
@@ -159,7 +159,7 @@ int hpx_main(boost::program_options::variables_map& /*vm*/)
         // The non-callback version of hpx::lcos::wait takes a single parameter,
         // a future of vectors to wait on. hpx::lcos::wait only returns when
         // all of the futures have finished.
-        hpx::lcos::wait(futures);
+        hpx::wait_all(futures);
     }
 
     // Initiate shutdown of the runtime system.

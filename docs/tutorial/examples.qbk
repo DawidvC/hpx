@@ -62,13 +62,13 @@ To compile this program, go to your __hpx__ build directory (see __getting_start
 for information on configuring and building __hpx__) and enter:
 
 ``
-    $ make examples.quickstart.fibonacci
+    make examples.quickstart.fibonacci
 ``
 
 To run the program type:
 
 ``
-    $ ./bin/fibonacci
+    ./bin/fibonacci
 ``
 
 This should print (time should be approximate):
@@ -85,7 +85,7 @@ the [^--n-value] option. Additionally you can use the
 wish to use when running the program. For instance, running:
 
 ```
-    $ ./bin/fibonacci --n-value 20 ``[hpx_cmdline --hpx:threads]`` 4
+    ./bin/fibonacci --n-value 20 ``[hpx_cmdline --hpx:threads]`` 4
 ```
 
 Will yield:
@@ -212,13 +212,13 @@ To compile this program, go to your __hpx__ build directory (see __getting_start
 for information on configuring and building __hpx__) and enter:
 
 ``
-    $ make examples.quickstart.hello_world
+    make examples.quickstart.hello_world
 ``
 
 To run the program type:
 
 ``
-    $ ./bin/hello_world
+    ./bin/hello_world
 ``
 
 This should print:
@@ -231,7 +231,7 @@ To use more OS-threads use the command line option [hpx_cmdline [^--hpx:threads]
 and type the number of threads that you wish to use. For example, typing:
 
 ```
-    $ ./bin/hello_world ``[hpx_cmdline --hpx:threads]`` 2
+    ./bin/hello_world ``[hpx_cmdline --hpx:threads]`` 2
 ```
 
 will yield:
@@ -243,7 +243,7 @@ will yield:
 
 Notice how the ordering of the two print statements will change with
 subsequent runs. To run this program on multiple localities please see the
-__pbs__ documentation.
+section __using_pbs__.
 
 [heading Walkthrough]
 
@@ -366,7 +366,7 @@ To compile this program, go to your __hpx__ build directory (see __getting_start
 for information on configuring and building __hpx__) and enter:
 
 ``
-    $ make examples.accumulator.managed_accumulator
+    make examples.accumulator.managed_accumulator
 ``
 
 To run the program type:
@@ -457,10 +457,6 @@ declare a data member:
 
 [managed_accumulator_server_data_member]
 
-The `boost::atomic<>` template class is from the __boost_atomic__ library. We use
-this class to ensure thread-safety in our example. Think of this data member as
-a thread-safe, 64-bit unsigned integer.
-
 The constructor for this class simply initializes `value_` to 0:
 
 [managed_accumulator_server_ctor]
@@ -469,12 +465,6 @@ Next, let's look at the three methods of this component that we will be exposing
 as component actions:
 
 [managed_accumulator_methods]
-
-Before we can define the action types for these methods, we first need to
-associate an action code (an arbitrary, unique integral value) with each method
-that we are going to expose as an action:
-
-[managed_accumulator_action_codes]
 
 Here are the action types. These types wrap the methods we're exposing. The
 wrapping technique is very similar to the one used in the __fibonacci_example__
@@ -633,13 +623,13 @@ To compile this program, go to your __hpx__ build directory (see __getting_start
 for information on configuring and building __hpx__) and enter:
 
 ``
-    $ make examples.quickstart.interest_calculator
+    make examples.quickstart.interest_calculator
 ``
 
 To run the program type:
 
 ``
-    $ ./bin/interest_calculator --principal 100 --rate 5 --cp 6 --time 36
+    ./bin/interest_calculator --principal 100 --rate 5 --cp 6 --time 36
 ``
 
 This should print:

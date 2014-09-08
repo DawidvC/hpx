@@ -10,11 +10,10 @@
 #include <hpx/components/distributing_factory/distributing_factory.hpp>
 
 #include <hpx/include/async.hpp>
-#include <hpx/lcos/future_wait.hpp>
 #include <hpx/lcos/local/packaged_task.hpp>
+#include <hpx/util/assert.hpp>
 
 #include <boost/foreach.hpp>
-#include <boost/assert.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/move/move.hpp>
 
@@ -101,8 +100,8 @@ namespace sheneos
 
         // Create distributing factory and let it create num_instances
         // objects.
-        distributing_factory factory;
-        factory.create(hpx::find_here());
+        distributing_factory factory =
+            distributing_factory::create(hpx::find_here());
 
         // Asynchronously create the components. They will be distributed
         // fairly across all available localities.
@@ -111,7 +110,7 @@ namespace sheneos
 
         // Initialize the partitions and store the mappings.
         partitions_.reserve(num_instances);
-        fill_partitions(datafilename, symbolic_name_base, result);
+        fill_partitions(datafilename, symbolic_name_base, std::move(result));
 
         was_created_ = true;
     }
@@ -120,8 +119,7 @@ namespace sheneos
     void interpolator::connect(std::string symbolic_name_base)
     {
         // Connect to the config object.
-        hpx::naming::id_type cfg_gid;
-        hpx::agas::resolve_name(symbolic_name_base, cfg_gid);
+        hpx::naming::id_type cfg_gid = hpx::agas::resolve_name(symbolic_name_base).get();
         cfg_ = configuration(cfg_gid);
         config_data data = cfg_.get();
 
@@ -134,9 +132,8 @@ namespace sheneos
         {
             using boost::lexical_cast;
             partitions_.push_back(hpx::naming::id_type());
-            hpx::agas::resolve_name(
-                data.symbolic_name_ + lexical_cast<std::string>(i),
-                partitions_.back());
+            hpx::naming::id_type id = hpx::agas::resolve_name(
+                    data.symbolic_name_ + lexical_cast<std::string>(i)).get();
         }
 
         // Read required data from given file.
@@ -182,7 +179,7 @@ namespace sheneos
 
         // Initialize all attached partition objects.
         std::size_t num_localities = partitions_.size();
-        BOOST_ASSERT(0 != num_localities);
+        HPX_ASSERT(0 != num_localities);
 
         num_partitions_per_dim_ = static_cast<std::size_t>(
             std::exp(std::log(double(num_localities)) / 3));
@@ -233,7 +230,7 @@ namespace sheneos
 
                     std::size_t index =
                         x + (y + z * num_partitions_per_dim_) * num_partitions_per_dim_;
-                    BOOST_ASSERT(index < partitions_.size());
+                    HPX_ASSERT(index < partitions_.size());
 
                     lazy_sync.push_back(stubs::partition3d::init_async(
                         partitions_[index], datafilename, dim_x, dim_y, dim_z));
@@ -262,7 +259,7 @@ namespace sheneos
         }
 
         // Wait for initialization to finish.
-        hpx::lcos::wait(lazy_sync);
+        hpx::wait_all(lazy_sync);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -275,7 +272,7 @@ namespace sheneos
 
         std::size_t index =
             x + (y + z * num_partitions_per_dim_) * num_partitions_per_dim_;
-        BOOST_ASSERT(index < partitions_.size());
+        HPX_ASSERT(index < partitions_.size());
 
         return partitions_[index];
     }
@@ -288,7 +285,7 @@ namespace sheneos
             (value - minval_[d]) / (delta_[d] * partition_size));
         if (partition_index == num_partitions_per_dim_)
             --partition_index;
-        BOOST_ASSERT(partition_index < num_partitions_per_dim_);
+        HPX_ASSERT(partition_index < num_partitions_per_dim_);
         return partition_index;
     }
 
@@ -399,7 +396,7 @@ namespace sheneos
             }
 
             // wait for all asynchronous operations to complete
-            lcos::wait(lazy_results);
+            wait_all(lazy_results);
 
             return overall_result;
         }
@@ -517,7 +514,7 @@ namespace sheneos
             }
 
             // wait for all asynchronous operations to complete
-            lcos::wait(lazy_results);
+            wait_all(lazy_results);
 
             return overall_results;
         }

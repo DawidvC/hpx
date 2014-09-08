@@ -15,12 +15,6 @@
 
 #include <hpx/plugins/parcel/coalescing_message_handler.hpp>
 
-#if defined(HPX_HAVE_CXX11)
-#include <type_traits>
-#else
-#include <boost/type_traits.hpp>
-#endif
-
 #include <boost/mpl/bool.hpp>
 
 namespace hpx { namespace lcos
@@ -56,7 +50,7 @@ namespace hpx { namespace lcos
 
         /// \brief finalize() will be called just before the instance gets
         ///        destructed
-        void finalize();
+        virtual void finalize();
 
         /// The \a function set_event_nonvirt is called whenever a
         /// \a set_event_action is applied on a instance of a LCO. This function
@@ -119,11 +113,20 @@ namespace hpx { namespace lcos
 
         /// This is the default hook implementation for decorate_action which
         /// does no hooking at all.
-        static HPX_STD_FUNCTION<threads::thread_function_type>
-        wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-            naming::address::address_type)
+        template <typename F>
+        static threads::thread_function_type
+        decorate_action(naming::address::address_type, F && f)
         {
-            return boost::move(f);
+            return std::forward<F>(f);
+        }
+
+        /// This is the default hook implementation for schedule_thread which
+        /// forwards to the default scheduler.
+        static void schedule_thread(naming::address::address_type,
+            threads::thread_init_data& data,
+            threads::thread_state_enum initial_state)
+        {
+            threads::register_work_plain(data, initial_state); //-V106
         }
     };
 }}

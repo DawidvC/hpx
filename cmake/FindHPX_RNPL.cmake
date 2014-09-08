@@ -5,12 +5,8 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-if(NOT HPX_FINDPACKAGE_LOADED)
-  include(HPX_FindPackage)
-endif()
-
 if(NOT SDF_ROOT AND NOT $ENV{SDF_ROOT} STREQUAL "")
-  set(SDF_ROOT $ENV{SDF_ROOT})
+  set(SDF_ROOT "$ENV{SDF_ROOT}")
 endif()
 
 if(SDF_ROOT)
@@ -20,11 +16,11 @@ endif()
 hpx_find_package(RNPL
   LIBRARIES bbhutil libbbhutil
   LIBRARY_PATHS lib64 lib
-  HEADERS sdf.h
+  HEADERS bbhutil.h sdf.h
   HEADER_PATHS include)
 
 if(RNPL_FOUND AND NOT HPX_SET_RNPL_MACRO)
-  add_definitions(-DSDF_FOUND)
-  add_definitions(-DRNPL_FOUND)
+  hpx_add_config_define(SDF_FOUND)
+  hpx_add_config_define(RNPL_FOUND)
 endif()
 

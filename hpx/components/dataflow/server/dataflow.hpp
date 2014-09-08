@@ -17,6 +17,7 @@
 #include <hpx/lcos/base_lco.hpp>
 #include <hpx/components/dataflow/server/detail/dataflow_impl.hpp>
 #include <hpx/components/dataflow/server/detail/component_wrapper.hpp>
+#include <hpx/util/decay.hpp>
 
 namespace hpx { namespace lcos { namespace server
 {
@@ -58,13 +59,13 @@ namespace hpx { namespace lcos { namespace server
 
         ~dataflow()
         {
-            BOOST_ASSERT(component_ptr);
-            component_ptr->finalize();
-            LLCO_(info)
-                << "~server::dataflow::dataflow()";
-            BOOST_ASSERT(component_ptr);
-            delete component_ptr;
+            LLCO_(info) << "~server::dataflow::dataflow()";
 
+            HPX_ASSERT(component_ptr);
+            if (component_ptr) {
+                component_ptr->finalize();
+                delete component_ptr;
+            }
             detail::update_destructed_count();
         }
 
@@ -92,18 +93,18 @@ namespace hpx { namespace lcos { namespace server
             }
             (*w)->init();
 
-            detail::update_initialized_count(); 
+            detail::update_initialized_count();
         }
 
         dataflow()
         {
-            BOOST_ASSERT(false);
+            HPX_ASSERT(false);
         }
 
         dataflow(component_type * back_ptr)
             : base_type(back_ptr)
         {
-            BOOST_ASSERT(false);
+            HPX_ASSERT(false);
         }
 
         template <typename Action>
@@ -117,7 +118,7 @@ namespace hpx { namespace lcos { namespace server
         {
             /*
             applier::register_thread(
-                HPX_STD_BIND(&dataflow::init<typename Action::type>
+                util::bind(&dataflow::init<typename Action::type>
                   , this
                   , target
                 )
@@ -190,14 +191,10 @@ namespace hpx { namespace lcos { namespace server
 #define N BOOST_PP_ITERATION()
         // TODO: get rid of the call to impl_ptr->init
 
-#define M0(Z, N, D) BOOST_FWD_REF(BOOST_PP_CAT(A, N)) BOOST_PP_CAT(a, N)
-#define M1(Z, N, D) boost::forward<BOOST_PP_CAT(A, N)>(BOOST_PP_CAT(a, N))
+#define M0(Z, N, D) BOOST_PP_CAT(A, N &&) BOOST_PP_CAT(a, N)
+#define M1(Z, N, D) std::forward<BOOST_PP_CAT(A, N)>(BOOST_PP_CAT(a, N))
 #define M2(Z, N, D)                                                             \
-    typename boost::remove_const<                                               \
-            typename hpx::util::detail::remove_reference<                       \
-                BOOST_PP_CAT(A, N)                                              \
-            >::type                                                             \
-        >::type                                                                 \
+    typename util::decay<BOOST_PP_CAT(A, N)>::type                              \
 /**/
 
         template <typename Action, BOOST_PP_ENUM_PARAMS(N, typename A)>
@@ -240,7 +237,7 @@ namespace hpx { namespace lcos { namespace server
         {
             /*
             applier::register_thread(
-                HPX_STD_BIND(&dataflow::init<
+                util::bind(&dataflow::init<
                         typename Action::type, BOOST_PP_ENUM_PARAMS(N, A)
                     >
                   , this

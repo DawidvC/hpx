@@ -52,7 +52,8 @@ namespace hpx { namespace components
         > p;
 
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<T>()
           , remote_object::dtor_fun<T>()
@@ -89,7 +90,6 @@ namespace hpx { namespace components
 #endif // !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 
 }}
-
 #endif
 
 #else
@@ -108,7 +108,8 @@ namespace hpx { namespace components
         > p;
 
         p.apply(
-            target_id
+            launch::async
+          , target_id
           , target_id
           , remote_object::ctor_fun<
                 T

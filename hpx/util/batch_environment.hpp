@@ -28,12 +28,12 @@ namespace hpx { namespace util
         // the constructor tries to read from a PBS node-file, filling our
         // map of nodes and thread counts
         batch_environment(bool debug = false)
-          : agas_node_num_(0), debug_(debug)
+          : agas_node_num_(0), num_tasks_(1), debug_(debug)
         {}
 
         // this function tries to read from a PBS node-file, filling our
         // map of nodes and thread counts
-        std::string init_from_file(std::string nodefile,
+        std::string init_from_file(std::string const& nodefile,
             std::string const& agas_host);
 
         // this function initializes the map of nodes from the given (space
@@ -92,6 +92,7 @@ namespace hpx { namespace util
         std::string agas_node_;
         std::size_t agas_node_num_;
         node_map_type nodes_;
+        std::size_t num_tasks_;
         bool debug_;
     };
 }}

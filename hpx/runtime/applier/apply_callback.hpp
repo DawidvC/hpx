@@ -21,29 +21,24 @@ namespace hpx
         // We know it is remote.
         template <typename Action, typename Callback>
         inline bool
-        apply_r_p_cb(naming::address& addr, naming::id_type const& gid,
-            threads::thread_priority priority, BOOST_FWD_REF(Callback) cb)
+        apply_r_p_cb(naming::address&& addr, naming::id_type const& id,
+            threads::thread_priority priority, Callback && cb)
         {
-            typedef typename hpx::actions::extract_action<Action>::type action_type;
-
             // If remote, create a new parcel to be sent to the destination
             // Create a new parcel with the gid, action, and arguments
-            parcelset::parcel p (gid.get_gid(), complement_addr<action_type>(addr),
-                new hpx::actions::transfer_action<action_type>(priority));
-
-            // Send the parcel through the parcel handler
-            hpx::applier::get_applier().get_parcel_handler()
-                .put_parcel(p, boost::forward<Callback>(cb));
+            lcos::local::detail::invoke_when_ready(
+                detail::put_parcel<Action>(id, std::move(addr), priority,
+                    actions::continuation_type(), std::forward<Callback>(cb)));
             return false;     // destination is remote
         }
 
         template <typename Action, typename Callback>
         inline bool
-        apply_r_cb(naming::address& addr, naming::id_type const& gid, 
-            BOOST_FWD_REF(Callback) cb)
+        apply_r_cb(naming::address& addr, naming::id_type const& gid,
+            Callback && cb)
         {
             return apply_r_p_cb<Action>(addr, gid, actions::action_priority<Action>(),
-                boost::forward<Callback>(cb));
+                std::forward<Callback>(cb));
         }
     }}
 
@@ -51,38 +46,47 @@ namespace hpx
     template <typename Action, typename Callback>
     inline bool
     apply_p_cb(naming::id_type const& gid, threads::thread_priority priority,
-        BOOST_FWD_REF(Callback) cb)
+        Callback && cb)
     {
+        if (!traits::action_is_target_valid<Action>::call(gid)) {
+            HPX_THROW_EXCEPTION(bad_parameter, "apply_p_cb",
+                boost::str(boost::format(
+                    "the target (destination) does not match the action type (%s)"
+                ) % hpx::actions::detail::get_action_name<Action>()));
+            return false;
+        }
+
         // Determine whether the gid is local or remote
         naming::address addr;
-        if (agas::is_local_address(gid, addr)) {
-            bool result = applier::detail::apply_l_p<Action>(addr, priority);   // apply locally
-            cb(boost::system::error_code(), 0);     // invoke callback
+        if (agas::is_local_address_cached(gid, addr)) {
+            bool result = applier::detail::apply_l_p<Action>(gid, gid,
+                std::move(addr), priority);         // apply locally
+            cb(boost::system::error_code(), parcelset::parcel());     // invoke callback
             return result;
         }
 
         // apply remotely
-        return applier::detail::apply_r_p_cb<Action>(addr, gid, 
-            priority, boost::forward<Callback>(cb));
+        return applier::detail::apply_r_p_cb<Action>(std::move(addr), gid,
+            priority, std::forward<Callback>(cb));
     }
 
     template <typename Action, typename Callback>
-    inline bool apply_cb(naming::id_type const& gid, BOOST_FWD_REF(Callback) cb)
+    inline bool apply_cb(naming::id_type const& gid, Callback && cb)
     {
         return apply_p_cb<Action>(gid, actions::action_priority<Action>(),
-            boost::forward<Callback>(cb));
+            std::forward<Callback>(cb));
     }
 
     template <typename Component, typename Result,
-        typename Arguments, typename Derived, threads::thread_priority Priority, 
+        typename Arguments, typename Derived, threads::thread_priority Priority,
         typename Callback>
     inline bool apply_cb(
         hpx::actions::action<
             Component, Result, Arguments, Derived
-        > /*act*/, naming::id_type const& gid, BOOST_FWD_REF(Callback) cb)
+        > /*act*/, naming::id_type const& gid, Callback && cb)
     {
         return apply_p_cb<Derived>(gid, actions::action_priority<Derived>(),
-            boost::forward<Callback>(cb));
+            std::forward<Callback>(cb));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -90,70 +94,96 @@ namespace hpx
     {
         template <typename Action, typename Callback>
         inline bool
-        apply_r_p_cb(naming::address& addr, actions::continuation* c,
-            naming::id_type const& gid, threads::thread_priority priority, 
-            BOOST_FWD_REF(Callback) cb)
+        apply_r_p_cb(naming::address&& addr, actions::continuation* c,
+            naming::id_type const& id, threads::thread_priority priority,
+            Callback && cb)
         {
-            typedef typename hpx::actions::extract_action<Action>::type action_type;
-
-            actions::continuation_type cont(c);
-
             // If remote, create a new parcel to be sent to the destination
             // Create a new parcel with the gid, action, and arguments
-            parcelset::parcel p (gid.get_gid(), complement_addr<action_type>(addr),
-                new hpx::actions::transfer_action<action_type>(priority), cont);
-
-            // Send the parcel through the parcel handler
-            hpx::applier::get_applier().get_parcel_handler()
-                .put_parcel(p, boost::forward<Callback>(cb));
+            lcos::local::detail::invoke_when_ready(
+                detail::put_parcel<Action>(id, std::move(addr), priority,
+                    actions::continuation_type(c), std::forward<Callback>(cb)));
             return false;     // destination is remote
         }
 
         template <typename Action, typename Callback>
         inline bool
-        apply_r_cb(naming::address& addr, actions::continuation* c,
-            naming::id_type const& gid, BOOST_FWD_REF(Callback) cb)
+        apply_r_cb(naming::address&& addr, actions::continuation* c,
+            naming::id_type const& gid, Callback && cb)
         {
-            return apply_r_p_cb<Action>(addr, c, gid,
-                actions::action_priority<Action>(), boost::forward<Callback>(cb));
+            return apply_r_p_cb<Action>(std::move(addr), c, gid,
+                actions::action_priority<Action>(), std::forward<Callback>(cb));
         }
     }}
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action, typename Callback>
-    inline bool apply_p_cb(actions::continuation* c, naming::id_type const& gid,
-        threads::thread_priority priority, BOOST_FWD_REF(Callback) cb)
+    inline bool apply_p_cb(actions::continuation* c, naming::address&& addr,
+        naming::id_type const& gid, threads::thread_priority priority,
+        Callback && cb)
     {
+        if (!traits::action_is_target_valid<Action>::call(gid)) {
+            HPX_THROW_EXCEPTION(bad_parameter, "apply_p_cb",
+                boost::str(boost::format(
+                    "the target (destination) does not match the action type (%s)"
+                ) % hpx::actions::detail::get_action_name<Action>()));
+            return false;
+        }
+
         // Determine whether the gid is local or remote
-        naming::address addr;
-        if (agas::is_local_address(gid, addr)) {
-            bool result = applier::detail::apply_l_p<Action>(c, addr, priority);
-            cb(boost::system::error_code(), 0);     // invoke callback
+        if (addr.locality_ == hpx::get_locality()) {
+            bool result = applier::detail::apply_l_p<Action>(c, gid,
+                std::move(addr), priority);
+            cb(boost::system::error_code(), parcelset::parcel());     // invoke callback
             return result;
         }
 
         // apply remotely
-        return applier::detail::apply_r_p_cb<Action>(addr, c, gid, priority, 
-            boost::forward<Callback>(cb));
+        return applier::detail::apply_r_p_cb<Action>(std::move(addr), c, gid,
+            priority, std::forward<Callback>(cb));
     }
 
     template <typename Action, typename Callback>
-    inline bool apply_cb(actions::continuation* c, naming::id_type const& gid, 
-        BOOST_FWD_REF(Callback) cb)
+    inline bool apply_p_cb(actions::continuation* c, naming::id_type const& gid,
+        threads::thread_priority priority, Callback && cb)
     {
-        return apply_p_cb<Action>(c, gid, actions::action_priority<Action>(),
-            boost::forward<Callback>(cb));
+        if (!traits::action_is_target_valid<Action>::call(gid)) {
+            HPX_THROW_EXCEPTION(bad_parameter, "apply_p_cb",
+                "the target (destination) does not match the action type");
+            return false;
+        }
+
+        // Determine whether the gid is local or remote
+        naming::address addr;
+        if (agas::is_local_address_cached(gid, addr)) {
+            bool result = applier::detail::apply_l_p<Action>(c, gid,
+                std::move(addr), priority);
+            cb(boost::system::error_code(), parcelset::parcel());     // invoke callback
+            return result;
+        }
+
+        // apply remotely
+        return applier::detail::apply_r_p_cb<Action>(std::move(addr), c, gid,
+            priority, std::forward<Callback>(cb));
     }
 
-    template <typename Component, typename Result, typename Arguments, 
+    template <typename Action, typename Callback>
+    inline bool apply_cb(actions::continuation* c, naming::id_type const& gid,
+        Callback && cb)
+    {
+        return apply_p_cb<Action>(c, gid, actions::action_priority<Action>(),
+            std::forward<Callback>(cb));
+    }
+
+    template <typename Component, typename Result, typename Arguments,
         typename Derived, typename Callback>
     inline bool apply_cb(actions::continuation* c,
         hpx::actions::action<
             Component, Result, Arguments, Derived
-        > /*act*/, naming::id_type const& gid, BOOST_FWD_REF(Callback) cb)
+        > /*act*/, naming::id_type const& gid, Callback && cb)
     {
         return apply_p_cb<Derived>(c, gid, actions::action_priority<Derived>(),
-            boost::forward<Callback>(cb));
+            std::forward<Callback>(cb));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -161,31 +191,31 @@ namespace hpx
     {
         template <typename Action, typename Callback>
         inline bool
-        apply_c_p_cb(naming::address& addr, naming::id_type const& contgid,
-            naming::id_type const& gid, threads::thread_priority priority, 
-            BOOST_FWD_REF(Callback) cb)
+        apply_c_p_cb(naming::address&& addr, naming::id_type const& contgid,
+            naming::id_type const& gid, threads::thread_priority priority,
+            Callback && cb)
         {
             typedef
                 typename hpx::actions::extract_action<Action>::result_type
                 result_type;
 
-            return apply_r_p_cb<Action>(addr,
+            return apply_r_p_cb<Action>(std::move(addr),
                 new actions::typed_continuation<result_type>(contgid),
-                gid, priority, boost::forward<Callback>(cb));
+                gid, priority, std::forward<Callback>(cb));
         }
 
         template <typename Action, typename Callback>
         inline bool
-        apply_c_cb(naming::address& addr, naming::id_type const& contgid,
-            naming::id_type const& gid, BOOST_FWD_REF(Callback) cb)
+        apply_c_cb(naming::address&& addr, naming::id_type const& contgid,
+            naming::id_type const& gid, Callback && cb)
         {
             typedef
                 typename hpx::actions::extract_action<Action>::result_type
                 result_type;
 
-            return apply_r_cb<Action>(addr,
-                new actions::typed_continuation<result_type>(contgid), 
-                gid, boost::forward<Callback>(cb));
+            return apply_r_cb<Action>(std::move(addr),
+                new actions::typed_continuation<result_type>(contgid),
+                gid, std::forward<Callback>(cb));
         }
     }}
 
@@ -193,7 +223,7 @@ namespace hpx
     template <typename Action, typename Callback>
     inline bool
     apply_c_p_cb(naming::id_type const& contgid, naming::id_type const& gid,
-        threads::thread_priority priority, BOOST_FWD_REF(Callback) cb)
+        threads::thread_priority priority, Callback && cb)
     {
         typedef
             typename hpx::actions::extract_action<Action>::result_type
@@ -201,21 +231,52 @@ namespace hpx
 
         return apply_p_cb<Action>(
             new actions::typed_continuation<result_type>(contgid),
-            gid, priority, boost::forward<Callback>(cb));
+            gid, priority, std::forward<Callback>(cb));
     }
 
     template <typename Action, typename Callback>
     inline bool
-    apply_c_cb(naming::id_type const& contgid, naming::id_type const& gid, 
-        BOOST_FWD_REF(Callback) cb)
+    apply_c_cb(naming::id_type const& contgid, naming::id_type const& gid,
+        Callback && cb)
     {
         typedef
             typename hpx::actions::extract_action<Action>::result_type
             result_type;
 
-        return apply_cb<Action>(
-            new actions::typed_continuation<result_type>(contgid), 
-            gid, boost::forward<Callback>(cb));
+        return apply_p_cb<Action>(
+            new actions::typed_continuation<result_type>(contgid),
+            gid, actions::action_priority<Action>(),
+            std::forward<Callback>(cb));
+    }
+
+    template <typename Action, typename Callback>
+    inline bool
+    apply_c_p_cb(naming::id_type const& contgid, naming::address&& addr,
+        naming::id_type const& gid, threads::thread_priority priority,
+        Callback && cb)
+    {
+        typedef
+            typename hpx::actions::extract_action<Action>::result_type
+            result_type;
+
+        return apply_p_cb<Action>(
+            new actions::typed_continuation<result_type>(contgid),
+            std::move(addr), gid, priority, std::forward<Callback>(cb));
+    }
+
+    template <typename Action, typename Callback>
+    inline bool
+    apply_c_cb(naming::id_type const& contgid, naming::address&& addr,
+        naming::id_type const& gid, Callback && cb)
+    {
+        typedef
+            typename hpx::actions::extract_action<Action>::result_type
+            result_type;
+
+        return apply_p_cb<Action>(
+            new actions::typed_continuation<result_type>(contgid),
+            std::move(addr), gid, actions::action_priority<Action>(),
+            std::forward<Callback>(cb));
     }
 }
 

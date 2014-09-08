@@ -4,15 +4,9 @@
 #include <boost/version.hpp>
 #include <hpx/config.hpp>
 
-#if !defined(HPX_USE_PORTABLE_ARCHIVES) || HPX_USE_PORTABLE_ARCHIVES == 0
-#include <boost/archive/binary_oarchive.hpp>
-
-namespace hpx { namespace util
-{
-    typedef boost::archive::binary_oarchive portable_binary_oarchive;
-}}
-
-#else
+#include <boost/mpl/bool.hpp>
+#include <boost/type_traits/is_unsigned.hpp>
+#include <boost/type_traits/is_integral.hpp>
 
 // MS compatible compilers support #pragma once
 #if defined(_MSC_VER) && (_MSC_VER >= 1020)
@@ -28,7 +22,7 @@ namespace hpx { namespace util
 // portable_binary_oarchive.hpp
 
 // (C) Copyright 2002 Robert Ramey - http://www.rrsd.com .
-// Copyright (c) 2007-2012 Hartmut Kaiser
+// Copyright (c) 2007-2013 Hartmut Kaiser
 //
 // Use, modification and distribution is subject to the Boost Software
 // License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
@@ -55,10 +49,16 @@ namespace hpx { namespace util
 namespace hpx { namespace util
 {
 
+#if defined(BOOST_MSVC) || defined(BOOST_INTEL_WIN)
+#define HPX_SERIALIZATION_EXPORT
+#else
+#define HPX_SERIALIZATION_EXPORT HPX_ALWAYS_EXPORT
+#endif
+
 /////////1/////////2/////////3/////////4/////////5/////////6/////////7/////////8
 // exception to be thrown if integer read from archive doesn't fit
 // variable being loaded
-class HPX_ALWAYS_EXPORT portable_binary_oarchive_exception :
+class HPX_SERIALIZATION_EXPORT portable_binary_oarchive_exception :
     public virtual boost::archive::archive_exception
 {
 public:
@@ -87,12 +87,6 @@ public:
 // archive. it addresses integer size and endianness so that binary archives can
 // be passed across systems. Note:floating point types are passed through as is.
 
-#if defined(BOOST_MSVC) || defined(BOOST_INTEL_WIN)
-#define HPX_SERIALIZATION_EXPORT
-#else
-#define HPX_SERIALIZATION_EXPORT HPX_ALWAYS_EXPORT
-#endif
-
 class HPX_SERIALIZATION_EXPORT portable_binary_oarchive :
     public hpx::util::basic_binary_oprimitive<
         portable_binary_oarchive
@@ -107,6 +101,9 @@ class HPX_SERIALIZATION_EXPORT portable_binary_oarchive :
     typedef boost::archive::detail::common_oarchive<
         portable_binary_oarchive
     > archive_base_t;
+
+    boost::uint32_t dest_locality_id_;
+
 #ifndef BOOST_NO_MEMBER_TEMPLATE_FRIENDS
 public:
 #else
@@ -118,16 +115,27 @@ public:
     friend class boost::archive::save_access;
 protected:
 #endif
-    unsigned int m_flags;
-    HPX_ALWAYS_EXPORT void
-    save_impl(const boost::int64_t l, const char maxsize);
+
+    HPX_ALWAYS_EXPORT void save_impl(boost::int64_t const l, char const maxsize);
+    HPX_ALWAYS_EXPORT void save_impl(boost::uint64_t const l, char const maxsize);
 
     // default fall through for any types not specified here
     template <typename T>
-    void save(T const& val, typename boost::enable_if<boost::is_integral<T> >::type* = 0)
+    void save_integral(T const& val, boost::mpl::false_)
     {
-        boost::int64_t t = static_cast<boost::int64_t>(val);
-        save_impl(t, sizeof(T));
+        save_impl(static_cast<boost::int64_t>(val), sizeof(T));
+    }
+
+    template <typename T>
+    void save_integral(T const& val, boost::mpl::true_)
+    {
+        save_impl(static_cast<boost::uint64_t>(val), sizeof(T));
+    }
+
+    template <typename T>
+    void save(T const& t, typename boost::enable_if<boost::is_integral<T> >::type* = 0)
+    {
+        save_integral(t, typename boost::is_unsigned<T>::type());
     }
 
     template <typename T>
@@ -136,9 +144,11 @@ protected:
         this->primitive_base_t::save(t);
     }
 
-    void save(const std::string& t) {
+    void save(std::string const &t)
+    {
         this->primitive_base_t::save(t);
     }
+
 #if BOOST_VERSION >= 104400
     void save(const boost::archive::class_id_reference_type& t) {
         boost::int64_t l = t;
@@ -220,24 +230,44 @@ protected:
     // binary files don't include the optional information
     void save_override(const boost::archive::class_id_optional_type&, int) {}
 
-    HPX_ALWAYS_EXPORT void init(util::binary_filter* filter, unsigned int flags);
+    HPX_ALWAYS_EXPORT void init(util::binary_filter* filter, unsigned int flags_value);
 
 public:
     template <typename Container>
-    portable_binary_oarchive(Container& buffer, binary_filter* filter = 0, unsigned flags = 0)
-      : primitive_base_t(buffer, flags),
-        archive_base_t(flags),
-        m_flags(flags & (enable_compression | endian_big | endian_little))
+    portable_binary_oarchive(Container& buffer, binary_filter* filter = 0,
+            unsigned flags_value = 0)
+      : primitive_base_t(buffer, flags_value),
+        archive_base_t(flags_value),
+        dest_locality_id_(~0U)
     {
-        init(filter, flags);
+        init(filter, flags_value);
     }
 
-    unsigned int flags() const
+    template <typename Container>
+    portable_binary_oarchive(Container& buffer,
+            boost::uint32_t dest_locality_id,
+            binary_filter* filter = 0, unsigned flags_value = 0)
+      : primitive_base_t(buffer, flags_value),
+        archive_base_t(flags_value),
+        dest_locality_id_(dest_locality_id)
     {
-        return m_flags;
+        init(filter, flags_value);
     }
 
-    // the optimized save_array dispatches to save_binary
+    template <typename Container>
+    portable_binary_oarchive(Container& buffer,
+            std::vector<serialization_chunk>* chunks,
+            boost::uint32_t dest_locality_id,
+            binary_filter* filter = 0, unsigned flags_value = 0)
+      : primitive_base_t(buffer, chunks, flags_value),
+        archive_base_t(flags_value),
+        dest_locality_id_(dest_locality_id)
+    {
+        init(filter, flags_value);
+    }
+
+    // the optimized save_array dispatches to the base class save_array
+    // implementation
 
     // default fall through for any types not specified here
     template <typename T>
@@ -246,40 +276,46 @@ public:
         // If we need to potentially flip bytes we serialize each element
         // separately.
 #ifdef BOOST_BIG_ENDIAN
-        if (m_flags & endian_little) {
+        if (this->flags() & (endian_little | disable_array_optimization)) {
             for (std::size_t i = 0; i != a.count(); ++i)
                 save(a.address()[i]);
         }
 #else
-        if (m_flags & endian_big) {
+        if (this->flags() & (endian_big | disable_array_optimization)) {
             for (std::size_t i = 0; i != a.count(); ++i)
                 save(a.address()[i]);
         }
 #endif
         else {
-            this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(T));
+            this->primitive_base_t::save_array(a);
         }
     }
 
     void save_array(boost::serialization::array<float> const& a, unsigned int)
     {
-        this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(float));
+        this->primitive_base_t::save_array(a);
     }
     void save_array(boost::serialization::array<double> const& a, unsigned int)
     {
-        this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(double));
+        this->primitive_base_t::save_array(a);
     }
     void save_array(boost::serialization::array<char> const& a, unsigned int)
     {
-        this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(char));
+        this->primitive_base_t::save_array(a);
     }
     void save_array(boost::serialization::array<unsigned char> const& a, unsigned int)
     {
-        this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(unsigned char));
+        this->primitive_base_t::save_array(a);
     }
     void save_array(boost::serialization::array<signed char> const& a, unsigned int)
     {
-        this->primitive_base_t::save_binary(a.address(), a.count()*sizeof(signed char));
+        this->primitive_base_t::save_array(a);
+    }
+
+    // return destination locality id
+    boost::uint32_t get_dest_locality_id() const
+    {
+        return dest_locality_id_;
     }
 };
 
@@ -300,6 +336,115 @@ BOOST_SERIALIZATION_USE_ARRAY_OPTIMIZATION(hpx::util::portable_binary_oarchive)
 namespace boost { namespace archive { namespace detail
 {
     template <>
+    struct save_non_pointer_type<hpx::util::portable_binary_oarchive>
+    {
+        typedef hpx::util::portable_binary_oarchive archive_type;
+
+        // note this bounces the call right back to the archive
+        // with no runtime overhead
+        struct save_primitive
+        {
+            template <typename T>
+            static void invoke(archive_type & ar, const T & t)
+            {
+                save_access::save_primitive(ar, t);
+            }
+        };
+
+        // same as above but passes through serialization
+        struct save_only
+        {
+            template <typename T>
+            static void invoke(archive_type & ar, const T & t)
+            {
+                // make sure call is routed through the highest interface that might
+                // be specialized by the user.
+                boost::serialization::serialize_adl(
+                    ar,
+                    const_cast<T &>(t),
+                    ::boost::serialization::version< T >::value
+                );
+            }
+        };
+
+        // adds class information to the archive. This includes
+        // serialization level and class version
+        struct save_standard
+        {
+            template <typename T>
+            static void invoke(archive_type &ar, const T & t)
+            {
+                ar.save_object(
+                    & t,
+                    boost::serialization::singleton<
+                        oserializer<archive_type, T>
+                    >::get_const_instance()
+                );
+            }
+        };
+
+        // adds class information to the archive. This includes
+        // serialization level and class version
+        struct save_conditional
+        {
+            template <typename T>
+            static void invoke(archive_type &ar, const T &t)
+            {
+                //if(0 == (ar.get_flags() & no_tracking))
+                    save_standard::invoke(ar, t);
+                //else
+                //   save_only::invoke(ar, t);
+            }
+        };
+
+
+        template <typename T>
+        static void invoke(archive_type & ar, const T & t)
+        {
+            typedef
+                BOOST_DEDUCED_TYPENAME mpl::eval_if<
+                // if its primitive
+                    mpl::equal_to<
+                        boost::serialization::implementation_level< T >,
+                        mpl::int_<boost::serialization::primitive_type>
+                    >,
+                    mpl::identity<save_primitive>,
+                // else
+                BOOST_DEDUCED_TYPENAME mpl::eval_if<
+                    // class info / version
+                    mpl::greater_equal<
+                        boost::serialization::implementation_level< T >,
+                        mpl::int_<boost::serialization::object_class_info>
+                    >,
+                    // do standard save
+                    mpl::identity<save_standard>,
+                // else
+                BOOST_DEDUCED_TYPENAME mpl::eval_if<
+                        // no tracking
+                    mpl::equal_to<
+                        boost::serialization::tracking_level< T >,
+                        mpl::int_<boost::serialization::track_never>
+                    >,
+                    // do a fast save
+                    mpl::identity<save_only>,
+                // else
+                    // do a fast save only tracking is turned off
+                    mpl::identity<save_conditional>
+                > > >::type typex;
+            check_object_versioning< T >();
+            typex::invoke(ar, t);
+        }
+
+        template <typename T>
+        static void invoke(archive_type & ar, T & t)
+        {
+            check_object_level< T >();
+            //check_object_tracking< T >();      // this has to be disabled to avoid warnings
+            invoke(ar, const_cast<const T &>(t));
+        }
+    };
+
+    template <>
     struct save_pointer_type<hpx::util::portable_binary_oarchive>
     {
         typedef hpx::util::portable_binary_oarchive archive_type;
@@ -319,7 +464,7 @@ namespace boost { namespace archive { namespace detail
         struct non_abstract
         {
             template <typename T>
-            static const basic_pointer_oserializer* 
+            static const basic_pointer_oserializer*
             register_type(archive_type& ar)
             {
                 return ar.register_type(static_cast<T*>(NULL));
@@ -373,7 +518,7 @@ namespace boost { namespace archive { namespace detail
 
                 // retrieve the true type of the object pointed to
                 // if this assertion fails its an error in this library
-                BOOST_ASSERT(NULL != this_type);
+                HPX_ASSERT(NULL != this_type);
 
                 const boost::serialization::extended_type_info * true_type =
                     i.get_derived_extended_type_info(t);
@@ -422,7 +567,7 @@ namespace boost { namespace archive { namespace detail
                             archive_serializer_map<archive_type>
                         >::get_const_instance().find(*true_type)
                     );
-                BOOST_ASSERT(NULL != bpos);
+                HPX_ASSERT(NULL != bpos);
                 if(NULL == bpos)
                     boost::serialization::throw_exception(
                         archive_exception(
@@ -437,7 +582,7 @@ namespace boost { namespace archive { namespace detail
         template <typename T>
         static void save(archive_type& ar, const T& t)
         {
-            check_pointer_level<T>();
+            //check_pointer_level< T >();       // this has to be disabled to avoid warnings
             //check_pointer_tracking<T>();      // this has to be disabled to avoid warnings
             typedef BOOST_DEDUCED_TYPENAME mpl::eval_if<
                 is_polymorphic<T>,
@@ -467,7 +612,6 @@ namespace boost { namespace archive { namespace detail
 #pragma warning( pop )
 #endif
 
-#endif // HPX_USE_PORTABLE_ARCHIVES == 0
 #endif // PORTABLE_BINARY_OARCHIVE_HPP
 
 

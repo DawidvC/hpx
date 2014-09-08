@@ -8,7 +8,6 @@
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/runtime/naming/name.hpp>
-#include <hpx/runtime/naming/resolver_client.hpp>
 #include <hpx/performance_counters/counters.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -54,7 +53,7 @@ namespace hpx { namespace performance_counters
             discover_counters_mode mode, error_code& ec = throws);
 
         counter_status discover_counter_type(
-            counter_info const& info, HPX_STD_FUNCTION<discover_counter_func> f,
+            counter_info const& info, HPX_STD_FUNCTION<discover_counter_func> const& f,
             discover_counters_mode mode, error_code& ec = throws)
         {
             return discover_counter_type(info.fullname_, f, mode, ec);
@@ -116,8 +115,7 @@ namespace hpx { namespace performance_counters
         ///        on given base counter name and given base time interval
         ///        (milliseconds).
         counter_status create_arithmetics_counter(counter_info const& info,
-            std::string const& base_counter_name1,
-            std::string const& base_counter_name2,
+            std::vector<std::string> const& base_counter_names,
             naming::gid_type& id, error_code& ec = throws);
 
         /// \brief Add an existing performance counter instance to the registry

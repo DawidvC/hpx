@@ -11,8 +11,9 @@
 #include <hpx/components/memory/mem_counter.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-// Add factory registration functionality
-HPX_REGISTER_COMPONENT_MODULE()
+// Add factory registration functionality, We register the module dynamically
+// as no executable links against it.
+HPX_REGISTER_COMPONENT_MODULE_DYNAMIC()
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace performance_counters { namespace memory
@@ -43,10 +44,11 @@ namespace hpx { namespace performance_counters { namespace memory
 }}}
 
 ///////////////////////////////////////////////////////////////////////////////
-// Register a startup function which will be called as a px-thread during
+// Register a startup function which will be called as a HPX-thread during
 // runtime startup. We use this function to register our performance counter
 // type and performance counter instances.
 //
 // Note that this macro can be used not more than once in one module.
-HPX_REGISTER_STARTUP_MODULE(hpx::performance_counters::memory::get_startup);
+HPX_REGISTER_STARTUP_MODULE_DYNAMIC(
+    hpx::performance_counters::memory::get_startup);
 

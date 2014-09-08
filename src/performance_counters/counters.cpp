@@ -7,8 +7,10 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/include/performance_counters.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/performance_counters/registry.hpp>
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/runtime/agas/interface.hpp>
+#include <hpx/runtime/components/base_lco_factory.hpp>
 #include <hpx/runtime/components/stubs/runtime_support.hpp>
 
 #include <hpx/util/portable_binary_iarchive.hpp>
@@ -165,7 +167,7 @@ namespace hpx { namespace performance_counters
         }
 
         if (!path.parameters_.empty()) {
-            result += "#";
+            result += "@";
             result += path.parameters_;
         }
 
@@ -525,10 +527,10 @@ namespace hpx { namespace performance_counters
     counter_status discover_counter_types(std::vector<counter_info>& counters,
         discover_counters_mode mode, error_code& ec)
     {
-        using HPX_STD_PLACEHOLDERS::_1;
+        using hpx::util::placeholders::_1;
 
         HPX_STD_FUNCTION<discover_counter_func> func(
-            HPX_STD_BIND(&detail::discover_counters, _1, boost::ref(counters),
+            hpx::util::bind(&detail::discover_counters, _1, boost::ref(counters),
                 boost::ref(ec)));
 
         return discover_counter_types(func, mode, ec);
@@ -538,10 +540,10 @@ namespace hpx { namespace performance_counters
         std::string const& name, std::vector<counter_info>& counters,
         discover_counters_mode mode, error_code& ec)
     {
-        using HPX_STD_PLACEHOLDERS::_1;
+        using hpx::util::placeholders::_1;
 
         HPX_STD_FUNCTION<discover_counter_func> func(
-            HPX_STD_BIND(&detail::discover_counters, _1, boost::ref(counters),
+            hpx::util::bind(&detail::discover_counters, _1, boost::ref(counters),
                 boost::ref(ec)));
 
         return discover_counter_type(name, func, mode, ec);
@@ -551,10 +553,10 @@ namespace hpx { namespace performance_counters
         counter_info const& info, std::vector<counter_info>& counters,
         discover_counters_mode mode, error_code& ec)
     {
-        using HPX_STD_PLACEHOLDERS::_1;
+        using hpx::util::placeholders::_1;
 
         HPX_STD_FUNCTION<discover_counter_func> func(
-            HPX_STD_BIND(&detail::discover_counters, _1, boost::ref(counters),
+            hpx::util::bind(&detail::discover_counters, _1, boost::ref(counters),
                 boost::ref(ec)));
 
         return discover_counter_type(info, func, mode, ec);
@@ -637,14 +639,12 @@ namespace hpx { namespace performance_counters
         // \brief Create a new aggregating performance counter instance based
         //        on given base counter name and given base time interval
         //        (milliseconds).
-        naming::gid_type create_arithmetics_counter(
-            counter_info const& info, std::string const& base_counter_name1,
-            std::string const& base_counter_name2, error_code& ec)
+        naming::gid_type create_arithmetics_counter(counter_info const& info,
+            std::vector<std::string> const& base_counter_names, error_code& ec)
         {
             naming::gid_type gid;
             get_runtime().get_counter_registry().
-                create_arithmetics_counter(info, base_counter_name1,
-                    base_counter_name2, gid, ec);
+                create_arithmetics_counter(info, base_counter_names, gid, ec);
             return gid;
         }
 
@@ -666,7 +666,7 @@ namespace hpx { namespace performance_counters
         naming::gid_type create_counter_local(counter_info const& info)
         {
             // find create function for given counter
-            error_code ec(lightweight);
+            error_code ec;
 
             HPX_STD_FUNCTION<create_counter_func> f;
             get_runtime().get_counter_registry().get_counter_create_function(
@@ -674,7 +674,7 @@ namespace hpx { namespace performance_counters
             if (ec) {
                 HPX_THROW_EXCEPTION(bad_parameter, "create_counter_local",
                     "no create function for performance counter found: " +
-                    remove_counter_prefix(info.fullname_) + 
+                    remove_counter_prefix(info.fullname_) +
                         " (" + ec.get_message() + ")");
                 return naming::invalid_gid;
             }
@@ -698,7 +698,7 @@ namespace hpx { namespace performance_counters
             if (ec) {
                 HPX_THROW_EXCEPTION(bad_parameter, "create_counter_local",
                     "couldn't create performance counter: " +
-                    remove_counter_prefix(info.fullname_) + 
+                    remove_counter_prefix(info.fullname_) +
                         " (" + ec.get_message() + ")");
                 return naming::invalid_gid;
             }
@@ -709,19 +709,20 @@ namespace hpx { namespace performance_counters
         ///////////////////////////////////////////////////////////////////////
         inline bool is_thread_kind(std::string const& pattern)
         {
-            return pattern.find("-thread#*") == pattern.size() - 9;
+            std::string::size_type p = pattern.find("-thread#*");
+            return p != std::string::npos && p == pattern.size() - 9;
         }
 
         inline std::string get_thread_kind(std::string const& pattern)
         {
-            BOOST_ASSERT(is_thread_kind(pattern));
+            HPX_ASSERT(is_thread_kind(pattern));
             return pattern.substr(0, pattern.find_last_of('-'));
         }
 
         ///////////////////////////////////////////////////////////////////////
         /// Expand all wild-cards in a counter base name (for aggregate counters)
         bool expand_basecounter(
-            counter_info& info, counter_path_elements& p,
+            counter_info const& info, counter_path_elements& p,
             HPX_STD_FUNCTION<discover_counter_func> const& f, error_code& ec)
         {
             // discover all base names
@@ -749,7 +750,7 @@ namespace hpx { namespace performance_counters
             HPX_STD_FUNCTION<discover_counter_func> const& f, error_code& ec)
         {
             std::size_t num_threads = get_os_thread_count();
-            for (std::size_t l = 0; l < num_threads; ++l)
+            for (std::size_t l = 0; l != num_threads; ++l)
             {
                 p.instanceindex_ = static_cast<boost::int64_t>(l);
                 counter_status status = get_counter_name(p, i.fullname_, ec);
@@ -770,8 +771,8 @@ namespace hpx { namespace performance_counters
                 expand_threads = true;
             }
 
-            boost::uint32_t last_locality = get_num_localities();
-            for (boost::uint32_t l = 0; l < last_locality; ++l)
+            boost::uint32_t last_locality = get_num_localities_sync();
+            for (boost::uint32_t l = 0; l != last_locality; ++l)
             {
                 p.parentinstanceindex_ = static_cast<boost::int32_t>(l);
                 if (expand_threads) {
@@ -786,6 +787,45 @@ namespace hpx { namespace performance_counters
             }
             return true;
         }
+
+        ///////////////////////////////////////////////////////////////////////
+        bool expand_counter_info(
+            counter_info const& info, counter_path_elements& p,
+            HPX_STD_FUNCTION<discover_counter_func> const& f, error_code& ec)
+        {
+            // A '*' wild-card as the instance name is equivalent to no instance
+            // name at all.
+            if (p.parentinstancename_ == "*")
+            {
+                HPX_ASSERT(p.parentinstanceindex_ == -1);
+                p.parentinstancename_.clear();
+            }
+
+            // first expand "locality*"
+            if (p.parentinstancename_ == "locality#*")
+            {
+                counter_info i = info;
+                p.parentinstancename_ = "locality";
+                return detail::expand_counter_info_localities(i, p, f, ec);
+            }
+
+            // now expand "<...>-thread#*"
+            if (detail::is_thread_kind(p.instancename_))
+            {
+                counter_info i = info;
+                p.instancename_ = detail::get_thread_kind(p.instancename_) + "-thread";
+                return detail::expand_counter_info_threads(i, p, f, ec);
+            }
+
+            // handle wild-cards in aggregate counters
+            if (p.parentinstance_is_basename_)
+            {
+                return detail::expand_basecounter(info, p, f, ec);
+            }
+
+            // everything else is handled directly
+            return f(info, ec);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -798,47 +838,17 @@ namespace hpx { namespace performance_counters
         counter_status status = get_counter_path_elements(info.fullname_, p, ec);
         if (!status_is_valid(status)) return false;
 
-        // A '*' wild-card as the instance name is equivalent to no instance
-        // name at all.
-        if (p.parentinstancename_ == "*")
-        {
-            BOOST_ASSERT(p.parentinstanceindex_ == -1);
-            p.parentinstancename_.clear();
-        }
-
-        // first expand "locality*"
-        if (p.parentinstancename_ == "locality#*")
-        {
-            counter_info i = info;
-            p.parentinstancename_ = "locality";
-            return detail::expand_counter_info_localities(i, p, f, ec);
-        }
-
-        // now expand "<...>-thread#*"
-        if (detail::is_thread_kind(p.instancename_))
-        {
-            counter_info i = info;
-            p.instancename_ = detail::get_thread_kind(p.instancename_) + "-thread";
-            return detail::expand_counter_info_threads(i, p, f, ec);
-        }
-
-        // handle wild-cards in aggregate counters
-        if (p.parentinstance_is_basename_)
-        {
-            counter_info i = info;
-            return detail::expand_basecounter(i, p, f, ec);
-        }
-
-        // everything else is handled directly
-        return f(info, ec);
+        return detail::expand_counter_info(info, p, f, ec);
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    void register_with_agas(lcos::future<naming::id_type> f,
+    naming::id_type register_with_agas(lcos::future<naming::id_type> f,
         std::string const& fullname)
     {
         // register the canonical name with AGAS
-        agas::register_name(fullname, f.get());
+        naming::id_type id = f.get();
+        agas::register_name_sync(fullname, id);
+        return id;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -856,7 +866,7 @@ namespace hpx { namespace performance_counters
 
         // ask AGAS for the id of the given counter
         naming::id_type id;
-        bool result = agas::resolve_name(complemented_info.fullname_, id, ec);
+        bool result = agas::resolve_name_sync(complemented_info.fullname_, id, ec);
         if (!result) {
             try {
                 // figure out target locality
@@ -874,7 +884,7 @@ namespace hpx { namespace performance_counters
 
                 if (p.parentinstancename_ == "locality" &&
                         (   p.parentinstanceindex_ < 0 ||
-                            p.parentinstanceindex_ >= static_cast<boost::int32_t>(get_num_localities())
+                            p.parentinstanceindex_ >= static_cast<boost::int32_t>(get_num_localities_sync())
                         )
                     )
                 {
@@ -899,10 +909,8 @@ namespace hpx { namespace performance_counters
                 }
 
                 // attach the function which registers the id_type with AGAS
-                f.then(util::bind(&register_with_agas, util::placeholders::_1,
+                return f.then(hpx::util::bind(&register_with_agas, hpx::util::placeholders::_1,
                     complemented_info.fullname_));
-
-                return f;
             }
             catch (hpx::exception const& e) {
                 if (&ec == &throws)
@@ -915,7 +923,7 @@ namespace hpx { namespace performance_counters
         }
         if (ec) return result_type();
 
-        return result_type(id);
+        return lcos::make_ready_future(id);
     }
 
     lcos::future<naming::id_type> get_counter_async(

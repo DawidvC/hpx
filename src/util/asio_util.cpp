@@ -62,8 +62,8 @@ namespace hpx { namespace util
             if (util::get_endpoint(hostname, port, ep))
                 return ep;
         }
-        catch (boost::system::system_error const& e) {
-            errors.add(e);
+        catch (boost::system::system_error const&) {
+            errors.add(boost::current_exception());
         }
 
         // it's not an address, try to treat it as a host name
@@ -75,11 +75,11 @@ namespace hpx { namespace util
 
             boost::asio::ip::tcp::resolver::iterator it =
                 resolver.resolve(query);
-            BOOST_ASSERT(it != boost::asio::ip::tcp::resolver::iterator());
+            HPX_ASSERT(it != boost::asio::ip::tcp::resolver::iterator());
             return *it;
         }
-        catch (boost::system::system_error const& e) {
-            errors.add(e);
+        catch (boost::system::system_error const&) {
+            errors.add(boost::current_exception());
         }
 
         // report errors

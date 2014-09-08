@@ -33,7 +33,6 @@ namespace hpx { namespace components { namespace server
                 Component > >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component >) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component >) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component >) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component >) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action0< Component >))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0>
@@ -50,7 +49,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -70,12 +69,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor1<
                     typename Component::wrapping_type,
                     A0>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0)));
+                        std::forward<A0>( a0 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -104,7 +103,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action1< Component , A0>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1>
@@ -121,7 +119,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -141,12 +139,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor2<
                     typename Component::wrapping_type,
                     A0 , A1>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -175,7 +173,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action2< Component , A0 , A1>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2>
@@ -192,7 +189,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -212,12 +209,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor3<
                     typename Component::wrapping_type,
                     A0 , A1 , A2>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -246,7 +243,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action3< Component , A0 , A1 , A2>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3>
@@ -263,7 +259,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -283,12 +279,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor4<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -317,7 +313,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action4< Component , A0 , A1 , A2 , A3>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4>
@@ -334,7 +329,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -354,12 +349,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor5<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -388,7 +383,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action5< Component , A0 , A1 , A2 , A3 , A4>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5>
@@ -405,7 +399,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -425,12 +419,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor6<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4 , A5>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4) , hpx::util::detail::move_if_no_ref< A5> ::call(a5)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -459,7 +453,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4 , A5> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action6< Component , A0 , A1 , A2 , A3 , A4 , A5>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6>
@@ -476,7 +469,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -496,12 +489,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor7<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4 , A5 , A6>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4) , hpx::util::detail::move_if_no_ref< A5> ::call(a5) , hpx::util::detail::move_if_no_ref< A6> ::call(a6)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -530,7 +523,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4 , A5 , A6> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action7< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7>
@@ -547,7 +539,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -567,12 +559,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor8<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4) , hpx::util::detail::move_if_no_ref< A5> ::call(a5) , hpx::util::detail::move_if_no_ref< A6> ::call(a6) , hpx::util::detail::move_if_no_ref< A7> ::call(a7)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -601,7 +593,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action8< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8>
@@ -618,7 +609,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -638,12 +629,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor9<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4) , hpx::util::detail::move_if_no_ref< A5> ::call(a5) , hpx::util::detail::move_if_no_ref< A6> ::call(a6) , hpx::util::detail::move_if_no_ref< A7> ::call(a7) , hpx::util::detail::move_if_no_ref< A8> ::call(a8)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -672,7 +663,6 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action9< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8>))>))> >::get_mutable_instance().export_guid(); }}} }
 namespace hpx { namespace components { namespace server
 {
     template <typename Component, typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8 , typename A9>
@@ -689,7 +679,7 @@ namespace hpx { namespace components { namespace server
             strm << "attempt to create component instance of "
                 << "invalid/unknown type: "
                 << components::get_component_type_name(type)
-                << " (component not found in map)";
+                << " (component type not found in map)";
             HPX_THROW_EXCEPTION(hpx::bad_component_type,
                 "runtime_support::create_component",
                 hpx::util::osstream_get_string(strm));
@@ -709,12 +699,12 @@ namespace hpx { namespace components { namespace server
         naming::gid_type id;
         boost::shared_ptr<component_factory_base> factory((*it).second.first);
         {
-            util::unlock_the_lock<component_map_mutex_type::scoped_lock> ul(l);
+            util::scoped_unlock<component_map_mutex_type::scoped_lock> ul(l);
             id = factory->create_with_args(
                 component_constructor_functor10<
                     typename Component::wrapping_type,
                     A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>(
-                        hpx::util::detail::move_if_no_ref< A0> ::call(a0) , hpx::util::detail::move_if_no_ref< A1> ::call(a1) , hpx::util::detail::move_if_no_ref< A2> ::call(a2) , hpx::util::detail::move_if_no_ref< A3> ::call(a3) , hpx::util::detail::move_if_no_ref< A4> ::call(a4) , hpx::util::detail::move_if_no_ref< A5> ::call(a5) , hpx::util::detail::move_if_no_ref< A6> ::call(a6) , hpx::util::detail::move_if_no_ref< A7> ::call(a7) , hpx::util::detail::move_if_no_ref< A8> ::call(a8) , hpx::util::detail::move_if_no_ref< A9> ::call(a9)));
+                        std::forward<A0>( a0 ) , std::forward<A1>( a1 ) , std::forward<A2>( a2 ) , std::forward<A3>( a3 ) , std::forward<A4>( a4 ) , std::forward<A5>( a5 ) , std::forward<A6>( a6 ) , std::forward<A7>( a7 ) , std::forward<A8>( a8 ) , std::forward<A9>( a9 )));
         }
         LRT_(info) << "successfully created component " << id
             << " of type: " << components::get_component_type_name(type);
@@ -743,4 +733,3 @@ namespace hpx { namespace components { namespace server
                 Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9> >
     {};
 }}}
-namespace boost { namespace serialization { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8 , typename A9>) ) struct guid_defined<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))> : mpl::true_ {}; namespace ext { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8 , typename A9>) ) struct guid_impl<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))> { static inline const char * call() { return hpx::util::detail::type_hash<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))>(); } }; } } namespace archive { namespace detail { namespace extra_detail { HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8 , typename A9>) ) struct init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))> { static hpx::util::detail::guid_initializer_helper< HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>)) > const & g; }; HPX_UTIL_STRIP( (template <typename Component , typename A0 , typename A1 , typename A2 , typename A3 , typename A4 , typename A5 , typename A6 , typename A7 , typename A8 , typename A9>) ) hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))> const & init_guid<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))>::g = ::boost::serialization::singleton< hpx::util::detail::guid_initializer_helper<HPX_UTIL_STRIP( (hpx::actions::transfer_action<HPX_UTIL_STRIP( (hpx::components::server::create_component_action10< Component , A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9>))>))> >::get_mutable_instance().export_guid(); }}} }

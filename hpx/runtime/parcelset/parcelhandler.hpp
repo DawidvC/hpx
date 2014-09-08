@@ -1,3 +1,4 @@
+//  Copyright (c)      2014 Thomas Heller
 //  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
@@ -21,7 +22,7 @@
 #include <hpx/runtime/parcelset/parcelhandler_queue_base.hpp>
 #include <hpx/util/high_resolution_timer.hpp>
 #include <hpx/util/logging.hpp>
-#include <hpx/util/spinlock.hpp>
+#include <hpx/lcos/local/spinlock.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -38,7 +39,7 @@ namespace hpx { namespace parcelset
     private:
         // default callback for put_parcel
         void default_write_handler(boost::system::error_code const&,
-            std::size_t /*size*/);
+            parcel const& p);
 
         void parcel_sink(parcel const& p);
 
@@ -62,17 +63,16 @@ namespace hpx { namespace parcelset
             error_code& ec = throws) const;
 
         // exception handling
-        typedef util::spinlock mutex_type;
+        typedef lcos::local::spinlock mutex_type;
 
         void rethrow_exception();
 
-        //
+    public:
         typedef std::pair<naming::locality, std::string> handler_key_type;
         typedef std::map<
             handler_key_type, boost::shared_ptr<policies::message_handler> >
         message_handler_map;
 
-    public:
         typedef parcelport::read_handler_type read_handler_type;
         typedef parcelport::write_handler_type write_handler_type;
 
@@ -88,21 +88,23 @@ namespace hpx { namespace parcelset
         ///                 instance will be used for any parcel related
         ///                 transport operations the parcelhandler carries out.
         parcelhandler(naming::resolver_client& resolver,
-            boost::shared_ptr<parcelport> pp,
             threads::threadmanager_base* tm, parcelhandler_queue_base* policy);
 
-        ~parcelhandler()
-        {
-        }
+        ~parcelhandler() {}
+
+        /// load runtime configuration settings ...
+        static std::vector<std::string> load_runtime_configuration();
+
+        void initialize(boost::shared_ptr<parcelport> pp);
 
         /// \brief Attach the given parcel port to this handler
-        void attach_parcelport(boost::shared_ptr<parcelport> pp, bool run = true);
+        void attach_parcelport(boost::shared_ptr<parcelport> const& pp, bool run = true);
 
         /// \brief Stop all parcelports associated with this parcelhandler
         void stop(bool blocking = true);
 
-        /// \ brief flush all parcel buffers
-        void flush_buffers(bool stop_buffering = false);
+        /// \ brief do background work in the parcel layer
+        void do_background_work(bool stop_buffering = false);
 
         /// \brief Allow access to AGAS resolver instance.
         ///
@@ -120,7 +122,7 @@ namespace hpx { namespace parcelset
         /// parcelhandler has been initialized with.
         parcelport& get_parcelport() const
         {
-            return *find_parcelport(connection_tcpip);
+            return *find_parcelport(connection_tcp);
         }
 
         /// Return the locality_id of this locality
@@ -153,7 +155,8 @@ namespace hpx { namespace parcelset
         ///          remote locality known by AGAS
         ///          (!prefixes.empty()).
         bool get_raw_remote_localities(std::vector<naming::gid_type>& locality_ids,
-            components::component_type type = components::component_invalid) const;
+            components::component_type type = components::component_invalid,
+            error_code& ec = throws) const;
 
         /// Return the list of all localities supporting the given
         /// component type
@@ -205,7 +208,7 @@ namespace hpx { namespace parcelset
         ///                 where \a err is the status code of the operation and
         ///                       \a size is the number of successfully
         ///                              transferred bytes.
-        void put_parcel(parcel& p, write_handler_type f);
+        void put_parcel(parcel& p, write_handler_type const& f);
 
         /// This put_parcel() function overload is asynchronous, but no
         /// callback functor is provided by the user.
@@ -218,16 +221,16 @@ namespace hpx { namespace parcelset
         ///                 id (if not already set).
         BOOST_FORCEINLINE void put_parcel(parcel& p)
         {
-            using HPX_STD_PLACEHOLDERS::_1;
-            using HPX_STD_PLACEHOLDERS::_2;
-            put_parcel(p, HPX_STD_BIND(&parcelhandler::default_write_handler,
+            using util::placeholders::_1;
+            using util::placeholders::_2;
+            put_parcel(p, util::bind(&parcelhandler::default_write_handler,
                 this, _1, _2));
         }
 
         /// The function \a get_parcel returns the next available parcel
         ///
         /// \param p        [out] The parcel instance to be filled with the
-        ///                 received parcel. If the functioned returns \a true
+        ///                 received parcel. If the function returns \a true
         ///                 this will be the next received parcel.
         ///
         /// \returns        Returns \a true if the next parcel has been
@@ -339,8 +342,23 @@ namespace hpx { namespace parcelset
         /// this parcelhandler is associated with.
         naming::locality const& here() const
         {
-            return find_parcelport(connection_tcpip)->here();
+            return find_parcelport(connection_tcp)->here();
         }
+
+        /// Return the name of this locality as retrieved from the
+        /// active parcel port.
+        std::string get_locality_name() const;
+
+        /// Temporarily enable/disable all parcel handling activities in the
+        /// parcel subsystem
+        ///
+        /// \param new_state    [in] The desired new state of the parcel
+        ///                     handling (true: enable parcel handling, false:
+        ///                     disable parcel handling)
+        ///
+        /// \returns            The previous state of the parcel handling
+        ///                     subsystem.
+        bool enable(bool new_state);
 
         ///////////////////////////////////////////////////////////////////////
         /// The function register_counter_types() is called during startup to
@@ -408,6 +426,16 @@ namespace hpx { namespace parcelset
         // operations (nanoseconds)
         boost::int64_t get_receiving_serialization_time(connection_type, bool) const;
 
+#if defined(HPX_HAVE_SECURITY)
+        // the total time it took for all sender-side security operations
+        // (nanoseconds)
+        boost::int64_t get_sending_security_time(connection_type, bool) const;
+
+        // the total time it took for all receiver-side security
+        // operations (nanoseconds)
+        boost::int64_t get_receiving_security_time(connection_type, bool) const;
+#endif
+
         // total data sent (bytes)
         std::size_t get_data_sent(connection_type, bool) const;
 
@@ -420,8 +448,15 @@ namespace hpx { namespace parcelset
         // total data (uncompressed) received (bytes)
         std::size_t get_raw_data_received(connection_type, bool) const;
 
+        boost::int64_t get_buffer_allocate_time_sent(connection_type, bool) const;
+        boost::int64_t get_buffer_allocate_time_received(connection_type, bool) const;
+
         boost::int64_t get_connection_cache_statistics(connection_type pp_type,
             parcelport::connection_cache_statistics_type stat_type, bool) const;
+
+        static void list_parcelports(util::osstream& strm);
+        static void list_parcelport(util::osstream& strm, connection_type t,
+            bool available = true);
 
     protected:
         std::size_t get_incoming_queue_length(bool /*reset*/) const
@@ -459,8 +494,10 @@ namespace hpx { namespace parcelset
         /// the runtime systems of all localities are guaranteed to have
         /// reached a certain state).
         boost::atomic<bool> use_alternative_parcelports_;
+        boost::atomic<bool> enable_parcel_handling_;
 
         /// Store message handlers for actions
+        mutex_type handlers_mtx_;
         message_handler_map handlers_;
 
         /// Count number of (outbound) parcels routed

@@ -3,6 +3,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/lcos.hpp>
 #include <hpx/include/apply.hpp>
@@ -13,6 +14,11 @@
 boost::int32_t increment(boost::int32_t i)
 {
     return i + 1;
+}
+
+boost::int32_t increment_with_future(hpx::shared_future<boost::int32_t> fi)
+{
+    return fi.get() + 1;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -90,6 +96,19 @@ int hpx_main()
 
         hpx::future<void> f4 = hpx::async(hpx::launch::sync, &do_nothing, 42);
         f4.get();
+    }
+    
+    {
+        hpx::promise<boost::int32_t> p;
+        hpx::shared_future<boost::int32_t> f = p.get_future();
+
+        hpx::future<boost::int32_t> f1 = hpx::async(&increment_with_future, f);
+        hpx::future<boost::int32_t> f2 =
+            hpx::async(hpx::launch::all, &increment_with_future, f);
+
+        p.set_value(42);        
+        HPX_TEST_EQ(f1.get(), 43);
+        HPX_TEST_EQ(f2.get(), 43);
     }
 
     {
@@ -169,19 +188,15 @@ int hpx_main()
         f6.get();
     }
 
-// We are currently not able to detect whether a type is callable. We need the
-// C++11 is_callable trait for this. For now, please use hpx::util::bind to
-// wrap your function object in order to pass it to async (see below).
+    {
+        mult2 mult;
+        
+        hpx::future<boost::int32_t> f1 = hpx::async(mult, 42);
+        HPX_TEST_EQ(f1.get(), 84);
 
-//     {
-//         mult2 mult;
-//
-//         hpx::future<boost::int32_t> f1 = hpx::async(mult, 42);
-//         HPX_TEST_EQ(f1.get(), 84);
-//
-//         hpx::future<boost::int32_t> f2 = hpx::async(hpx::launch::all, mult, 42);
-//         HPX_TEST_EQ(f2.get(), 84);
-//     }
+        hpx::future<boost::int32_t> f2 = hpx::async(hpx::launch::all, mult, 42);
+        HPX_TEST_EQ(f2.get(), 84);
+    }
 
     {
         mult2 mult;

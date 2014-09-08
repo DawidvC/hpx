@@ -30,10 +30,10 @@ namespace hpx { namespace components { namespace server
         {}
         ~remote_object()
         {
-            BOOST_ASSERT(dtor);
+            HPX_ASSERT(dtor);
             dtor(&object);
         }
-        
+
         template <typename F>
         typename F::result_type apply1(F const & f);
         template <typename F, typename A>
@@ -61,7 +61,7 @@ namespace hpx { namespace components { namespace server
     }
 
     ///////////////////////////////////////////////////////////////////////////
-#if defined(HPX_GCC_VERSION) && (HPX_GCC_VERSION <= 40400)
+#if defined(HPX_GCC44_WORKAROUND)
     template <typename F>
     struct remote_object_apply_action1
       : hpx::actions::result_action1<
@@ -123,5 +123,7 @@ HPX_REGISTER_ACTION_DECLARATION(
     hpx::components::server::remote_object::set_dtor_action
   , remote_object_set_dtor_action
 )
+
+HPX_UTIL_REGISTER_FUNCTION_DECLARATION(void(void**), hpx::util::function<void(void**)>, hpx_remote_object_dtor_functor)
 
 #endif

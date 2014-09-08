@@ -5,6 +5,8 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
+
 // System Header Files
 #include <cerrno>
 #include <cstdio>
@@ -17,13 +19,12 @@
 #include <iostream>
 #include <fstream>
 
-#include <hpx/config.hpp>
 #include <hpx/exception.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/ini.hpp>
 #include <hpx/util/portable_binary_iarchive.hpp>
 #include <hpx/util/portable_binary_oarchive.hpp>
 
-#include <boost/assert.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -203,7 +204,8 @@ bool force_entry(std::string& str)
 
 // parse file
 void section::parse (std::string const& sourcename,
-    std::vector<std::string> const& lines, bool verify_existing)
+    std::vector<std::string> const& lines, bool verify_existing,
+    bool weed_out_comments)
 {
     int linenum = 0;
     section* current = this;
@@ -227,15 +229,18 @@ void section::parse (std::string const& sourcename,
         if (line.empty())
             continue;
 
-        // weep out comments
-        boost::smatch what_comment;
-        if (boost::regex_match (line, what_comment, regex_comment))
+        // weed out comments
+        if (weed_out_comments)
         {
-            BOOST_ASSERT(3 == what_comment.size());
+            boost::smatch what_comment;
+            if (boost::regex_match (line, what_comment, regex_comment))
+            {
+                HPX_ASSERT(3 == what_comment.size());
 
-            line = trim_whitespace (what_comment[1]);
-            if (line.empty())
-                continue;
+                line = trim_whitespace (what_comment[1]);
+                if (line.empty())
+                    continue;
+            }
         }
 
         // no comments anymore: line is either section, key=val,
@@ -267,9 +272,9 @@ void section::parse (std::string const& sourcename,
 
             // add key/val to this section
             std::string key(what[2]);
-            if (!force_entry(key) && verify_existing && !current->has_entry(key)) 
+            if (!force_entry(key) && verify_existing && !current->has_entry(key))
             {
-                line_msg ("Attempt to initialize unknown entry: ", sourcename, 
+                line_msg ("Attempt to initialize unknown entry: ", sourcename,
                     linenum, line);
             }
             current->add_entry (key, what[3]);
@@ -313,15 +318,15 @@ void section::parse (std::string const& sourcename,
 
             // add key/val to current section
             std::string key(what[1]);
-            if (!force_entry(key) && verify_existing && !current->has_entry(key)) 
+            if (!force_entry(key) && verify_existing && !current->has_entry(key))
             {
-                line_msg ("Attempt to initialize unknown entry: ", sourcename, 
+                line_msg ("Attempt to initialize unknown entry: ", sourcename,
                     linenum, line);
             }
             current->add_entry (key, what[2]);
         }
         else {
-            // Hmm, is not a section, is not an entry, is not empty - must be 
+            // Hmm, is not a section, is not an entry, is not empty - must be
             // an error!
             line_msg ("Cannot parse line at: ", sourcename, linenum, line);
         }
@@ -438,7 +443,7 @@ bool section::has_entry (std::string const& key) const
         if (has_section(sub_sec))
         {
             section_map::const_iterator cit = sections_.find(sub_sec);
-            BOOST_ASSERT(cit != sections_.end());
+            HPX_ASSERT(cit != sections_.end());
             return (*cit).second.has_entry(sub_key);
         }
         return false;
@@ -456,7 +461,7 @@ std::string section::get_entry (std::string const& key) const
         if (has_section(sub_sec))
         {
             section_map::const_iterator cit = sections_.find(sub_sec);
-            BOOST_ASSERT(cit != sections_.end());
+            HPX_ASSERT(cit != sections_.end());
             return (*cit).second.get_entry(sub_key);
         }
 
@@ -468,7 +473,7 @@ std::string section::get_entry (std::string const& key) const
     if (entries_.find(key) != entries_.end())
     {
         entry_map::const_iterator cit = entries_.find(key);
-        BOOST_ASSERT(cit != entries_.end());
+        HPX_ASSERT(cit != entries_.end());
         return this->expand((*cit).second);
     }
 

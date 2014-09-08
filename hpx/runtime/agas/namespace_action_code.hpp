@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2013 Hartmut Kaiser
+//  Copyright (c) 2012-2014 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -15,7 +15,8 @@ namespace hpx { namespace agas
 {
 
 // Base name used to register AGAS service instances
-char const* const service_name = "/agas/";
+char const* const service_name = "/0/agas/";
+char const* const performance_counter_basename = "/agas/";
 
 enum namespace_action_code
 {
@@ -38,9 +39,10 @@ enum namespace_action_code
     primary_ns_bind_gid                     = BOOST_BINARY_U(1000011),
     primary_ns_resolve_gid                  = BOOST_BINARY_U(1000100),
     primary_ns_unbind_gid                   = BOOST_BINARY_U(1000101),
-    primary_ns_change_credit_non_blocking   = BOOST_BINARY_U(1000110),
-    primary_ns_change_credit_sync           = BOOST_BINARY_U(1000111),
-    primary_ns_statistics_counter           = BOOST_BINARY_U(1001000),
+    primary_ns_increment_credit             = BOOST_BINARY_U(1000110),
+    primary_ns_decrement_credit             = BOOST_BINARY_U(1000111),
+    primary_ns_allocate                     = BOOST_BINARY_U(1001000),
+    primary_ns_statistics_counter           = BOOST_BINARY_U(1001001),
 
     component_ns_service                    = BOOST_BINARY_U(0100000),
     component_ns_bulk_service               = BOOST_BINARY_U(0100001),
@@ -59,7 +61,8 @@ enum namespace_action_code
     symbol_ns_resolve                       = BOOST_BINARY_U(0010011),
     symbol_ns_unbind                        = BOOST_BINARY_U(0010100),
     symbol_ns_iterate_names                 = BOOST_BINARY_U(0010101),
-    symbol_ns_statistics_counter            = BOOST_BINARY_U(0010110)
+    symbol_ns_on_event                      = BOOST_BINARY_U(0010110),
+    symbol_ns_statistics_counter            = BOOST_BINARY_U(0010111)
 };
 
 namespace detail
@@ -83,8 +86,19 @@ namespace detail
     // counter description data for component namespace components
     static counter_service_data const component_namespace_services[] =
     {
+        // counters exposing overall API invocation count and timings
+        {   "component/count"
+          , ""
+          , counter_target_count
+          , component_ns_statistics_counter
+          , component_ns_statistics_counter }
+      , {   "component/time"
+          , "ns"
+          , counter_target_time
+          , component_ns_statistics_counter
+          , component_ns_statistics_counter }
         // counters exposing API invocation counts
-        {   "count/bind_prefix"
+      , {   "count/bind_prefix"
           , ""
           , counter_target_count
           , component_ns_bind_prefix
@@ -162,12 +176,18 @@ namespace detail
     // counter description data for localities namespace components
     static counter_service_data const locality_namespace_services[] =
     {
-        // counters exposing API invocation counts
-        {   "count/allocate"
+        // counters exposing overall API invocation count and timings
+        {   "locality/count"
           , ""
           , counter_target_count
-          , locality_ns_allocate
+          , locality_ns_statistics_counter
           , locality_ns_statistics_counter }
+      , {   "locality/time"
+          , "ns"
+          , counter_target_time
+          , locality_ns_statistics_counter
+          , locality_ns_statistics_counter }
+        // counters exposing API invocation counts
       , {   "count/free"
           , ""
           , counter_target_count
@@ -199,11 +219,6 @@ namespace detail
           , locality_ns_resolved_localities
           , locality_ns_statistics_counter }
       // counters exposing API timings
-      , {   "time/allocate"
-          , "ns"
-          , counter_target_time
-          , locality_ns_allocate
-          , locality_ns_statistics_counter }
       , {   "time/free"
           , "ns"
           , counter_target_time
@@ -214,7 +229,7 @@ namespace detail
           , counter_target_time
           , locality_ns_localities
           , locality_ns_statistics_counter }
-      , {   "time/lnum_ocalities"
+      , {   "time/num_localities"
           , "ns"
           , counter_target_time
           , locality_ns_num_localities
@@ -233,7 +248,7 @@ namespace detail
           , "ns"
           , counter_target_time
           , locality_ns_resolved_localities
-          , primary_ns_statistics_counter }
+          , locality_ns_statistics_counter }
     };
     static std::size_t const num_locality_namespace_services =
         sizeof(locality_namespace_services)/sizeof(locality_namespace_services[0]);
@@ -241,8 +256,19 @@ namespace detail
     // counter description data for primary namespace components
     static counter_service_data const primary_namespace_services[] =
     {
+        // counters exposing overall API invocation count and timings
+        {   "primary/count"
+          , ""
+          , counter_target_count
+          , primary_ns_statistics_counter
+          , primary_ns_statistics_counter }
+      , {   "primary/time"
+          , "ns"
+          , counter_target_time
+          , primary_ns_statistics_counter
+          , primary_ns_statistics_counter }
         // counters exposing API invocation counts
-        {   "count/route"
+      , {   "count/route"
           , ""
           , counter_target_count
           , primary_ns_route
@@ -262,10 +288,20 @@ namespace detail
           , counter_target_count
           , primary_ns_unbind_gid
           , primary_ns_statistics_counter }
-      , {   "count/change_credit"
+      , {   "count/increment_credit"
           , ""
           , counter_target_count
-          , primary_ns_change_credit_non_blocking
+          , primary_ns_increment_credit
+          , primary_ns_statistics_counter }
+      , {   "count/decrement_credit"
+          , ""
+          , counter_target_count
+          , primary_ns_decrement_credit
+          , primary_ns_statistics_counter }
+      , {   "count/allocate"
+          , ""
+          , counter_target_count
+          , primary_ns_allocate
           , primary_ns_statistics_counter }
       // counters exposing API timings
       , {   "time/route"
@@ -288,10 +324,20 @@ namespace detail
           , counter_target_time
           , primary_ns_unbind_gid
           , primary_ns_statistics_counter }
-      , {   "time/change_credit"
+      , {   "time/increment_credit"
           , "ns"
           , counter_target_time
-          , primary_ns_change_credit_non_blocking
+          , primary_ns_increment_credit
+          , primary_ns_statistics_counter }
+      , {   "time/decrement_credit"
+          , "ns"
+          , counter_target_time
+          , primary_ns_decrement_credit
+          , primary_ns_statistics_counter }
+      , {   "time/allocate"
+          , "ns"
+          , counter_target_time
+          , primary_ns_allocate
           , primary_ns_statistics_counter }
     };
     static std::size_t const num_primary_namespace_services =
@@ -300,8 +346,19 @@ namespace detail
     // counter description data for symbol namespace components
     static counter_service_data const symbol_namespace_services[] =
     {
+        // counters exposing overall API invocation count and timings
+        {   "symbol/count"
+          , ""
+          , counter_target_count
+          , symbol_ns_statistics_counter
+          , symbol_ns_statistics_counter }
+      , {   "symbol/time"
+          , "ns"
+          , counter_target_time
+          , symbol_ns_statistics_counter
+          , symbol_ns_statistics_counter }
         // counters exposing API invocation counts
-        {   "count/bind"
+      , {   "count/bind"
           , ""
           , counter_target_count
           , symbol_ns_bind
@@ -320,6 +377,11 @@ namespace detail
           , ""
           , counter_target_count
           , symbol_ns_iterate_names
+          , symbol_ns_statistics_counter }
+      , {   "count/on_symbol_namespace_event"
+          , ""
+          , counter_target_count
+          , symbol_ns_on_event
           , symbol_ns_statistics_counter }
       // counters exposing API timings
       , {   "time/bind"
@@ -341,6 +403,11 @@ namespace detail
           , "ns"
           , counter_target_time
           , symbol_ns_iterate_names
+          , symbol_ns_statistics_counter }
+      , {   "time/on_symbol_namespace_event"
+          , "ns"
+          , counter_target_time
+          , symbol_ns_on_event
           , symbol_ns_statistics_counter }
     };
     static std::size_t const num_symbol_namespace_services =

@@ -51,14 +51,24 @@ namespace hpx { namespace components
         /// \return Returns \a true if the parameter \a fillini has been
         ///         successfully initialized with the registry data of all
         ///         implemented in this module.
-        bool get_component_info(std::vector<std::string>& fillini)
+        bool get_component_info(std::vector<std::string>& fillini,
+            std::string const& filepath, bool is_static = false)
         {
             using namespace boost::assign;
             fillini += std::string("[hpx.components.") +
                 unique_component_name<component_registry>::call() + "]";
             fillini += "name = " HPX_COMPONENT_STRING;
-            fillini += std::string("path = ") +
-                util::find_prefix(HPX_COMPONENT_STRING) + "/lib/hpx";
+
+            if(!is_static)
+            {
+                if (filepath.empty()) {
+                    fillini += std::string("path = ") +
+                        util::find_prefixes("/lib/hpx", HPX_COMPONENT_STRING);
+                }
+                else {
+                    fillini += std::string("path = ") + filepath;
+                }
+            }
 
             switch (state) {
             case factory_enabled:
@@ -70,6 +80,10 @@ namespace hpx { namespace components
             case factory_check:
                 fillini += "enabled = $[hpx.components.load_external]";
                 break;
+            }
+
+            if (is_static) {
+                fillini += "static = 1";
             }
 
             char const* more = traits::component_config_data<Component>::call();
@@ -107,6 +121,35 @@ namespace hpx { namespace components
     typedef hpx::components::component_registry<ComponentType, state>         \
         componentname ## _component_registry_type;                            \
     HPX_REGISTER_COMPONENT_REGISTRY(                                          \
+        componentname ## _component_registry_type, componentname)             \
+    HPX_DEF_UNIQUE_COMPONENT_NAME(                                            \
+        componentname ## _component_registry_type, componentname)             \
+    template struct hpx::components::component_registry<                      \
+        ComponentType, state>;                                                \
+/**/
+
+///////////////////////////////////////////////////////////////////////////////
+#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC(...)                  \
+        HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_(__VA_ARGS__)         \
+    /**/
+
+#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_(...)                 \
+    HPX_UTIL_EXPAND_(BOOST_PP_CAT(                                            \
+        HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_,                     \
+            HPX_UTIL_PP_NARG(__VA_ARGS__)                                     \
+    )(__VA_ARGS__))                                                           \
+/**/
+
+#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_2(                    \
+        ComponentType, componentname)                                         \
+    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                        \
+        ComponentType, componentname, ::hpx::components::factory_check)       \
+/**/
+#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                    \
+        ComponentType, componentname, state)                                  \
+    typedef hpx::components::component_registry<ComponentType, state>         \
+        componentname ## _component_registry_type;                            \
+    HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(                                  \
         componentname ## _component_registry_type, componentname)             \
     HPX_DEF_UNIQUE_COMPONENT_NAME(                                            \
         componentname ## _component_registry_type, componentname)             \

@@ -11,6 +11,29 @@
 
 #include <string>
 
+namespace hpx { namespace threads { namespace policies
+{
+    ///////////////////////////////////////////////////////////////////////////
+    struct init_affinity_data
+    {
+        init_affinity_data(std::size_t pu_offset = std::size_t(-1),
+                std::size_t pu_step = 1, std::string const& affinity = "pu",
+                std::string const& affinity_desc = "")
+          : used_cores_(0),
+            pu_offset_(pu_offset),
+            pu_step_(pu_step),
+            affinity_domain_(affinity),
+            affinity_desc_(affinity_desc)
+        {}
+
+        std::size_t used_cores_;
+        std::size_t pu_offset_;
+        std::size_t pu_step_;
+        std::string affinity_domain_;
+        std::string affinity_desc_;
+    };
+}}}
+
 namespace hpx { namespace threads { namespace policies { namespace detail
 {
     ///////////////////////////////////////////////////////////////////////////
@@ -18,29 +41,31 @@ namespace hpx { namespace threads { namespace policies { namespace detail
     // for the shepherd threads of this instance
     struct affinity_data
     {
-//         affinity_data()
-//           : pu_offset_(0), pu_step_(1),
-//             affinity_domain_("pu"), affinity_masks_(),
-//             pu_nums_()
-//         {}
+        affinity_data(std::size_t num_threads);
 
-        affinity_data(std::size_t num_threads, std::size_t pu_offset, 
-            std::size_t pu_step, std::string const& affinity_domain, 
-            std::string const& affinity_desc);
+        std::size_t init(init_affinity_data const& data,
+                topology const & toplogy);
 
         mask_cref_type get_pu_mask(topology const& topology,
             std::size_t num_thread, bool numa_sensitive) const;
 
         std::size_t get_pu_num(std::size_t num_thread) const
         {
-            BOOST_ASSERT(num_thread < pu_nums_.size());
+            HPX_ASSERT(num_thread < pu_nums_.size());
             return pu_nums_[num_thread];
         }
 
-    private:
-        std::size_t init_pu_num(std::size_t num_thread,
+        void add_punit(std::size_t virt_core, std::size_t thread_num,
+            topology const& topology);
+
+    protected:
+        void init_cached_pu_nums(std::size_t hardware_concurrency,
+                topology const & topology);
+        std::size_t get_pu_num(std::size_t num_thread,
             std::size_t hardware_concurrency) const;
 
+    private:
+        std::size_t num_threads_;   ///< number of punits managed
         std::size_t pu_offset_; ///< offset of the first processing unit to use
         std::size_t pu_step_;   ///< step between used processing units
         std::string affinity_domain_;

@@ -34,7 +34,14 @@
 #include <hpx/runtime/components/server/simple_component_base.hpp>
 #include <hpx/runtime/components/server/abstract_component_base.hpp>
 
+#include <hpx/runtime/components/server/locking_hook.hpp>
+#include <hpx/runtime/components/server/migration_support.hpp>
+
 #include <hpx/runtime/components/new.hpp>
+#include <hpx/runtime/components/copy_component.hpp>
+#include <hpx/runtime/components/migrate_component.hpp>
+
+#include <hpx/runtime/get_ptr.hpp>
 
 #endif
 

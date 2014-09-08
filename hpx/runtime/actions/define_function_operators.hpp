@@ -13,6 +13,57 @@
 #include <boost/preprocessor/iterate.hpp>
 #include <boost/preprocessor/enum_params.hpp>
 
+    template <typename LocalResult>
+    struct sync_invoke_0
+    {
+        template <typename IdType>
+        BOOST_FORCEINLINE static LocalResult call(
+            boost::mpl::false_, BOOST_SCOPED_ENUM(launch) policy,
+            IdType const& id, error_code& ec)
+        {
+            return hpx::async<action>(policy, id).get(ec);
+        }
+
+        template <typename IdType>
+        BOOST_FORCEINLINE static LocalResult call(
+            boost::mpl::true_, BOOST_SCOPED_ENUM(launch) policy,
+            IdType const& id, error_code& ec)
+        {
+            return hpx::async<action>(policy, id);
+        }
+    };
+
+    template <typename IdType>
+    BOOST_FORCEINLINE typename boost::enable_if<
+        boost::mpl::and_<
+            boost::mpl::bool_<
+                util::tuple_size<arguments_type>::value == 0>,
+            boost::is_same<IdType, naming::id_type> >,
+        local_result_type
+    >::type
+    operator()(BOOST_SCOPED_ENUM(launch) policy, IdType const& id,
+        error_code& ec = throws) const
+    {
+        return util::void_guard<local_result_type>(),
+            sync_invoke_0<local_result_type>::call(is_future_pred(),
+                policy, id, ec);
+    }
+
+    template <typename IdType>
+    BOOST_FORCEINLINE typename boost::enable_if<
+        boost::mpl::and_<
+            boost::mpl::bool_<
+                util::tuple_size<arguments_type>::value == 0>,
+            boost::is_same<IdType, naming::id_type> >,
+        local_result_type
+    >::type
+    operator()(IdType const& id, error_code& ec = throws) const
+    {
+        return util::void_guard<local_result_type>(),
+            sync_invoke_0<local_result_type>::call(is_future_pred(),
+                launch::sync, id, ec);
+    }
+
 #if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #  include <hpx/runtime/actions/preprocessed/define_function_operators.hpp>
 #else
@@ -44,36 +95,62 @@
 #define N BOOST_PP_ITERATION()
 
     ///////////////////////////////////////////////////////////////////////////
+    template <typename LocalResult>
+    struct BOOST_PP_CAT(sync_invoke_, N)
+    {
+        template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>
+        BOOST_FORCEINLINE static LocalResult call(
+            boost::mpl::false_, BOOST_SCOPED_ENUM(launch) policy,
+            naming::id_type const& id, HPX_ENUM_FWD_ARGS(N, Arg, arg),
+            error_code& ec)
+        {
+            return hpx::async<action>(policy, id,
+                HPX_ENUM_FORWARD_ARGS(N, Arg, arg)).get(ec);
+        }
+
+        template <BOOST_PP_ENUM_PARAMS(N, typename Arg)>
+        BOOST_FORCEINLINE static LocalResult call(
+            boost::mpl::true_, BOOST_SCOPED_ENUM(launch) policy,
+            naming::id_type const& id, HPX_ENUM_FWD_ARGS(N, Arg, arg),
+            error_code& ec)
+        {
+            return hpx::async<action>(policy, id,
+                HPX_ENUM_FORWARD_ARGS(N, Arg, arg));
+        }
+    };
+
     template <typename IdType, BOOST_PP_ENUM_PARAMS(N, typename Arg)>
     BOOST_FORCEINLINE typename boost::enable_if<
         boost::mpl::and_<
             boost::mpl::bool_<
-                boost::fusion::result_of::size<arguments_type>::value == N>,
-            boost::is_same<IdType, naming::id_type>,
-            boost::is_same<local_result_type, void> >
+                util::tuple_size<arguments_type>::value == N>,
+            boost::is_same<IdType, naming::id_type> >,
+        local_result_type
     >::type
-    operator()(IdType const& id, HPX_ENUM_FWD_ARGS(N, Arg, arg),
-        error_code& ec = throws) const
+    operator()(BOOST_SCOPED_ENUM(launch) policy, IdType const& id,
+        HPX_ENUM_FWD_ARGS(N, Arg, arg), error_code& ec = throws) const
     {
-        hpx::async(*this, id
-          BOOST_PP_COMMA_IF(N) HPX_ENUM_FORWARD_ARGS(N, Arg, arg)).get(ec);
+        return util::void_guard<local_result_type>(),
+            BOOST_PP_CAT(sync_invoke_, N)<local_result_type>::call(
+                is_future_pred(), policy, id,
+                HPX_ENUM_FORWARD_ARGS(N, Arg, arg), ec);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
     template <typename IdType, BOOST_PP_ENUM_PARAMS(N, typename Arg)>
     BOOST_FORCEINLINE typename boost::enable_if<
         boost::mpl::and_<
             boost::mpl::bool_<
-                boost::fusion::result_of::size<arguments_type>::value == N>,
-            boost::is_same<IdType, naming::id_type>,
-            boost::mpl::not_<boost::is_same<local_result_type, void> > >,
+                util::tuple_size<arguments_type>::value == N>,
+            boost::is_same<IdType, naming::id_type> >,
         local_result_type
     >::type
     operator()(IdType const& id, HPX_ENUM_FWD_ARGS(N, Arg, arg),
         error_code& ec = throws) const
     {
-        return boost::move(hpx::async(*this, id
-          BOOST_PP_COMMA_IF(N) HPX_ENUM_FORWARD_ARGS(N, Arg, arg)).move(ec));
+        return util::void_guard<local_result_type>(),
+            BOOST_PP_CAT(sync_invoke_, N)<local_result_type>::call(
+                is_future_pred(), launch::sync, id,
+                HPX_ENUM_FORWARD_ARGS(N, Arg, arg), ec);
     }
 
 #undef N

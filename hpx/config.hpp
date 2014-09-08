@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2014 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Lelbach
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,36 +7,46 @@
 #if !defined(HPX_CONFIG_MAR_24_2008_0943AM)
 #define HPX_CONFIG_MAR_24_2008_0943AM
 
+// We need to detect if user code include boost/config.hpp before including hpx/config.hpp
+// Everything else might lead to hard compile errors and possible very subtile bugs.
+#if defined(BOOST_CONFIG_HPP)
+#error Boost.Config was included before the hpx config header. This might lead to subtile failures and compile errors. Please include <hpx/config.hpp> before any other boost header
+#endif
+
+#include <hpx/config/defines.hpp>
 #include <hpx/version.hpp>
 #include <hpx/config/compiler_specific.hpp>
 #include <hpx/config/branch_hints.hpp>
 #include <hpx/config/manual_profiling.hpp>
 #include <hpx/config/forceinline.hpp>
-#include <hpx/config/noexcept.hpp>
 #include <hpx/config/constexpr.hpp>
-#include <hpx/config/preprocessor/add3.hpp>
+#include <hpx/config/cxx11_macros.hpp>
 #include <hpx/config/preprocessor/round_up.hpp>
-#include <hpx/config/preprocessor/round_up_add3.hpp>
+
+#if BOOST_VERSION < 105600
+#include <boost/exception/detail/attribute_noreturn.hpp>
+#endif
+
 #include <boost/preprocessor/stringize.hpp>
 #include <boost/preprocessor/arithmetic/add.hpp>
+#include <boost/preprocessor/selection/min.hpp>
+#include <boost/preprocessor/facilities/expand.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 // Make sure DEBUG macro is defined consistently across platforms
 #if defined(_DEBUG) && !defined(DEBUG)
-#  define DEBUG 1
+#  define DEBUG
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(DEBUG) && !defined(HPX_DEBUG)
-#  define HPX_DEBUG 1
+#  define HPX_DEBUG
 #endif
 
-#if !defined(HPX_BUILD_TYPE)
-#  if defined(HPX_DEBUG)
-#    define HPX_BUILD_TYPE debug
-#  else
-#    define HPX_BUILD_TYPE release
-#  endif
+#if defined(HPX_DEBUG)
+#  define HPX_BUILD_TYPE debug
+#else
+#  define HPX_BUILD_TYPE release
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,12 +56,6 @@
 #define HPX_INITIAL_IP_ADDRESS      "127.0.0.1"
 
 ///////////////////////////////////////////////////////////////////////////////
-/// This defines if the Intel Thread Building Blocks library will be used
-#if !defined(HPX_USE_TBB)
-#  define HPX_USE_TBB 0
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of possible runtime instances in one
 /// executable
 #if !defined(HPX_RUNTIME_INSTANCE_LIMIT)
@@ -59,118 +63,142 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Properly handle all preprocessing limits
-#if !defined(HPX_LIMIT)
-#  define HPX_LIMIT 5
+// We currently do not support more than 20 arguments (ask if you need more)
+#if !defined(HPX_MAX_LIMIT)
+#  define HPX_MAX_LIMIT 20
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// We currently do not support more than 20 arguments (ask if you need more)
-#define HPX_MAX_LIMIT 20
+// Properly handle all preprocessing limits
+#if !defined(HPX_LIMIT)
+#  define HPX_LIMIT 5
+#elif (HPX_LIMIT < 5)
+#  error "HPX_LIMIT is too low, it must be at least 5"
+#elif (HPX_LIMIT > HPX_MAX_LIMIT) && \
+      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
+#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
+#endif
 
-// We need the same value as a string for partial preprocessing the files.
+// We need the same value as a string while partially preprocessing the files.
 #if defined(__WAVE__) && defined(HPX_CREATE_PREPROCESSED_FILES)
 #  define HPX_LIMIT_STR BOOST_PP_STRINGIZE(HPX_LIMIT)
 #endif
 
+// make sure Fusion sizes are adjusted appropriately as well
+#if HPX_LIMIT > 5 && !defined(FUSION_MAX_VECTOR_SIZE)
+#  define FUSION_MAX_VECTOR_SIZE 20
+#endif
+
+#if HPX_LIMIT > 6 && !defined(BOOST_FUSION_INVOKE_MAX_ARITY)
+#  define BOOST_FUSION_INVOKE_MAX_ARITY HPX_LIMIT
+#endif
+
+#if HPX_LIMIT > 6 && !defined(BOOST_FUSION_INVOKE_PROCEDURE_MAX_ARITY)
+#  define BOOST_FUSION_INVOKE_PROCEDURE_MAX_ARITY HPX_LIMIT
+#endif
+
+#if HPX_LIMIT > 6 && !defined(BOOST_FUSION_INVOKE_FUNCTION_OBJECT_MAX_ARITY)
+#  define BOOST_FUSION_INVOKE_FUNCTION_OBJECT_MAX_ARITY HPX_LIMIT
+#endif
+
+// make sure boost::result_of is adjusted appropriately as well
+#if HPX_LIMIT > 5 && !defined(BOOST_RESULT_OF_NUM_ARGS)
+#  define BOOST_RESULT_OF_NUM_ARGS 20
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of arguments an action can take
-#if !defined(HPX_ACTION_ARGUMENT_LIMIT)
+#if defined(HPX_ACTION_ARGUMENT_LIMIT)
+#  error HPX_ACTION_ARGUMENT_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #    define HPX_ACTION_ARGUMENT_LIMIT HPX_LIMIT
 #  else
-#    define HPX_ACTION_ARGUMENT_LIMIT HPX_PP_ROUND_UP(HPX_LIMIT)
+#    define HPX_ACTION_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(HPX_PP_ROUND_UP(HPX_LIMIT))
 #  endif
-#elif (HPX_ACTION_ARGUMENT_LIMIT < 4)
-#  error "HPX_ACTION_ARGUMENT_LIMIT is too low, it must be higher than 4"
-#elif (HPX_ACTION_ARGUMENT_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of arguments \a hpx#lcos#wait can take
-#if !defined(HPX_WAIT_ARGUMENT_LIMIT)
+#if defined(HPX_WAIT_ARGUMENT_LIMIT)
+#  error HPX_WAIT_ARGUMENT_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#    define HPX_WAIT_ARGUMENT_LIMIT HPX_LIMIT
+#    define HPX_WAIT_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(BOOST_PP_ADD(HPX_LIMIT, 3))
 #  else
-#    define HPX_WAIT_ARGUMENT_LIMIT HPX_PP_ROUND_UP(HPX_LIMIT)
+#    define HPX_WAIT_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(HPX_PP_ROUND_UP(HPX_LIMIT))
 #  endif
-#elif (HPX_WAIT_ARGUMENT_LIMIT < 4)
-#  error "HPX_WAIT_ARGUMENT_LIMIT is too low, it must be higher than 4"
-#elif (HPX_WAIT_ARGUMENT_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of arguments a component constructor can
 /// take
-#if !defined(HPX_COMPONENT_CREATE_ARGUMENT_LIMIT)
+#if defined(HPX_COMPONENT_CREATE_ARGUMENT_LIMIT)
+#  error HPX_COMPONENT_CREATE_ARGUMENT_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #    define HPX_COMPONENT_CREATE_ARGUMENT_LIMIT HPX_LIMIT
 #  else
-#    define HPX_COMPONENT_CREATE_ARGUMENT_LIMIT HPX_PP_ROUND_UP(HPX_LIMIT)
+#    define HPX_COMPONENT_CREATE_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(HPX_PP_ROUND_UP(HPX_LIMIT))
 #  endif
-#elif (HPX_COMPONENT_CREATE_ARGUMENT_LIMIT < 4)
-#  error "HPX_COMPONENT_CREATE_ARGUMENT_LIMIT is too low, it must be higher than 4"
-#elif (HPX_COMPONENT_CREATE_ARGUMENT_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of arguments a util::function can take.
 /// Note that this needs to be larger than HPX_ACTION_ARGUMENT_LIMIT by at
 /// least 3.
-#if !defined(HPX_FUNCTION_ARGUMENT_LIMIT)
+#if defined(HPX_FUNCTION_ARGUMENT_LIMIT)
+#  error HPX_FUNCTION_ARGUMENT_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#    define HPX_FUNCTION_ARGUMENT_LIMIT HPX_PP_ADD3(HPX_LIMIT)
+#    define HPX_FUNCTION_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(BOOST_PP_ADD(HPX_LIMIT, 3))
 #  else
-#    define HPX_FUNCTION_ARGUMENT_LIMIT HPX_PP_ROUND_UP_ADD3(HPX_ACTION_ARGUMENT_LIMIT)
+#    define HPX_FUNCTION_ARGUMENT_LIMIT \
+        BOOST_PP_EXPAND(BOOST_PP_ADD(HPX_PP_ROUND_UP(HPX_ACTION_ARGUMENT_LIMIT), 3))
 #  endif
-#elif (HPX_FUNCTION_ARGUMENT_LIMIT < 7)
-#  error "HPX_FUNCTION_ARGUMENT_LIMIT is too low, it must be higher than 7"
-#elif (HPX_FUNCTION_ARGUMENT_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
-#endif
-
-#if HPX_FUNCTION_ARGUMENT_LIMIT < (HPX_ACTION_ARGUMENT_LIMIT + 3)
-#  error "HPX_FUNCTION_ARGUMENT_LIMIT has to be larger than HPX_ACTION_ARGUMENT_LIMIT by at least 3."
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the maximum number of elements a util::tuple can have.
 /// Note that this needs to be at least of the same value as
 /// HPX_FUNCTION_ARGUMENT_LIMIT.
-#if !defined(HPX_TUPLE_LIMIT)
+#if defined(HPX_TUPLE_LIMIT)
+#  error HPX_TUPLE_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #    define HPX_TUPLE_LIMIT HPX_FUNCTION_ARGUMENT_LIMIT
 #  else
-#    define HPX_TUPLE_LIMIT HPX_PP_ROUND_UP(HPX_FUNCTION_ARGUMENT_LIMIT)
+#    define HPX_TUPLE_LIMIT HPX_FUNCTION_ARGUMENT_LIMIT
 #  endif
-#elif (HPX_TUPLE_LIMIT < 7)
-#  error "HPX_TUPLE_LIMIT is too low, it must be higher than 7"
-#elif (HPX_TUPLE_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
-#endif
-
-#if HPX_TUPLE_LIMIT < HPX_FUNCTION_ARGUMENT_LIMIT
-#   error "HPX_TUPLE_LIMIT has to be greater than or equal to HPX_FUNCTION_ARGUMENT_LIMIT."
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_LOCK_LIMIT)
+#if defined(HPX_LOCK_LIMIT)
+#  error HPX_LOCK_LIMIT cannot be set directly, set HPX_LIMIT instead
+#else
 #  if defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
 #    define HPX_LOCK_LIMIT HPX_LIMIT
 #  else
-#    define HPX_LOCK_LIMIT HPX_PP_ROUND_UP(HPX_LIMIT)
+#    define HPX_LOCK_LIMIT \
+        BOOST_PP_EXPAND(HPX_PP_ROUND_UP(HPX_LIMIT))
 #  endif
-#elif (HPX_LOCK_LIMIT > HPX_MAX_LIMIT) && \
-      !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)
-#  define HPX_USE_PREPROCESSOR_LIMIT_EXPANSION
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+/// This defines the type of the parcelport to be used during application
+/// bootstrap. This value can be changed at runtime by the configuration
+/// parameter:
+///
+///   hpx.parcel.bootstrap = ...
+///
+/// (or by setting the corresponding environment variable HPX_PARCEL_BOOTSTRAP).
+#if !defined(HPX_PARCEL_BOOTSTRAP)
+#  define HPX_PARCEL_BOOTSTRAP "tcp"
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -181,21 +209,32 @@
 ///   hpx.parcel.max_connections = ...
 ///
 /// (or by setting the corresponding environment variable
-/// HPX_MAX_PARCEL_CONNECTIONS).
-#if !defined(HPX_MAX_PARCEL_CONNECTIONS)
-#  define HPX_MAX_PARCEL_CONNECTIONS 512
+/// HPX_PARCEL_MAX_CONNECTIONS).
+#if !defined(HPX_PARCEL_MAX_CONNECTIONS)
+#  define HPX_PARCEL_MAX_CONNECTIONS 512
 #endif
 
-/// This defines the number of outgoing shmem (parcel-) connections kept alive
+/// This defines the number of outgoing ipc (parcel-) connections kept alive
 /// (to each of the other localities on the same node). This value can be changed
 /// at runtime by setting the configuration parameter:
 ///
-///   hpx.parcel.shmem.data_buffer_cache_size = ...
+///   hpx.parcel.ipc.data_buffer_cache_size = ...
 ///
 /// (or by setting the corresponding environment variable
-/// HPX_PARCEL_SHMEM_DATA_BUFFER_CACHE_SIZE).
-#if !defined(HPX_PARCEL_SHMEM_DATA_BUFFER_CACHE_SIZE)
-#  define HPX_PARCEL_SHMEM_DATA_BUFFER_CACHE_SIZE 512
+/// HPX_PARCEL_IPC_DATA_BUFFER_CACHE_SIZE).
+#if !defined(HPX_PARCEL_IPC_DATA_BUFFER_CACHE_SIZE)
+#  define HPX_PARCEL_IPC_DATA_BUFFER_CACHE_SIZE 512
+#endif
+
+/// This defines the number of MPI requests in flight
+/// This value can be changed at runtime by setting the configuration parameter:
+///
+///   hpx.parcel.mpi.max_requests = ...
+///
+/// (or by setting the corresponding environment variable
+/// HPX_PARCEL_MPI_MAX_REQUESTS).
+#if !defined(HPX_PARCEL_MPI_MAX_REQUESTS)
+#  define HPX_PARCEL_MPI_MAX_REQUESTS 2147483647
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -206,11 +245,30 @@
 ///   hpx.parcel.max_connections_per_locality = ...
 ///
 /// (or by setting the corresponding environment variable
-/// HPX_MAX_PARCEL_CONNECTIONS_PER_LOCALITY).
-#if !defined(HPX_MAX_PARCEL_CONNECTIONS_PER_LOCALITY)
-#  define HPX_MAX_PARCEL_CONNECTIONS_PER_LOCALITY 4
+/// HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY).
+#if !defined(HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY)
+#  define HPX_PARCEL_MAX_CONNECTIONS_PER_LOCALITY 4
 #endif
 
+///////////////////////////////////////////////////////////////////////////////
+/// This defines the maximally allowed message size for messages transferred
+/// between localities. This value can be changed at runtime by
+/// setting the configuration parameter:
+///
+///   hpx.parcel.max_message_size = ...
+///
+/// (or by setting the corresponding environment variable
+/// HPX_PARCEL_MAX_MESSAGE_SIZE).
+#if !defined(HPX_PARCEL_MAX_MESSAGE_SIZE)
+#  define HPX_PARCEL_MAX_MESSAGE_SIZE 1000000000
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// This defines the number of bytes of overhead it takes to serialize a
+// parcel.
+#if !defined(HPX_PARCEL_SERIALIZATION_OVERHEAD)
+#   define HPX_PARCEL_SERIALIZATION_OVERHEAD 512
+#endif
 
 /// This defines the number of AGAS address translations kept in the local
 /// cache on a per OS-thread basis (system wide used OS threads).
@@ -237,17 +295,10 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-/// This defines whether to use the portable binary archives for parcel
-/// serialization
-#if !defined(HPX_USE_PORTABLE_ARCHIVES)
-#  define HPX_USE_PORTABLE_ARCHIVES 1
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
 /// This defines the initial global reference count associated with any created
 /// object.
-#if !defined(HPX_INITIAL_GLOBALCREDIT)
-#  define HPX_INITIAL_GLOBALCREDIT 255
+#if !defined(HPX_GLOBALCREDIT_INITIAL)
+#  define HPX_GLOBALCREDIT_INITIAL 0x80000000ll     // 2 ^ 31, i.e. 2 ^ 0b11111
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -264,15 +315,10 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_USE_ITTNOTIFY)
-#  define HPX_USE_ITTNOTIFY 0
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
 /// By default, enable minimal thread deadlock detection in debug builds only.
 #if !defined(HPX_THREAD_MINIMAL_DEADLOCK_DETECTION)
 #  if defined(HPX_DEBUG)
-#    define HPX_THREAD_MINIMAL_DEADLOCK_DETECTION 1
+#    define HPX_THREAD_MINIMAL_DEADLOCK_DETECTION
 #  endif
 #endif
 
@@ -281,7 +327,7 @@
 /// only.
 #if !defined(HPX_THREAD_MAINTAIN_PARENT_REFERENCE)
 #  if defined(HPX_DEBUG)
-#    define HPX_THREAD_MAINTAIN_PARENT_REFERENCE 1
+#    define HPX_THREAD_MAINTAIN_PARENT_REFERENCE
 #  endif
 #endif
 
@@ -289,7 +335,7 @@
 /// By default, enable storing the thread phase in debug builds only.
 #if !defined(HPX_THREAD_MAINTAIN_PHASE_INFORMATION)
 #  if defined(HPX_DEBUG)
-#    define HPX_THREAD_MAINTAIN_PHASE_INFORMATION 1
+#    define HPX_THREAD_MAINTAIN_PHASE_INFORMATION
 #  endif
 #endif
 
@@ -297,7 +343,7 @@
 /// By default, enable storing the thread description in debug builds only.
 #if !defined(HPX_THREAD_MAINTAIN_DESCRIPTION)
 #  if defined(HPX_DEBUG)
-#    define HPX_THREAD_MAINTAIN_DESCRIPTION 1
+#    define HPX_THREAD_MAINTAIN_DESCRIPTION
 #  endif
 #endif
 
@@ -306,27 +352,7 @@
 /// accessing in debug builds only.
 #if !defined(HPX_THREAD_MAINTAIN_TARGET_ADDRESS)
 #  if defined(HPX_DEBUG)
-#    define HPX_THREAD_MAINTAIN_TARGET_ADDRESS 1
-#  endif
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-/// By default enable collecting queue wait times
-#if !defined(HPX_THREAD_MAINTAIN_QUEUE_WAITTIME)
-#  define HPX_THREAD_MAINTAIN_QUEUE_WAITTIME 1
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-/// By default, always enable storing the thread data.
-#if !defined(HPX_THREAD_MAINTAIN_THREAD_DATA)
-#  define HPX_THREAD_MAINTAIN_THREAD_DATA 1
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-/// By default, enable guard pages.
-#if defined(__linux) || defined(linux) || defined(__linux__) || defined(__FreeBSD__)
-#  if !defined(HPX_THREAD_GUARD_PAGE)
-#    define HPX_THREAD_GUARD_PAGE 1
+#    define HPX_THREAD_MAINTAIN_TARGET_ADDRESS
 #  endif
 #endif
 
@@ -334,22 +360,14 @@
 /// By default we do not maintain stack back-traces on suspension. This is a
 /// pure debugging aid to be able to see in the debugger where a suspended
 /// thread got stuck.
-#if !defined(HPX_THREAD_MAINTAIN_BACKTRACE_ON_SUSPENSION)
-#  define HPX_THREAD_MAINTAIN_BACKTRACE_ON_SUSPENSION 0
-#elif !defined(HPX_HAVE_STACKTRACES)
+#if defined(HPX_THREAD_MAINTAIN_BACKTRACE_ON_SUSPENSION) && \
+  !defined(HPX_HAVE_STACKTRACES)
 #  error HPX_THREAD_MAINTAIN_BACKTRACE_ON_SUSPENSION reqires HPX_HAVE_STACKTRACES to be defined!
 #endif
 
 /// By default we capture only 5 levels of stack back trace on suspension
-#if HPX_THREAD_MAINTAIN_BACKTRACE_ON_SUSPENSION && \
-    !defined(HPX_THREAD_BACKTRACE_ON_SUSPENSION_DEPTH)
+#if !defined(HPX_THREAD_BACKTRACE_ON_SUSPENSION_DEPTH)
 #  define HPX_THREAD_BACKTRACE_ON_SUSPENSION_DEPTH 5
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-// This defines the default installation location, should be set by build system
-#if !defined(HPX_PREFIX)
-#  define HPX_PREFIX "."
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -377,7 +395,9 @@
 #  define HPX_PATH_DELIMITERS               "/"
 #  ifdef __APPLE__    // apple
 #    define HPX_SHARED_LIB_EXTENSION        ".dylib"
-#  else               // linux & co
+#  elif defined(HPX_STATIC_LINKING)
+#    define HPX_SHARED_LIB_EXTENSION        ".a"
+#  else  // linux & co
 #    define HPX_SHARED_LIB_EXTENSION        ".so"
 #  endif
 #endif
@@ -385,9 +405,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(BOOST_WINDOWS)
 #  if defined(HPX_DEBUG)
-#    define HPX_MAKE_DLL_STRING(n) "lib" + n + "d" + HPX_SHARED_LIB_EXTENSION
+#    define HPX_MAKE_DLL_STRING(n)  "lib" + n + "d" + HPX_SHARED_LIB_EXTENSION
 #  else
-#    define HPX_MAKE_DLL_STRING(n) "lib" + n + HPX_SHARED_LIB_EXTENSION
+#    define HPX_MAKE_DLL_STRING(n)  "lib" + n + HPX_SHARED_LIB_EXTENSION
 #  endif
 #elif defined(HPX_DEBUG)
 #  define HPX_MAKE_DLL_STRING(n)   n + "d" + HPX_SHARED_LIB_EXTENSION
@@ -431,9 +451,6 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-#if !defined(HPX_DLL_STRING)
-#  define HPX_DLL_STRING HPX_MAKE_DLL_STRING(HPX_COMPONENT_NAME)
-#endif
 
 #if !defined(HPX_APPLICATION_STRING)
 #  if defined(HPX_APPLICATION_NAME)
@@ -446,22 +463,19 @@
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(BOOST_WINDOWS)
 #  define snprintf _snprintf
-#  if !defined(HPX_EMULATE_SWAP_CONTEXT)
-#    define HPX_EMULATE_SWAP_CONTEXT 0
-#  endif
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Count number of empty (no PX thread available) thread manager loop executions
+// Count number of empty (no HPX thread available) thread manager loop executions
 #if !defined(HPX_IDLE_LOOP_COUNT_MAX)
-#  define HPX_IDLE_LOOP_COUNT_MAX 20000
+#  define HPX_IDLE_LOOP_COUNT_MAX 200000
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Count number of busy thread manager loop executions before forcefully
 // cleaning up terminated thread objects
 #if !defined(HPX_BUSY_LOOP_COUNT_MAX)
-#  define HPX_BUSY_LOOP_COUNT_MAX 20000
+#  define HPX_BUSY_LOOP_COUNT_MAX 200000
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -485,15 +499,21 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Enable lock verification code which allows to check whether there are locks
 // held while HPX-threads are suspended and/or interrupted.
-#if !defined(HPX_VERIFY_LOCKS)
+#if !defined(HPX_HAVE_VERIFY_LOCKS)
 #  if defined(HPX_DEBUG)
-#    define HPX_VERIFY_LOCKS 1
+#    define HPX_HAVE_VERIFY_LOCKS
+#  endif
+#endif
+
+#if !defined(HPX_HAVE_VERIFY_LOCKS_GLOBALY)
+#  if defined(HPX_DEBUG)
+#    define HPX_HAVE_VERIFY_LOCKS_GLOBALY
 #  endif
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_SMALL_STACK_SIZE)
-#  if defined(BOOST_WINDOWS) && !defined(HPX_COROUTINE_USE_GENERIC_CONTEXT)
+#  if defined(BOOST_WINDOWS) && !defined(HPX_HAVE_GENERIC_CONTEXT_COROUTINES)
 #    define HPX_SMALL_STACK_SIZE    0x4000        // 16kByte
 #  else
 #    if defined(HPX_DEBUG)
@@ -535,34 +555,6 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Use std::bind if it's available and movable
-#if defined(HPX_UTIL_BIND)
-#  define HPX_STD_PLACEHOLDERS        ::hpx::util::placeholders
-#  define HPX_STD_BIND                ::hpx::util::bind
-#  define HPX_STD_PROTECT(f)          ::hpx::util::protect(f)
-#  define HPX_STD_REF(r)              ::boost::ref(r)
-#else
-#  if !defined(HPX_HAVE_CXX11_STD_BIND)
-#    if defined(HPX_PHOENIX_BIND)
-#      define HPX_STD_PLACEHOLDERS    ::boost::phoenix::placeholders
-#      define HPX_STD_BIND            ::boost::phoenix::bind
-#      define HPX_STD_REF(r)          ::boost::phoenix::ref(r)
-#      define HPX_STD_PROTECT(f)      ::boost::phoenix::lambda[f]
-#    else
-#      define HPX_STD_PLACEHOLDERS
-#      define HPX_STD_BIND            ::boost::bind
-#      define HPX_STD_REF(r)          ::boost::ref(r)
-#      define HPX_STD_PROTECT(f)      ::hpx::util::protect(f)
-#    endif
-#  else
-#    define HPX_STD_PLACEHOLDERS      ::std::placeholders
-#    define HPX_STD_BIND              ::std::bind
-#    define HPX_STD_REF(r)            ::std::ref(r)
-#    define HPX_STD_PROTECT(f)        ::hpx::util::protect(f)
-#  endif
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
 // Use std::tuple if it's available and movable
 #if defined(HPX_UTIL_TUPLE)
 #  define HPX_STD_TUPLE         ::hpx::util::tuple
@@ -583,13 +575,37 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Older Boost versions do not have BOOST_NOEXCEPT defined
 #if !defined(BOOST_NOEXCEPT)
-#define BOOST_NOEXCEPT
+#  define BOOST_NOEXCEPT
+#  define BOOST_NOEXCEPT_IF(Predicate)
+#  define BOOST_NOEXCEPT_EXPR(Expression) false
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Make sure Chrono is handled properly
-#if defined(HPX_INTERNAL_CHRONO) && BOOST_VERSION < 104700 && !defined(BOOST_CHRONO_NO_LIB)
-#  define BOOST_CHRONO_NO_LIB
+// Older Boost versions do not have BOOST_NOINLINE defined
+#if !defined(BOOST_NOINLINE)
+#  if defined(BOOST_MSVC)
+#    define BOOST_NOINLINE __declspec(noinline)
+#  else
+#    define BOOST_NOINLINE
+#  endif
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Older Boost versions do not have BOOST_NORETURN defined
+#if defined(BOOST_NORETURN)
+#  define HPX_ATTRIBUTE_NORETURN BOOST_NORETURN
+#elif defined(BOOST_ATTRIBUTE_NORETURN)
+#  define HPX_ATTRIBUTE_NORETURN BOOST_ATTRIBUTE_NORETURN
+#else
+#  define HPX_ATTRIBUTE_NORETURN
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// GCC has issues with forceinline and member function pointers
+#if defined(HPX_GCC_VERSION)
+#  define HPX_MAYBE_FORCEINLINE inline
+#else
+#  define HPX_MAYBE_FORCEINLINE BOOST_FORCEINLINE
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -597,20 +613,30 @@
 #if defined(__MIC__) && !defined(HPX_HAVE_MORE_THAN_64_THREADS)
 #  define HPX_HAVE_MORE_THAN_64_THREADS
 #endif
+#if defined(__MIC__) && !defined(HPX_MAX_CPU_COUNT)
+#  define HPX_MAX_CPU_COUNT 256
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
-#define HPX_AGAS_BOOTSTRAP_PREFIX   0U
+#define HPX_AGAS_BOOTSTRAP_PREFIX                    0U
 
-#define HPX_AGAS_NS_MSB             0x0000000000000001ULL
+#define HPX_AGAS_NS_MSB                              0x0000000000000001ULL
 
-#define HPX_AGAS_PRIMARY_NS_MSB     0x0000000100000001ULL
-#define HPX_AGAS_PRIMARY_NS_LSB     0x0000000000000001ULL
-#define HPX_AGAS_COMPONENT_NS_MSB   0x0000000100000001ULL
-#define HPX_AGAS_COMPONENT_NS_LSB   0x0000000000000002ULL
-#define HPX_AGAS_SYMBOL_NS_MSB      0x0000000100000001ULL
-#define HPX_AGAS_SYMBOL_NS_LSB      0x0000000000000003ULL
-#define HPX_AGAS_LOCALITY_NS_MSB    0x0000000100000001ULL
-#define HPX_AGAS_LOCALITY_NS_LSB    0x0000000000000004ULL
+#define HPX_AGAS_PRIMARY_NS_MSB                      0x0000000100000001ULL
+#define HPX_AGAS_PRIMARY_NS_LSB                      0x0000000000000001ULL
+#define HPX_AGAS_COMPONENT_NS_MSB                    0x0000000100000001ULL
+#define HPX_AGAS_COMPONENT_NS_LSB                    0x0000000000000002ULL
+#define HPX_AGAS_SYMBOL_NS_MSB                       0x0000000100000001ULL
+#define HPX_AGAS_SYMBOL_NS_LSB                       0x0000000000000003ULL
+#define HPX_AGAS_LOCALITY_NS_MSB                     0x0000000100000001ULL
+#define HPX_AGAS_LOCALITY_NS_LSB                     0x0000000000000004ULL
+
+#if defined(HPX_HAVE_SODIUM)
+#  define HPX_ROOT_CERTIFICATE_AUTHORITY_MSB         0x0000000100000001ULL
+#  define HPX_ROOT_CERTIFICATE_AUTHORITY_LSB         0x0000000000000005ULL
+#  define HPX_SUBORDINATE_CERTIFICATE_AUTHORITY_MSB  0x0000000000000001ULL      // this is made locality specific
+#  define HPX_SUBORDINATE_CERTIFICATE_AUTHORITY_LSB  0x0000000000000006ULL
+#endif
 
 #if !defined(HPX_NO_DEPRECATED)
 #  define HPX_DEPRECATED_MSG "This function is deprecated and will be removed in the future."
@@ -630,5 +656,3 @@
 #include <hpx/config/defaults.hpp>
 
 #endif
-
-

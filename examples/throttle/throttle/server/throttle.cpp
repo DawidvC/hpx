@@ -7,12 +7,13 @@
 #include <hpx/runtime/actions/continuation.hpp>
 #include <hpx/runtime/components/component_factory.hpp>
 #include <hpx/runtime.hpp>
-#include <hpx/util/unlock_lock.hpp>
+#include <hpx/util/scoped_unlock.hpp>
 
 #include <hpx/util/portable_binary_iarchive.hpp>
 #include <hpx/util/portable_binary_oarchive.hpp>
 
-#include <boost/assert.hpp>
+#include <hpx/util/assert.hpp>
+
 #include <boost/bind.hpp>
 #include <boost/thread.hpp>
 
@@ -24,7 +25,7 @@ namespace throttle { namespace server
     throttle::throttle()
     {
         const std::size_t num_threads = hpx::get_os_thread_count();
-        BOOST_ASSERT(num_threads != std::size_t(-1));
+        HPX_ASSERT(num_threads != std::size_t(-1));
         blocked_os_threads_.resize(num_threads);
 
         std::cerr << "Created throttle component!" << std::endl;
@@ -95,7 +96,7 @@ namespace throttle { namespace server
             boost::system_time xt(boost::get_system_time() +
                 boost::posix_time::milliseconds(100));
 
-            hpx::util::unlock_the_lock<mutex_type::scoped_lock> ul(l);
+            hpx::util::scoped_unlock<mutex_type::scoped_lock> ul(l);
             boost::thread::sleep(xt);
         }
 

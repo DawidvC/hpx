@@ -43,10 +43,11 @@
 #endif
 #endif
 
-#include <boost/config.hpp>
-#include <boost/assert.hpp>
-#include <boost/atomic.hpp>
+#include <hpx/util/assert.hpp>
 #include <hpx/util/get_and_reset_value.hpp>
+
+#include <boost/config.hpp>
+#include <boost/atomic.hpp>
 
 #if defined(__FreeBSD__) || (defined(_XOPEN_UNIX) && defined(_XOPEN_VERSION) && _XOPEN_VERSION >= 500)
 
@@ -57,7 +58,7 @@
 #include "pth/pth.h"
 #include <cerrno>
 
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
   namespace posix { namespace pth {
 
@@ -101,7 +102,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 #include <ucontext.h>
 #include <cstddef>                  // ptrdiff_t
 
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
   namespace posix { namespace ucontext {
 
@@ -186,8 +187,8 @@ namespace hpx { namespace util { namespace coroutines {
                    default_hint)
       {
           int  error = HPX_COROUTINE_SWAP_CONTEXT(&from.m_ctx, &to.m_ctx);
-          (void)error;
-          BOOST_ASSERT(error == 0);
+          HPX_UNUSED(error);
+          HPX_ASSERT(error == 0);
       }
 
     protected:
@@ -212,13 +213,13 @@ namespace hpx { namespace util { namespace coroutines {
           : m_stack_size(stack_size == -1? default_stack_size: stack_size),
             m_stack(alloc_stack(m_stack_size))
         {
-            BOOST_ASSERT(m_stack);
+            HPX_ASSERT(m_stack);
             typedef void cb_type(Functor*);
             cb_type * cb_ptr = &trampoline<Functor>;
             int error = HPX_COROUTINE_MAKE_CONTEXT(
                 &m_ctx, m_stack, m_stack_size, (void (*)(void*))(cb_ptr), &cb, NULL);
-            (void)error;
-            BOOST_ASSERT(error == 0);
+            HPX_UNUSED(error);
+            HPX_ASSERT(error == 0);
         }
 
         ~ucontext_context_impl()
@@ -239,9 +240,9 @@ namespace hpx { namespace util { namespace coroutines {
         static void thread_shutdown() {}
 
         void reset_stack() {}
-        void rebind_stack() 
+        void rebind_stack()
         {
-            if (m_stack) 
+            if (m_stack)
                 increment_stack_recycle_count();
         }
 

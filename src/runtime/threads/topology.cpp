@@ -16,6 +16,10 @@
 #include <cpu-features.h>
 #endif
 
+#if defined(__bgq__)
+#include <hwi/include/bqc/A2_inlines.h>
+#endif
+
 #if defined(_POSIX_VERSION)
 #include <sys/syscall.h>
 #include <sys/resource.h>
@@ -25,7 +29,7 @@
 
 namespace hpx { namespace threads
 {
-    mask_type noop_topology::empty_mask = mask_type();
+    mask_type noop_topology::empty_mask = mask_type(noop_topology::hardware_concurrency());
 }}
 
 #else
@@ -36,31 +40,8 @@ namespace hpx { namespace threads { namespace detail
 {
     std::size_t hwloc_hardware_concurrency()
     {
-        hwloc_topology_t topo;
-        int err = hwloc_topology_init(&topo);
-        if (err != 0)
-        {
-            HPX_THROW_EXCEPTION(hpx::no_success, "hwloc_hardware_concurrency",
-                "Failed to init hwloc hwloc_topology");
-        }
-
-        err = hwloc_topology_load(topo);
-        if (err != 0)
-        {
-            hwloc_topology_destroy(topo);
-            HPX_THROW_EXCEPTION(hpx::no_success, "hwloc_hardware_concurrency",
-                "Failed to load hwloc topology");
-        }
-        int num_of_pus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
-        if(num_of_pus < 0)
-        {
-            hwloc_topology_destroy(topo);
-            HPX_THROW_EXCEPTION(hpx::no_success, "hwloc_hardware_concurrency",
-                "Failed to get number of PUs");
-        }
-
-        hwloc_topology_destroy(topo);
-        return std::size_t(num_of_pus);
+        threads::topology& top = threads::create_topology();
+        return top.get_number_of_pus();
     }
 }}}
 #endif
@@ -87,7 +68,7 @@ namespace hpx { namespace threads
 
     bool topology::reduce_thread_priority(error_code& ec) const
     {
-#if defined(_POSIX_VERSION)
+#if defined(__linux__) && !defined(__ANDROID__) && !defined(__bgq__)
         pid_t tid;
         tid = syscall(SYS_gettid);
         if (setpriority(PRIO_PROCESS, tid, 19))
@@ -99,10 +80,12 @@ namespace hpx { namespace threads
 #elif defined(BOOST_MSVC)
         if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST))
         {
-            HPX_THROWS_IF(ec, no_success, "threadmanager_impl::tfunc", 
+            HPX_THROWS_IF(ec, no_success, "threadmanager_impl::tfunc",
                 "SetThreadPriority returned an error");
             return false;
         }
+#elif defined(__bgq__)
+        ThreadPriority_Low();
 #endif
         return true;
     }

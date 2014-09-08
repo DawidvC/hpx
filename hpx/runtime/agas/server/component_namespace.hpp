@@ -39,7 +39,7 @@ namespace server
 {
 
 // Base name used to register the component
-char const* const component_namespace_service_name = "component_namespace/";
+char const* const component_namespace_service_name = "component/";
 
 struct HPX_EXPORT component_namespace
   : components::fixed_component_base<component_namespace>
@@ -100,6 +100,7 @@ struct HPX_EXPORT component_namespace
         boost::int64_t get_iterate_types_count(bool);
         boost::int64_t get_component_type_name_count(bool);
         boost::int64_t get_num_localities_count(bool);
+        boost::int64_t get_overall_count(bool);
 
         boost::int64_t get_bind_prefix_time(bool);
         boost::int64_t get_bind_name_time(bool);
@@ -108,6 +109,7 @@ struct HPX_EXPORT component_namespace
         boost::int64_t get_iterate_types_time(bool);
         boost::int64_t get_component_type_name_time(bool);
         boost::int64_t get_num_localities_time(bool);
+        boost::int64_t get_overall_time(bool);
 
         // increment counter values
         void increment_bind_prefix_count();
@@ -259,15 +261,6 @@ struct HPX_EXPORT component_namespace
 
     HPX_DEFINE_COMPONENT_ACTION(component_namespace, remote_service, service_action);
     HPX_DEFINE_COMPONENT_ACTION(component_namespace, remote_bulk_service, bulk_service_action);
-
-    /// This is the default hook implementation for decorate_action which
-    /// does no hooking at all.
-    static HPX_STD_FUNCTION<threads::thread_function_type>
-    wrap_action(HPX_STD_FUNCTION<threads::thread_function_type> f,
-        naming::address::address_type)
-    {
-        return boost::move(f);
-    }
 };
 
 }}}

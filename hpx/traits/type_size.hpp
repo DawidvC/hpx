@@ -30,7 +30,7 @@ namespace hpx { namespace traits
     {
         typedef void uses_sizeof;
 
-        static BOOST_FORCEINLINE std::size_t call(T const& t)
+        static BOOST_FORCEINLINE std::size_t call(T const&)
         {
             return sizeof(T);
         }
@@ -42,12 +42,10 @@ namespace hpx { namespace traits
       : type_size<T>
     {};
 
-#if !defined(BOOST_NO_RVALUE_REFERENCES)
     template <typename T>
     struct type_size<T&&>
       : type_size<T>
     {};
-#endif
 
     ///////////////////////////////////////////////////////////////////////////
     // handle containers

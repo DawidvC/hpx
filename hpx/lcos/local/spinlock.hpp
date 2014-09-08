@@ -1,6 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2011 Bryce Lelbach
 //  Copyright (c) 2011-2012 Hartmut Kaiser
+//  Copyright (c) 2014 Thomas Heller
+//
 //  Copyright (c) 2008 Peter Dimov
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -42,8 +44,9 @@ namespace hpx { namespace lcos { namespace local
         boost::uint64_t v_;
 #endif
 
-        BOOST_MOVABLE_BUT_NOT_COPYABLE(spinlock)
+        HPX_MOVABLE_BUT_NOT_COPYABLE(spinlock)
 
+    public:
         ///////////////////////////////////////////////////////////////////////
         static void yield(std::size_t k)
         {
@@ -58,7 +61,7 @@ namespace hpx { namespace lcos { namespace local
 #endif
             else if(k < 32 || k & 1) //-V112
             {
-                if(hpx::threads::get_self_ptr())
+                if (hpx::threads::get_self_ptr())
                 {
                     hpx::this_thread::suspend(hpx::threads::pending,
                         "spinlock::yield");
@@ -78,7 +81,7 @@ namespace hpx { namespace lcos { namespace local
                 if (hpx::threads::get_self_ptr())
                 {
                     hpx::this_thread::suspend(hpx::threads::pending,
-                        "spinlock::yield");
+                        "local::spinlock::yield");
                 }
                 else
                 {
@@ -102,12 +105,13 @@ namespace hpx { namespace lcos { namespace local
         }
 
     public:
-        spinlock() : v_(0)
+        spinlock(char const* const desc = "hpx::lcos::local::spinlock")
+          : v_(0)
         {
-            HPX_ITT_SYNC_CREATE(this, "hpx::lcos::local::spinlock", "");
+            HPX_ITT_SYNC_CREATE(this, desc, "");
         }
 
-        spinlock(BOOST_RV_REF(spinlock) rhs)
+        spinlock(spinlock && rhs)
 #if defined(BOOST_WINDOWS)
           : v_(BOOST_INTERLOCKED_EXCHANGE(&rhs.v_, 0))
 #else
@@ -120,7 +124,7 @@ namespace hpx { namespace lcos { namespace local
             HPX_ITT_SYNC_DESTROY(this);
         }
 
-        spinlock& operator=(BOOST_RV_REF(spinlock) rhs)
+        spinlock& operator=(spinlock && rhs)
         {
             if (this != &rhs) {
                 unlock();
@@ -137,7 +141,7 @@ namespace hpx { namespace lcos { namespace local
         {
             HPX_ITT_SYNC_PREPARE(this);
 
-            for (std::size_t k = 0; !try_lock(); ++k)
+            for (std::size_t k = 0; !acquire_lock(); ++k)
             {
                 spinlock::yield(k);
             }
@@ -150,14 +154,9 @@ namespace hpx { namespace lcos { namespace local
         {
             HPX_ITT_SYNC_PREPARE(this);
 
-#if defined(BOOST_WINDOWS)
-            boost::uint64_t r = BOOST_INTERLOCKED_EXCHANGE(&v_, 1);
-            BOOST_COMPILER_FENCE
-#else
-            boost::uint64_t r = __sync_lock_test_and_set(&v_, 1);
-#endif
+            bool r = acquire_lock();
 
-            if (r == 0) {
+            if (r) {
                 HPX_ITT_SYNC_ACQUIRED(this);
                 util::register_lock(this);
                 return true;
@@ -171,17 +170,36 @@ namespace hpx { namespace lcos { namespace local
         {
             HPX_ITT_SYNC_RELEASING(this);
 
+            relinquish_lock();
+
+            HPX_ITT_SYNC_RELEASED(this);
+            util::unregister_lock(this);
+        }
+
+    private:
+        // returns whether the mutex has been acquired
+        bool acquire_lock()
+        {
+#if defined(BOOST_WINDOWS)
+            boost::uint64_t r = BOOST_INTERLOCKED_EXCHANGE(&v_, 1);
+            BOOST_COMPILER_FENCE
+#else
+            boost::uint64_t r = __sync_lock_test_and_set(&v_, 1);
+#endif
+            return r == 0;
+        }
+
+        void relinquish_lock()
+        {
 #if defined(BOOST_WINDOWS)
             BOOST_COMPILER_FENCE
             *const_cast<boost::uint64_t volatile*>(&v_) = 0;
 #else
             __sync_lock_release(&v_);
 #endif
-
-            HPX_ITT_SYNC_RELEASED(this);
-            util::unregister_lock(this);
         }
 
+    public:
         typedef boost::unique_lock<spinlock> scoped_lock;
         typedef boost::detail::try_lock_wrapper<spinlock> scoped_try_lock;
     };

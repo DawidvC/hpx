@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -15,7 +15,7 @@ namespace hpx { namespace components
     ///////////////////////////////////////////////////////////////////////////
     /// The \a runtime_support class is the client side representation of a
     /// \a server#runtime_support component
-    class runtime_support : public stubs::runtime_support
+    class HPX_EXPORT runtime_support : public stubs::runtime_support
     {
     private:
         typedef stubs::runtime_support base_type;
@@ -39,16 +39,8 @@ namespace hpx { namespace components
         ///         be created in blocks (i.e. more than one instance at once).
         ///         This function is used by the \a distributing_factory to
         ///         determine a correct allocation strategy
-        int get_factory_properties(components::component_type type)
-        {
-            return this->base_type::get_factory_properties(gid_, type);
-        }
-
-        lcos::future<int>
-        get_factory_properties_async(components::component_type type)
-        {
-            return this->base_type::get_factory_properties_async(gid_, type);
-        }
+        int get_factory_properties(components::component_type type);
+        lcos::future<int> get_factory_properties_async(components::component_type);
 
         /// Create a new component type using the runtime_support
         template <typename Component>
@@ -67,11 +59,11 @@ namespace hpx { namespace components
 
 #define HPX_RUNTIME_SUPPORT_CLIENT_CREATE(Z, N, D)                           \
         template <typename Component, BOOST_PP_ENUM_PARAMS(N, typename A)>   \
-        lcos::future<naming::id_type>                      \
+        lcos::future<naming::id_type>                                 \
         create_component_async(BOOST_PP_ENUM_BINARY_PARAMS(N, A, a))         \
         {                                                                    \
             return this->base_type::template create_component_async<Component>\
-                (gid_, HPX_ENUM_MOVE_IF_NO_REF_ARGS(N, A, a));               \
+                (gid_, HPX_ENUM_FORWARD_ARGS(N, A, a));                      \
         }                                                                    \
                                                                              \
         template <typename Component, BOOST_PP_ENUM_PARAMS(N, typename A)>   \
@@ -201,9 +193,9 @@ namespace hpx { namespace components
             this->base_type::get_config(gid_, ini);
         }
 
-        void get_instance_count(components::component_type type)
+        boost::int32_t  get_instance_count(components::component_type type)
         {
-            this->base_type::get_instance_count(gid_, type);
+            return this->base_type::get_instance_count(gid_, type);
         }
 
         ///////////////////////////////////////////////////////////////////////

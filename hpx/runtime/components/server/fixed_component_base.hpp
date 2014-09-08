@@ -10,7 +10,6 @@
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/exception.hpp>
 #include <hpx/runtime/components/component_type.hpp>
-#include <hpx/runtime/parcelset/parcelhandler.hpp>
 #include <hpx/runtime/naming/name.hpp>
 #include <hpx/runtime/naming/address.hpp>
 #include <hpx/runtime/applier/applier.hpp>
@@ -49,14 +48,14 @@ public:
 
     /// \brief finalize() will be called just before the instance gets
     ///        destructed
-    void finalize() 
+    void finalize()
     {
         /// Unbind the GID if it's not this instantiations fixed gid and is
         /// is not invalid.
         if (naming::invalid_gid != gid_)
         {
             error_code ec(lightweight);     // ignore errors
-            applier::unbind_gid(gid_, ec);
+            applier::unbind_gid_local(gid_, ec);
             gid_ = naming::gid_type();      // invalidate GID
         }
     }
@@ -74,8 +73,17 @@ public:
     /// \brief Return the component's fixed GID.
     ///
     /// \returns The fixed global id (GID) for this component
-    naming::gid_type get_base_gid() const
+    naming::gid_type get_base_gid(
+        naming::gid_type const& assign_gid = naming::invalid_gid) const
     {
+        if (assign_gid)
+        {
+            HPX_THROW_EXCEPTION(bad_parameter,
+                "fixed_component_base::get_base_gid",
+                "fixed_components must be assigned new gids on creation");
+            return naming::invalid_gid;
+        }
+
         if (!gid_)
         {
             naming::address addr(applier::get_applier().here(),
@@ -85,10 +93,10 @@ public:
             gid_ = naming::gid_type(msb_, lsb_);
 
             // Try to bind the preset GID first
-            if (!applier::bind_gid(gid_, addr))
+            if (!applier::bind_gid_local(gid_, addr))
             {
                 hpx::util::osstream strm;
-                strm << "could not bind_gid: " << gid_;
+                strm << "could not bind_gid(local): " << gid_;
                 gid_ = naming::gid_type();   // invalidate GID
                 HPX_THROW_EXCEPTION(duplicate_component_address,
                     "fixed_component_base<Component>::get_base_gid",
@@ -128,6 +136,47 @@ public:
         }
     }
 
+#if defined(HPX_HAVE_SECURITY)
+    static components::security::capability get_required_capabilities(
+        components::security::traits::capability<>::capabilities caps)
+    {
+        return components::default_component_creation_capabilities(caps);
+    }
+#endif
+
+    // This component type does not support migration.
+    static BOOST_CONSTEXPR bool supports_migration() { return false; }
+
+    // Pinning functionality
+    void pin() {}
+    void unpin() {}
+    boost::uint32_t pin_count() const { return 0; }
+    void mark_as_migrated()
+    {
+        // If this assertion is triggered then this component instance is being
+        // migrated even if the component type has not been enabled to support
+        // migration.
+        HPX_ASSERT(false);
+    }
+
+    /// This is the default hook implementation for decorate_action which
+    /// does no hooking at all.
+    template <typename F>
+    static threads::thread_function_type
+    decorate_action(naming::address::address_type, F && f)
+    {
+        return std::forward<F>(f);
+    }
+
+    /// This is the default hook implementation for schedule_thread which
+    /// forwards to the default scheduler.
+    static void schedule_thread(naming::address::address_type,
+        threads::thread_init_data& data,
+        threads::thread_state_enum initial_state)
+    {
+        hpx::threads::register_work_plain(data, initial_state); //-V106
+    }
+
 private:
     mutable naming::gid_type gid_;
     boost::uint64_t msb_;
@@ -142,12 +191,12 @@ namespace detail
     {
         static Component* alloc(std::size_t count)
         {
-            BOOST_ASSERT(false);        // this shouldn't ever be called
+            HPX_ASSERT(false);        // this shouldn't ever be called
             return 0;
         }
         static void free(void* p, std::size_t count)
         {
-            BOOST_ASSERT(false);        // this shouldn't ever be called
+            HPX_ASSERT(false);        // this shouldn't ever be called
         }
     };
 }
@@ -166,7 +215,7 @@ class fixed_component : public Component
     ///         initialization of instances of the derived components.
     static Component* create(std::size_t count)
     {
-        BOOST_ASSERT(false);        // this shouldn't ever be called
+        HPX_ASSERT(false);        // this shouldn't ever be called
         return 0;
     }
 
@@ -174,7 +223,7 @@ class fixed_component : public Component
     ///         de-allocation of instances of the derived components.
     static void destroy(Component* p, std::size_t count = 1)
     {
-        BOOST_ASSERT(false);        // this shouldn't ever be called
+        HPX_ASSERT(false);        // this shouldn't ever be called
     }
 };
 

@@ -20,9 +20,9 @@
 #ifndef JT28092007_BOOST_TSS_IMPL_WIN32
 #define JT28092007_BOOST_TSS_IMPL_WIN32
 
+#include <hpx/util/assert.hpp>
 #include <vector>
 #include <memory>
-#include <boost/assert.hpp>
 
 #   include <windef.h>
 
@@ -62,7 +62,7 @@ inline void init_tss_data() {
     //Allocate tls slot
 
     // if you get an assertion here, this function was called twice - should never happen!
-    BOOST_ASSERT( tss_data_native_key() == TLS_OUT_OF_INDEXES);
+    HPX_ASSERT( tss_data_native_key() == TLS_OUT_OF_INDEXES);
     // now, allocate it
     tss_data_native_key() = TlsAlloc();
 

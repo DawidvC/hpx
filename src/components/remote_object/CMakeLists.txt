@@ -7,13 +7,7 @@
 ###############################################################################
 set(root "${hpx_SOURCE_DIR}/hpx/components/remote_object")
 
-if(HPX_DEFAULT_BUILD_TARGETS)
-  add_hpx_component(remote_object
-    FOLDER "Core/Components"
-    HEADER_ROOT ${root}
-    AUTOGLOB
-    ESSENTIAL)
-else()
+if(HPX_BUILD_DEFAULT_TARGETS)
   add_hpx_component(remote_object
     FOLDER "Core/Components"
     HEADER_ROOT ${root}
@@ -22,21 +16,23 @@ endif()
 
 add_hpx_pseudo_dependencies(components.remote_object
                             remote_object_component)
+add_hpx_pseudo_dependencies(core
+                          components.remote_object)
 
 ################################################################################
 # add headers to partial_preprocessing
-if(${BOOST_MINOR_VERSION} GREATER 50) 
+if(Boost_VERSION GREATER 105000)
   hpx_partial_preprocess_header(
       "hpx/components/remote_object/distributed_new.hpp"
-      LIMIT HPX_FUNCTION_ARGUMENT_LIMIT
+      LIMIT HPX_LIMIT
   )
   hpx_partial_preprocess_header(
       "hpx/components/remote_object/ctor_fun.hpp"
-      LIMIT HPX_FUNCTION_ARGUMENT_LIMIT
+      LIMIT HPX_LIMIT
   )
   hpx_partial_preprocess_header(
       "hpx/components/remote_object/new.hpp"
-      LIMIT HPX_FUNCTION_ARGUMENT_LIMIT
+      LIMIT HPX_LIMIT
   )
 endif()
 

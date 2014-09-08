@@ -20,27 +20,29 @@
 // IN GENERAL, ARCHIVES CREATED WITH THIS CLASS WILL NOT BE READABLE
 // ON PLATFORM APART FROM THE ONE THEY ARE CREATE ON
 
+#include <hpx/util/assert.hpp>
+#include <hpx/util/binary_filter.hpp>
+#include <hpx/util/ochunk_manager.hpp>
+
 #include <iosfwd>
 #include <string>
 #include <cstring> // memcpy
 #include <cstddef> // size_t
 #include <vector>
 
-#include <boost/assert.hpp>
 #include <boost/config.hpp>
 #include <boost/cstdint.hpp>
 #include <boost/integer.hpp>
 #include <boost/integer_traits.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
+#include <boost/ref.hpp>
 
 #include <boost/serialization/is_bitwise_serializable.hpp>
 #include <boost/mpl/placeholders.hpp>
 #include <boost/serialization/array.hpp>
 
 #include <boost/archive/detail/abi_prefix.hpp> // must be the last header
-
-#include <hpx/util/binary_filter.hpp>
 
 #if !defined(BOOST_WINDOWS)
 #  pragma GCC visibility push(default)
@@ -60,77 +62,6 @@
 
 namespace hpx { namespace util
 {
-    namespace detail
-    {
-        struct erase_container_type
-        {
-            virtual ~erase_container_type() {}
-            virtual void set_filter(binary_filter* filter) = 0;
-            virtual void save_binary(void const* address, std::size_t count) = 0;
-        };
-
-        template <typename Container>
-        struct container_type : erase_container_type
-        {
-            container_type(Container& cont)
-              : cont_(cont), current_(0)
-            {}
-            ~container_type()
-            {
-                if (filter_.get()) {
-                    std::size_t written = 0;
-                    do {
-                        bool flushed = filter_->flush(&cont_[current_],
-                            cont_.size()-current_, written);
-
-                        current_ += written;
-                        if (flushed)
-                            break;
-
-                        // resize container
-                        cont_.resize(cont_.size()*2);
-
-                    } while (true);
-
-                    cont_.resize(current_);         // truncate container
-                }
-            }
-
-            void set_filter(binary_filter* filter)
-            {
-                filter_.reset(filter);
-            }
-
-            void save_binary(void const* address, std::size_t count)
-            {
-                if (count != 0)
-                {
-                    cont_.resize(cont_.size() + count);
-                    if (filter_.get()) {
-                        filter_->save(address, count);
-                    }
-                    else {
-                        std::memcpy(&cont_[current_], address, count);
-                        current_ += count;
-                    }
-
-                    if (cont_.size() < current_)
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            boost::archive::archive_exception(
-                                boost::archive::archive_exception::output_stream_error,
-                                "archive data bstream is too short"));
-                        return;
-                    }
-                }
-            }
-
-            Container& cont_;
-            std::size_t current_;
-            HPX_STD_UNIQUE_PTR<binary_filter> filter_;
-        };
-    }
-
     /////////////////////////////////////////////////////////////////////
     // class basic_binary_oprimitive - binary output of primitives to a
     // character buffer
@@ -144,6 +75,12 @@ namespace hpx { namespace util
             buffer_->save_binary(address, count);
         }
 
+        void save_binary_chunk(void const* address, std::size_t count)
+        {
+            size_ += count;
+            buffer_->save_binary_chunk(address, count);
+        }
+
 #ifndef BOOST_NO_MEMBER_TEMPLATE_FRIENDS
         friend class save_access;
     protected:
@@ -151,8 +88,9 @@ namespace hpx { namespace util
     public:
 #endif
         // this is the output buffer
+        boost::uint32_t flags_;
         std::size_t size_;
-        boost::shared_ptr<detail::erase_container_type> buffer_;
+        boost::shared_ptr<detail::erase_ocontainer_type> buffer_;
 
         // return a pointer to the most derived class
         Archive* This()
@@ -171,7 +109,7 @@ namespace hpx { namespace util
         // on load.
         void save(bool const& t)
         {
-            BOOST_ASSERT(0 == static_cast<int>(t) || 1 == static_cast<int>(t));
+            HPX_ASSERT(0 == static_cast<int>(t) || 1 == static_cast<int>(t));
             save_binary(&t, sizeof(t));
         }
 
@@ -192,14 +130,26 @@ namespace hpx { namespace util
         }
 #endif
 
-        HPX_ALWAYS_EXPORT void init(unsigned flags);
+        HPX_ALWAYS_EXPORT void init(unsigned flags_value);
 
         template <typename Container>
-        basic_binary_oprimitive(Container& buffer, unsigned flags = 0)
-          : size_(0),
-            buffer_(boost::make_shared<detail::container_type<Container> >(buffer))
+        basic_binary_oprimitive(Container& buffer, unsigned flags_value = 0)
+          : flags_(flags_value & all_archive_flags),
+            size_(0),
+            buffer_(boost::make_shared<detail::ocontainer_type<Container> >(boost::ref(buffer)))
         {
-            init(flags);
+            init(flags_value);
+        }
+
+        template <typename Container>
+        basic_binary_oprimitive(Container& buffer, std::vector<serialization_chunk>* chunks,
+                unsigned flags_value = 0)
+          : flags_(flags_value & all_archive_flags),
+            size_(0),
+            buffer_(boost::make_shared<detail::ocontainer_type<Container> >(
+                boost::ref(buffer), chunks))
+        {
+            init(flags_value);
         }
 
     public:
@@ -230,12 +180,20 @@ namespace hpx { namespace util
             return size_;
         }
 
+        boost::uint32_t flags() const
+        {
+            return flags_;
+        }
+
     protected:
         // the optimized save_array dispatches to save_binary
         template <typename T>
-        void save_array(boost::serialization::array<T> const& a, unsigned int)
+        void save_array(boost::serialization::array<T> const& a)
         {
-            save_binary(a.address(), a.count()*sizeof(T));
+            if (flags() & disable_data_chunking)
+                save_binary(a.address(), a.count()*sizeof(T));
+            else
+                save_binary_chunk(a.address(), a.count()*sizeof(T));
         }
 
         void set_filter(binary_filter* filter)

@@ -1,5 +1,6 @@
-//  Copyright (c) 2008-2009 Chirag Dekate, Hartmut Kaiser, Anshul Tandon
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
+//  Copyright (c) 2008-2009 Chirag Dekate, Anshul Tandon
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -11,7 +12,8 @@
 #include <hpx/util/move.hpp>
 #include <hpx/util/backtrace.hpp>
 #include <hpx/exception.hpp>
-#include <hpx/runtime/threads/thread_init_data.hpp>
+#include <hpx/runtime/naming/address.hpp>
+#include <hpx/runtime/threads/thread_executor.hpp>
 
 #include <boost/date_time/posix_time/posix_time_duration.hpp>
 #include <boost/date_time/posix_time/ptime.hpp>
@@ -20,6 +22,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace threads
 {
+    struct thread_init_data;
+
     ///////////////////////////////////////////////////////////////////////////
     /// \brief  Set the thread state of the \a thread referenced by the
     ///         thread_id \a id.
@@ -53,7 +57,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT thread_state set_thread_state(thread_id_type id,
+    HPX_API_EXPORT thread_state set_thread_state(thread_id_type const& id,
         thread_state_enum state = pending,
         thread_state_ex_enum stateex = wait_signaled,
         thread_priority priority = thread_priority_normal,
@@ -85,12 +89,24 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type id,
+    HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type const& id,
         boost::posix_time::ptime const& at_time,
         thread_state_enum state = pending,
         thread_state_ex_enum stateex = wait_timeout,
         thread_priority priority = thread_priority_normal,
         error_code& ec = throws);
+
+    template <typename Clock, typename Duration>
+    thread_id_type set_thread_state(thread_id_type const& id,
+        boost::chrono::time_point<Clock, Duration> const& abs_time,
+        thread_state_enum state = pending,
+        thread_state_ex_enum stateex = wait_timeout,
+        thread_priority priority = thread_priority_normal,
+        error_code& ec = throws)
+    {
+        return set_thread_state(id, util::to_ptime(abs_time), state,
+            stateex, priority, ec);
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief  Set the thread state of the \a thread referenced by the
@@ -118,12 +134,24 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type id,
+    HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type const& id,
         boost::posix_time::time_duration const& after_duration,
         thread_state_enum state = pending,
         thread_state_ex_enum stateex = wait_timeout,
         thread_priority priority = thread_priority_normal,
         error_code& ec = throws);
+
+    template <typename Rep, typename Period>
+    thread_id_type set_thread_state(thread_id_type const& id,
+        boost::chrono::duration<Rep, Period> const& rel_time,
+        thread_state_enum state = pending,
+        thread_state_ex_enum stateex = wait_timeout,
+        thread_priority priority = thread_priority_normal,
+        error_code& ec = throws)
+    {
+        return set_thread_state(id, util::to_time_duration(rel_time), state,
+            stateex, priority, ec);
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     /// The function get_thread_description is part of the thread related API
@@ -145,14 +173,14 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT char const* get_thread_description(thread_id_type id,
+    HPX_API_EXPORT char const* get_thread_description(thread_id_type const& id,
         error_code& ec = throws);
-    HPX_API_EXPORT char const* set_thread_description(thread_id_type id,
+    HPX_API_EXPORT char const* set_thread_description(thread_id_type const& id,
         char const* desc = 0, error_code& ec = throws);
 
-    HPX_API_EXPORT char const* get_thread_lco_description(thread_id_type id,
+    HPX_API_EXPORT char const* get_thread_lco_description(thread_id_type const& id,
         error_code& ec = throws);
-    HPX_API_EXPORT char const* set_thread_lco_description(thread_id_type id,
+    HPX_API_EXPORT char const* set_thread_lco_description(thread_id_type const& id,
         char const* desc = 0, error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -175,10 +203,17 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
+#ifdef HPX_THREAD_MAINTAIN_FULLBACKTRACE_ON_SUSPENSION
+    HPX_API_EXPORT char const* get_thread_backtrace(
+        thread_id_type const& id, error_code& ec = throws);
+    HPX_API_EXPORT char const* set_thread_backtrace(
+        thread_id_type const& id, char const* bt = 0, error_code& ec = throws);
+#else
     HPX_API_EXPORT util::backtrace const* get_thread_backtrace(
-        thread_id_type id, error_code& ec = throws);
+        thread_id_type const& id, error_code& ec = throws);
     HPX_API_EXPORT util::backtrace const* set_thread_backtrace(
-        thread_id_type id, util::backtrace const* bt = 0, error_code& ec = throws);
+        thread_id_type const& id, util::backtrace const* bt = 0, error_code& ec = throws);
+#endif
 
     ///////////////////////////////////////////////////////////////////////////
     /// The function get_thread_state is part of the thread related API. It
@@ -200,7 +235,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT thread_state get_thread_state(thread_id_type id,
+    HPX_API_EXPORT thread_state get_thread_state(thread_id_type const& id,
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -223,7 +258,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT std::size_t get_thread_phase(thread_id_type id,
+    HPX_API_EXPORT std::size_t get_thread_phase(thread_id_type const& id,
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -248,7 +283,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT bool get_thread_interruption_enabled(thread_id_type id,
+    HPX_API_EXPORT bool get_thread_interruption_enabled(thread_id_type const& id,
         error_code& ec = throws);
 
     /// Set whether the given thread can be interrupted at this point.
@@ -269,7 +304,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT bool set_thread_interruption_enabled(thread_id_type id,
+    HPX_API_EXPORT bool set_thread_interruption_enabled(thread_id_type const& id,
         bool enable, error_code& ec = throws);
 
     /// Returns whether the given thread has been flagged for interruption.
@@ -289,7 +324,7 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT bool get_thread_interruption_requested(thread_id_type id,
+    HPX_API_EXPORT bool get_thread_interruption_requested(thread_id_type const& id,
         error_code& ec = throws);
 
     /// Flag the given thread for interruption.
@@ -308,10 +343,10 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT void interrupt_thread(thread_id_type id, bool flag,
+    HPX_API_EXPORT void interrupt_thread(thread_id_type const& id, bool flag,
         error_code& ec = throws);
 
-    inline void interrupt_thread(thread_id_type id, error_code& ec = throws)
+    inline void interrupt_thread(thread_id_type const& id, error_code& ec = throws)
     {
         interrupt_thread(id, true, ec);
     }
@@ -331,14 +366,14 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT void interruption_point(thread_id_type id,
+    HPX_API_EXPORT void interruption_point(thread_id_type const& id,
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     /// Return priority of the given thread
     ///
-    /// \param id         [in] The thread id of the thread which should be
-    ///                   interrupted.
+    /// \param id         [in] The thread id of the thread whose priority
+    ///                   is queried.
     /// \param ec         [in,out] this represents the error status on exit,
     ///                   if this is pre-initialized to \a hpx#throws
     ///                   the function will throw on error instead.
@@ -349,26 +384,59 @@ namespace hpx { namespace threads
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
     HPX_API_EXPORT threads::thread_priority get_thread_priority(
-        thread_id_type id, error_code& ec = throws);
+        thread_id_type const& id, error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_API_EXPORT void run_thread_exit_callbacks(thread_id_type id,
+    /// Return stack size of the given thread
+    ///
+    /// \param id         [in] The thread id of the thread whose priority
+    ///                   is queried.
+    /// \param ec         [in,out] this represents the error status on exit,
+    ///                   if this is pre-initialized to \a hpx#throws
+    ///                   the function will throw on error instead.
+    ///
+    /// \note             As long as \a ec is not pre-initialized to
+    ///                   \a hpx#throws this function doesn't
+    ///                   throw but returns the result code using the
+    ///                   parameter \a ec. Otherwise it throws an instance
+    ///                   of hpx#exception.
+    HPX_API_EXPORT std::ptrdiff_t get_stack_size(
+        thread_id_type const& id, error_code& ec = throws);
+
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_API_EXPORT void run_thread_exit_callbacks(thread_id_type const& id,
         error_code& ec = throws);
 
-    HPX_API_EXPORT bool add_thread_exit_callback(thread_id_type id,
+    HPX_API_EXPORT bool add_thread_exit_callback(thread_id_type const& id,
         HPX_STD_FUNCTION<void()> const& f, error_code& ec = throws);
 
-    HPX_API_EXPORT void free_thread_exit_callbacks(thread_id_type id,
+    HPX_API_EXPORT void free_thread_exit_callbacks(thread_id_type const& id,
         error_code& ec = throws);
 
-#if HPX_THREAD_MAINTAIN_THREAD_DATA
+#if defined(HPX_THREAD_MAINTAIN_LOCAL_STORAGE)
     ///////////////////////////////////////////////////////////////////////////
-    HPX_API_EXPORT std::size_t get_thread_data(thread_id_type id,
+    HPX_API_EXPORT std::size_t get_thread_data(thread_id_type const& id,
         error_code& ec = throws);
 
-    HPX_API_EXPORT std::size_t set_thread_data(thread_id_type id,
+    HPX_API_EXPORT std::size_t set_thread_data(thread_id_type const& id,
         std::size_t data, error_code& ec = throws);
 #endif
+
+    /// Returns a non-null pointer to the executor which was used to create
+    /// the given thread.
+    ///
+    /// \throws If <code>&ec != &throws</code>, never throws, but will set \a ec
+    ///         to an appropriate value when an error occurs. Otherwise, this
+    ///         function will throw an \a hpx#exception with an error code of
+    ///         \a hpx#yield_aborted if it is signaled with \a wait_aborted.
+    ///         If called outside of a HPX-thread, this function will throw
+    ///         an \a hpx#exception with an error code of \a hpx::null_thread_id.
+    ///         If this function is called while the thread-manager is not
+    ///         running, it will throw an \a hpx#exception with an error code of
+    ///         \a hpx#invalid_status.
+    ///
+    HPX_API_EXPORT threads::executor get_executor(
+        thread_id_type const& id, error_code& ec = throws);
 }}
 
 namespace hpx { namespace this_thread
@@ -417,6 +485,15 @@ namespace hpx { namespace this_thread
         char const* description = "this_thread::suspend",
         error_code& ec = throws);
 
+    template <typename Clock, typename Duration>
+    threads::thread_state_ex_enum suspend(
+        boost::chrono::time_point<Clock, Duration> const& abs_time,
+        char const* description = "this_thread::suspend",
+        error_code& ec = throws)
+    {
+        return suspend(util::to_ptime(abs_time), description, ec);
+    }
+
     /// The function \a suspend will return control to the thread manager
     /// (suspends the current thread). It sets the new state of this thread
     /// to \a suspended and schedules a wakeup for this threads after the given
@@ -438,6 +515,15 @@ namespace hpx { namespace this_thread
         boost::posix_time::time_duration const&,
         char const* description = "this_thread::suspend",
         error_code& ec = throws);
+
+    template <typename Rep, typename Period>
+    threads::thread_state_ex_enum suspend(
+        boost::chrono::duration<Rep, Period> const& rel_time,
+        char const* description = "this_thread::suspend",
+        error_code& ec = throws)
+    {
+        return suspend(util::to_time_duration(rel_time), description, ec);
+    }
 
     /// The function \a suspend will return control to the thread manager
     /// (suspends the current thread). It sets the new state of this thread
@@ -474,7 +560,7 @@ namespace hpx { namespace applier
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes one argument (a
+    ///                   HPX-thread interface, i.e. it takes one argument (a
     ///                   \a threads#thread_state_ex_enum) and returns a
     ///                   \a threads#thread_state_enum.
     /// \param description [in] A optional string describing the newly created
@@ -490,16 +576,16 @@ namespace hpx { namespace applier
     ///                   will result in creating a thread object later (if
     ///                   no work is available any more). The default is to
     ///                   immediately create the thread object.
-    /// \param priority   [in] This is the priority the newly created PX-thread
+    /// \param priority   [in] This is the priority the newly created HPX-thread
     ///                   should be executed with. The default is \a
     ///                   threads#thread_priority_normal. This parameter is not
     ///                   guaranteed to be taken into account as it depends on
     ///                   the used scheduling policy whether priorities are
     ///                   supported in the first place.
     /// \param os_thread  [in] The number of the shepherd thread the newly
-    ///                   created PX-thread should run on. If this is given it
+    ///                   created HPX-thread should run on. If this is given it
     ///                   will be no more than a hint in any case, mainly
-    ///                   because even if the PX-thread gets scheduled on the
+    ///                   because even if the HPX-thread gets scheduled on the
     ///                   queue of the requested shepherd thread, it still can
     ///                   be stolen by another shepherd thread. If this is not
     ///                   given, the system will select a shepherd thread.
@@ -508,17 +594,17 @@ namespace hpx { namespace applier
     ///                   the function will throw on error instead.
     ///
     /// \returns This function will return the internal id of the newly created
-    ///          PX-thread or threads#invalid_thread_id (if run_now is set to
+    ///          HPX-thread or threads#invalid_thread_id (if run_now is set to
     ///          `false`).
     ///
     /// \note The value returned by the thread function will be interpreted by
-    ///       the thread manager as the new thread state the executed PX-thread
-    ///       needs to be switched to. Normally, PX-threads will either return
+    ///       the thread manager as the new thread state the executed HPX-thread
+    ///       needs to be switched to. Normally, HPX-threads will either return
     ///       \a threads#terminated (if the thread should be destroyed) or
     ///       \a threads#suspended (if the thread needs to be suspended because
     ///       it is waiting for an external event to happen). The external
     ///       event will set the state of the thread back to pending, which
-    ///       will re-schedule the PX-thread.
+    ///       will re-schedule the HPX-thread.
     ///
     /// \throws invalid_status if the runtime system has not been started yet.
     ///
@@ -529,7 +615,7 @@ namespace hpx { namespace applier
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
     HPX_API_EXPORT threads::thread_id_type register_thread_plain(
-        BOOST_RV_REF(HPX_STD_FUNCTION<threads::thread_function_type>) func,
+        threads::thread_function_type && func,
         char const* description = 0,
         threads::thread_state_enum initial_state = threads::pending,
         bool run_now = true,
@@ -544,7 +630,7 @@ namespace hpx { namespace applier
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes one argument (a
+    ///                   HPX-thread interface, i.e. it takes one argument (a
     ///                   \a threads#thread_state_ex_enum). The thread will be
     ///                   terminated after the function returns.
     ///
@@ -552,7 +638,7 @@ namespace hpx { namespace applier
     ///       \a threads#register_thread_plain
     ///
     HPX_API_EXPORT threads::thread_id_type register_thread(
-        BOOST_RV_REF(HPX_STD_FUNCTION<void(threads::thread_state_ex_enum)>) func,
+        util::unique_function_nonser<void(threads::thread_state_ex_enum)> && func,
         char const* description = 0,
         threads::thread_state_enum initial_state = threads::pending,
         bool run_now = true,
@@ -561,20 +647,43 @@ namespace hpx { namespace applier
         threads::thread_stacksize stacksize = threads::thread_stacksize_default,
         error_code& ec = throws);
 
+    /// \brief Create a new \a thread using the given function as the work to
+    ///        be executed. The work item can't be suspended when
+    ///        executing.
+    ///
+    /// \param func       [in] The function to be executed as the thread-function.
+    ///                   This function has to expose the minimal low level
+    ///                   HPX-thread interface, i.e. it takes one argument (a
+    ///                   \a threads#thread_state_ex_enum). The thread will be
+    ///                   terminated after the function returns.
+    ///
+    /// \note All other arguments are equivalent to those of the function
+    ///       \a threads#register_thread_plain
+    ///
+    HPX_API_EXPORT threads::thread_id_type register_non_suspendable_thread(
+        util::unique_function_nonser<void(threads::thread_state_ex_enum)> && func,
+        char const* description = 0,
+        threads::thread_state_enum initial_state = threads::pending,
+        bool run_now = true,
+        threads::thread_priority priority = threads::thread_priority_normal,
+        std::size_t os_thread = std::size_t(-1),
+        error_code& ec = throws);
+
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Create a new \a thread using the given function as the work to
     ///        be executed.
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes no arguments. The
+    ///                   HPX-thread interface, i.e. it takes no arguments. The
     ///                   thread will be terminated after the function returns.
     ///
     /// \note All other arguments are equivalent to those of the function
     ///       \a threads#register_thread_plain
     ///
     HPX_API_EXPORT threads::thread_id_type register_thread_nullary(
-        BOOST_RV_REF(HPX_STD_FUNCTION<void()>) func, char const* description = 0,
+        util::unique_function_nonser<void()> && func,
+        char const* description = 0,
         threads::thread_state_enum initial_state = threads::pending,
         bool run_now = true,
         threads::thread_priority priority = threads::thread_priority_normal,
@@ -605,7 +714,7 @@ namespace hpx { namespace applier
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes one argument (a
+    ///                   HPX-thread interface, i.e. it takes one argument (a
     ///                   \a threads#thread_state_ex_enum) and returns a
     ///                   \a threads#thread_state_enum.
     /// \param description [in] A optional string describing the newly created
@@ -615,16 +724,16 @@ namespace hpx { namespace applier
     ///                   should have. If this is not given it defaults to
     ///                   \a threads#pending, which means that the new thread
     ///                   will be scheduled to run as soon as it is created.
-    /// \param priority   [in] This is the priority the newly created PX-thread
+    /// \param priority   [in] This is the priority the newly created HPX-thread
     ///                   should be executed with. The default is \a
     ///                   threads#thread_priority_normal. This parameter is not
     ///                   guaranteed to be taken into account as it depends on
     ///                   the used scheduling policy whether priorities are
     ///                   supported in the first place.
     /// \param os_thread  [in] The number of the shepherd thread the newly
-    ///                   created PX-thread should run on. If this is given it
+    ///                   created HPX-thread should run on. If this is given it
     ///                   will be no more than a hint in any case, mainly
-    ///                   because even if the PX-thread gets scheduled on the
+    ///                   because even if the HPX-thread gets scheduled on the
     ///                   queue of the requested shepherd thread, it still can
     ///                   be stolen by another shepherd thread. If this is not
     ///                   given, the system will select a shepherd thread.
@@ -633,18 +742,18 @@ namespace hpx { namespace applier
     ///                   the function will throw on error instead.
     ///
     /// \note The value returned by the thread function will be interpreted by
-    ///       the thread manager as the new thread state the executed PX-thread
-    ///       needs to be switched to. Normally, PX-threads will either return
+    ///       the thread manager as the new thread state the executed HPX-thread
+    ///       needs to be switched to. Normally, HPX-threads will either return
     ///       \a threads#terminated (if the thread should be destroyed) or
     ///       \a threads#suspended (if the thread needs to be suspended because
     ///       it is waiting for an external event to happen). The external
     ///       event will set the state of the thread back to pending, which
-    ///       will re-schedule the PX-thread.
+    ///       will re-schedule the HPX-thread.
     ///
     /// \throws invalid_status if the runtime system has not been started yet.
     ///
     HPX_API_EXPORT void register_work_plain(
-        BOOST_RV_REF(HPX_STD_FUNCTION<threads::thread_function_type>) func,
+        threads::thread_function_type && func,
         char const* description = 0, naming::address::address_type lva = 0,
         threads::thread_state_enum initial_state = threads::pending,
         threads::thread_priority priority = threads::thread_priority_normal,
@@ -652,13 +761,25 @@ namespace hpx { namespace applier
         threads::thread_stacksize stacksize = threads::thread_stacksize_default,
         error_code& ec = throws);
 
+#if !defined(DOXYGEN)
+    HPX_API_EXPORT void register_work_plain(
+        threads::thread_function_type && func,
+        naming::id_type const& target, char const* description = 0,
+        naming::address::address_type lva = 0,
+        threads::thread_state_enum initial_state = threads::pending,
+        threads::thread_priority priority = threads::thread_priority_normal,
+        std::size_t os_thread = std::size_t(-1),
+        threads::thread_stacksize stacksize = threads::thread_stacksize_default,
+        error_code& ec = throws);
+#endif
+
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Create a new work item using the given function as the
     ///        work to be executed.
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes one argument (a
+    ///                   HPX-thread interface, i.e. it takes one argument (a
     ///                   \a threads#thread_state_ex_enum). The thread will be
     ///                   terminated after the function returns.
     ///
@@ -666,12 +787,33 @@ namespace hpx { namespace applier
     ///       \a threads#register_work_plain
     ///
     HPX_API_EXPORT void register_work(
-        BOOST_RV_REF(HPX_STD_FUNCTION<void(threads::thread_state_ex_enum)>) func,
+        util::unique_function_nonser<void(threads::thread_state_ex_enum)> && func,
         char const* description = 0,
         threads::thread_state_enum initial_state = threads::pending,
         threads::thread_priority priority = threads::thread_priority_normal,
         std::size_t os_thread = std::size_t(-1),
         threads::thread_stacksize stacksize = threads::thread_stacksize_default,
+        error_code& ec = throws);
+
+    /// \brief Create a new work item using the given function as the
+    ///        work to be executed. The work item can't be suspended when
+    ///        executing.
+    ///
+    /// \param func       [in] The function to be executed as the thread-function.
+    ///                   This function has to expose the minimal low level
+    ///                   HPX-thread interface, i.e. it takes one argument (a
+    ///                   \a threads#thread_state_ex_enum). The thread will be
+    ///                   terminated after the function returns.
+    ///
+    /// \note All other arguments are equivalent to those of the function
+    ///       \a threads#register_work_plain
+    ///
+    HPX_API_EXPORT void register_non_suspendable_work(
+        util::unique_function_nonser<void(threads::thread_state_ex_enum)> && func,
+        char const* description = 0,
+        threads::thread_state_enum initial_state = threads::pending,
+        threads::thread_priority priority = threads::thread_priority_normal,
+        std::size_t os_thread = std::size_t(-1),
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -680,14 +822,15 @@ namespace hpx { namespace applier
     ///
     /// \param func       [in] The function to be executed as the thread-function.
     ///                   This function has to expose the minimal low level
-    ///                   PX-thread interface, i.e. it takes no arguments. The
+    ///                   HPX-thread interface, i.e. it takes no arguments. The
     ///                   thread will be terminated after the function returns.
     ///
     /// \note All other arguments are equivalent to those of the function
     ///       \a threads#register_work_plain
     ///
     HPX_API_EXPORT void register_work_nullary(
-        BOOST_RV_REF(HPX_STD_FUNCTION<void()>) func, char const* description = 0,
+        util::unique_function_nonser<void()> && func,
+        char const* description = 0,
         threads::thread_state_enum initial_state = threads::pending,
         threads::thread_priority priority = threads::thread_priority_normal,
         std::size_t os_thread = std::size_t(-1),
@@ -709,10 +852,10 @@ namespace hpx { namespace applier
         error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
-    /// The \a create_async function initiates the creation of a new
+    /// The \a create function initiates the creation of a new
     /// component instance using the runtime_support as given by targetgid.
     /// This function is non-blocking as it returns a \a lcos#future. The
-    /// caller of this create_async is responsible to call
+    /// caller of this create is responsible to call
     /// \a lcos#future#get to obtain the result.
     ///
     /// \param targetgid
@@ -724,13 +867,13 @@ namespace hpx { namespace applier
     ///             component when used to call get.
     ///
     /// \note       For synchronous operation use the function
-    ///             \a threads#create_async.
+    ///             \a threads#create_sync.
     HPX_API_EXPORT lcos::future<naming::id_type>
-        create_async(naming::id_type const& targetgid,
+        create(naming::id_type const& targetgid,
             components::component_type type, std::size_t count = 1);
 
     ///////////////////////////////////////////////////////////////////////////
-    /// The \a create function creates a new component instance using the
+    /// The \a create_sync function creates a new component instance using the
     /// \a runtime_support as given by targetgid. This function is blocking
     /// for the component to be created and until the global id of the new
     /// component has been returned.
@@ -743,8 +886,8 @@ namespace hpx { namespace applier
     ///             component.
     ///
     /// \note       For asynchronous operation use the function
-    ///             \a threads#create_async.
-    HPX_API_EXPORT naming::id_type create(naming::id_type const& targetgid,
+    ///             \a threads#create.
+    HPX_API_EXPORT naming::id_type create_sync(naming::id_type const& targetgid,
         components::component_type type, std::size_t count = 1);
 }}
 

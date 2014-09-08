@@ -9,6 +9,7 @@
 #define HPX_LCOS_DATAFLOW_HPP
 
 #include <hpx/config.hpp>
+#include <hpx/util/decay.hpp>
 #include <hpx/util/move.hpp>
 #include <hpx/include/plain_actions.hpp>
 #include <hpx/components/dataflow/dataflow_base.hpp>
@@ -36,12 +37,12 @@ namespace hpx { namespace lcos
       , typename DirectExecute
     >
     struct dataflow
-        : dataflow_base<Result, typename Action::result_type>
+        : dataflow_base<Result, typename Action::remote_result_type>
     {
-        typedef typename Action::result_type remote_result_type;
+        typedef typename Action::remote_result_type remote_result_type;
         typedef Result result_type;
         typedef
-            dataflow_base<Result, typename Action::result_type>
+            dataflow_base<Result, typename Action::remote_result_type>
             base_type;
 
         typedef stubs::dataflow stub_type;
@@ -79,9 +80,7 @@ namespace hpx { namespace lcos
 
 #define HPX_A(z, n, _)                                                        \
         BOOST_PP_COMMA_IF(n)                                                  \
-            typename boost::remove_const<                                     \
-                typename hpx::util::detail::remove_reference<                 \
-                    BOOST_PP_CAT(A, n)>::type>::type const &                  \
+            typename util::decay<BOOST_PP_CAT(A, n)>::type        const &     \
     /**/
 
 #if !defined(HPX_USE_PREPROCESSOR_LIMIT_EXPANSION)

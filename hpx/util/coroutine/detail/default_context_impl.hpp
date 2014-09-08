@@ -97,12 +97,17 @@
      make copyable.
 */
 
-#if HPX_COROUTINE_USE_GENERIC_CONTEXT != 0
+#if defined(HPX_HAVE_GENERIC_CONTEXT_COROUTINES)                              \
+ && defined(HPX_HAVE_FIBER_BASED_COROUTINES)
+#   error HPX_HAVE_GENERIC_CONTEXT_COROUTINES and HPX_HAVE_FIBER_BASED_COROUTINES cannot be defined at the same time.
+#endif
+
+#if defined(HPX_HAVE_GENERIC_CONTEXT_COROUTINES)
 
 #if BOOST_VERSION >= 105100
 
 #include <hpx/util/coroutine/detail/context_generic_context.hpp>
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
     typedef generic_context::context_impl default_context_impl;
 }}}}
@@ -111,26 +116,26 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 #error Boost.Context is available only with Boost V1.51 or later
 #endif
 
-#elif defined(__linux) || defined(linux) || defined(__linux__)
+#elif (defined(__linux) || defined(linux) || defined(__linux__)) && !defined(__bgq__)
 
 #include <hpx/util/coroutine/detail/context_linux_x86.hpp>
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
     typedef lx::context_impl default_context_impl;
 }}}}
 
-#elif defined(_POSIX_VERSION)
+#elif defined(_POSIX_VERSION) || defined(__bgq__)
 
 #include <hpx/util/coroutine/detail/context_posix.hpp>
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
     typedef posix::context_impl default_context_impl;
 }}}}
 
-#elif defined(BOOST_WINDOWS)
+#elif defined(HPX_HAVE_FIBER_BASED_COROUTINES)
 
 #include <hpx/util/coroutine/detail/context_windows_fibers.hpp>
-namespace hpx { namespace util { namespace coroutines { namespace detail 
+namespace hpx { namespace util { namespace coroutines { namespace detail
 {
     typedef windows::context_impl default_context_impl;
 }}}}
@@ -139,7 +144,7 @@ namespace hpx { namespace util { namespace coroutines { namespace detail
 
 #error No default_context_impl available for this system
 
-#endif // HPX_COROUTINE_USE_GENERIC_CONTEXT
+#endif // HPX_HAVE_GENERIC_CONTEXT_COROUTINES
 
 namespace hpx { namespace util { namespace coroutines
 {

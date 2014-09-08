@@ -1,4 +1,4 @@
-.. Copyright (c) 2007-2013 Louisiana State University
+.. Copyright (c) 2007-2014 Louisiana State University
 
    Distributed under the Boost Software License, Version 1.0. (See accompanying
    file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -42,23 +42,24 @@ What's so special about HPX?
   hand-held devices to very large scale systems.
 * It is the first fully functional implementation of the ParalleX execution
   model.
-* HPX is published under a liberal open-source license and has a open,
+* HPX is published under a liberal open-source license and has an open,
   active, and thriving developer community.
 
 
-The documentation for the latest release of HPX (currently V0.9.5) can be
-`found here <http://stellar.cct.lsu.edu/files/hpx_0.9.5/html/index.html>`_.
+The documentation for the latest release of HPX (currently V0.9.8) can be
+`found here <http://stellar.cct.lsu.edu/files/hpx_0.9.8/html/index.html>`_.
 
 Additionally, we regularily upload the current status of the documentation
 (which is being worked on as we speak)
-`here <http://stellar.cct.lsu.edu/files/hpx_master/docs/index.html>`_.
+`here <http://stellar-group.github.io/hpx/docs/html/>`_. We also have a
+single-page version of the documentation `here <http://stellar-group.github.io/hpx/docs/html/hpx.html>`_.
 
 If you plan to use HPX we suggest to start with the latest released version
-(currently HPX V0.9.5) which can be `downloaded here <http://stellar.cct.lsu.edu/downloads/>`_.
+(currently HPX V0.9.8) which can be `downloaded here <http://stellar.cct.lsu.edu/downloads/>`_.
 
 If you would like to work with the cutting edge version from this repository
 we suggest following the current health status of the master branch by looking at
-our `contiguous integration results website <http://ithaca.cct.lsu.edu/waterfall>`_.
+our `contiguous integration results website <http://hermione.cct.lsu.edu/waterfall>`_.
 While we try to keep the master branch stable and usable, sometimes new bugs
 trick their way into the code base - you have been warned!
 
@@ -75,49 +76,68 @@ Version 1.0 (See accompanying file LICENSE_1_0.txt or an online copy available
 `here <http://www.boost.org/LICENSE_1_0.txt>`_).
 
 Before starting to build HPX, please read about the
-`prerequisites <http://stellar.cct.lsu.edu/files/hpx_0.9.0/docs/hpx/tutorial/getting_started.html>`_.
+`prerequisites <http://stellar-group.github.io/hpx/docs/html/hpx/tutorial/getting_started/prereqs.html>`_.
 
 Linux
 -----
 
 1) Clone the master HPX git repository (or a stable tag)::
 
-    $ git clone git://github.com/STEllAR-GROUP/hpx.git
+    git clone git://github.com/STEllAR-GROUP/hpx.git
 
 2) Create a build directory. HPX requires an out-of-tree build. This means you
    will be unable to run CMake in the HPX source directory::
 
-    $ cd hpx
-    $ mkdir my_hpx_build
-    $ cd my_hpx_build
+    cd hpx
+    mkdir my_hpx_build
+    cd my_hpx_build
 
 3) Invoke CMake from your build directory, pointing the CMake driver to the root
    of your HPX source tree::
 
-    $ cmake -DBOOST_ROOT=/your_boost_directory [other CMake variable definitions] /path/to/hpx/source/tree
+    cmake -DBOOST_ROOT=/your_boost_directory \
+         -DHWLOC_ROOT=/your_hwloc_directory \
+         -DCMAKE_INSTALL_PREFIX=/where_hpx_should_be_installed \
+         [other CMake variable definitions] \
+         /path/to/hpx/source/tree
 
 4) Invoke GNU make. If you are on a machine with multiple cores (very likely),
-   add the -jN flag to your make invocation, where N is the number of nodes
+   add the -jN flag to your make invocation, where N is the number of cores
    on your machine plus one::
 
-    $ gmake -j5
+    gmake -j5
 
 5) To complete the build and install HPX::
 
-    $ gmake install
+    gmake install
 
-Mac OSX
--------
+   This will build and install the essential core components of HPX only. Use::
+
+    gmake tests
+
+   to build and run the tests and::
+
+    gmake examples
+    gmake install
+
+   to build and install the examples.
+
+OS X (Mac)
+----------
+
+The standard system compiler on OS X is too old to build HPX. You will
+have to install a newer compiler manually, either Clang or GCC. Below
+we describe two possibilities:
 
 1) Install a recent version of LLVM and Clang.
    In order to build hpx you will need a fairly recent version of Clang
-   (at least version 3.2 of Clang and LLVM). For more instructions please 
+   (at least version 3.2 of Clang and LLVM). For more instructions please
    see http://clang.llvm.org/get_started.html.
 
    If you're using Homebrew, ``brew install llvm --with-clang`` will do the trick.
    This will install Clang V3.2 into ``/usr/local/bin``.
 
-2) Visit http://libcxx.llvm.org/ to get the latest version of the "libc++" C++ 
+2) Visit http://libcxx.llvm.org/ to get the latest version of the "libc++" C++
    standard library. You need to use the trunk version; what's currently bundled
    with XCode or OS X aren't quite there yet. You can follow the steps in
    http://libcxx.llvm.org/ if you choose, but here's briefly how it could be built::
@@ -151,27 +171,65 @@ Mac OSX
 
 4) Clone the master HPX git repository (or a stable tag)::
 
-    $ git clone git://github.com/STEllAR-GROUP/hpx.git
+    git clone git://github.com/STEllAR-GROUP/hpx.git
 
 5) Build HPX, finally::
 
-      $ cd hpx
-      $ mkdir my_hpx_build
-      $ cd my_hpx_build
+    cd hpx
+    mkdir my_hpx_build
+    cd my_hpx_build
 
    To build with Clang 3.2, execute::
 
-      $ cmake /path/to/hpx/source/tree \
-           -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
-           -DCMAKE_C_COMPILER=/usr/local/bin/clang-3.2 \
-           -DBOOST_ROOT=/your_boost_directory \
-           -DCMAKE_CXX_FLAGS="-isystem /path/to/libcxx/include" \
-           -DLINK_FLAGS="-L /path/to/libcxx/lib"
-      $ make -j5
+    cmake /path/to/hpx/source/tree \
+         -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
+         -DCMAKE_C_COMPILER=/usr/local/bin/clang-3.2 \
+         -DBOOST_ROOT=/your_boost_directory \
+         -DCMAKE_CXX_FLAGS="-isystem /path/to/libcxx/include" \
+         -DLINK_FLAGS="-L /path/to/libcxx/lib"
+    make -j5
 
 6) To complete the build and install HPX::
 
-    $ make install
+    make install
+
+   This will build and install the essential core components of HPX only. Use::
+
+    make tests
+
+   to build and run the tests and::
+
+    make examples
+    make install
+
+   to build and install the examples.
+
+
+Alternatively, you can install a recent version of gcc as well as all
+required libraries via MacPorts:
+
+1) Install MacPorts <http://www.macports.org/>
+
+2) Install Boost, CMake, gcc 4.8, and hwloc::
+
+    sudo port install boost
+    sudo port install gcc48
+    sudo port install hwloc
+
+   You may also want::
+
+    sudo port install cmake
+    sudo port install git-core
+
+3) Make this version of gcc your default compiler::
+
+    sudo port install gcc_select
+    sudo port select gcc mp-gcc48
+
+4) Build HPX as described above in the ``Linux'' section.
+
+For more information and additional options, please see the corresponding
+`documentation <http://stellar-group.github.io/hpx/docs/html/hpx/tutorial/getting_started/macos_installation.html>`_.
 
 Windows
 -------
@@ -188,15 +246,17 @@ Windows
 3) Open up the CMake GUI. In the input box labelled "Where is the source code:",
    enter the full path to the source folder. In the input box labelled
    "Where to build the binaries:", enter the full path to the build folder you
-   created in step 1.
+   created in step 2.
 
-4) Add CMake variable definitions (if any) by clicking the "Add Entry" button.
-   Most probably you will need to at least add the directory where Boost is
-   located as BOOST_ROOT.
+4) Add CMake variable definitions (if any) by clicking the "Add Entry" button and selecting type 
+   "String". Most probably you will need to at least add the directories where `Boost <http://www.boost.org>`_
+   is located as BOOST_ROOT and where `Hwloc <http://www.open-mpi.org/projects/hwloc/>`_ is
+   located as HWLOC_ROOT.
 
-5) Press the "Configure" button. A window will pop up asking you which compilers
-   to use. Select the x64 Visual Studio 10 compiler (Visual Studio 2012 is
-   supported as well).
+5) Press the "Configure" button. A window will pop up asking you which compiler
+   to use. Select the x64 Visual Studio 2012 compiler. Note that while it is possible to build HPX for x86
+   we don't recommend doing so as 32 bit runs are severely restricted by a 32 bit
+   Windows system limitation affecting the number of HPX threads you can create.
 
 6) If the "Generate" button is not clickable, press "Configure" again. Repeat
    this step until the "Generate" button becomes clickable.
@@ -207,4 +267,98 @@ Windows
 
 9) Build the INSTALL target.
 
+BlueGene/Q
+----------
 
+So far we only support BGClang for compiling HPX on the BlueGene/Q.
+
+1) Check if BGClang is available on your installation. If not obtain and install a copy
+   from the `BGClang trac page <https://trac.alcf.anl.gov/projects/llvm-bgq>`_
+
+2) Build (and install) a recent version of `Hwloc <http://www.open-mpi.org/projects/hwloc/>`_
+   With the following commands::
+
+    ./configure \
+          --host=powerpc64-bgq-linux \
+          --prefix=$HOME/install/hwloc \
+          --disable-shared \
+          --enable-static \
+          CPPFLAGS='-I/bgsys/drivers/ppcfloor -I/bgsys/drivers/ppcfloor/spi/include/kernel/cnk/'
+    make
+    make install
+
+3) Build (and install) a recent version of Boost, using BGClang::
+   To build Boost with BGClang, you'll need to set up the following in your Boost
+   ``~/user-config.jam`` file::
+
+      # user-config.jam (put this file into your home directory)
+      using clang
+        :
+        : bgclang++11
+        :
+        ;
+
+   You can then use this as your build command::
+
+        ./bootstrap.sh
+        ./b2 --build-dir=/tmp/build-boost --layout=versioned toolset=clang -j12
+
+4) Clone the master HPX git repository (or a stable tag)::
+
+    git clone git://github.com/STEllAR-GROUP/hpx.git
+
+5) Generate the HPX buildfiles using cmake::
+
+    cmake -DHPX_PLATFORM=BlueGeneQ \
+         -DCMAKE_CXX_COMPILER=bgclang++11 \
+         -DMPI_CXX_COMPILER=mpiclang++11 \
+         -DHWLOC_ROOT=/path/to/hwloc/installation \
+         -DBOOST_ROOT=/path/to/boost \
+         -DHPX_MALLOC=system \
+         /path/to/hpx
+
+6) To complete the build and install HPX::
+
+    make -j24
+    make install
+
+   This will build and install the essential core components of HPX only. Use::
+
+    make -j24 examples
+    make -j24 install
+
+   to build and install the examples.
+
+******************
+ Acknowledgements
+******************
+
+We would like to acknowledge the NSF, DoE, DARPA, the Center for Computation 
+and Technology (CCT) at Louisiana State University, and the Department of 
+Computer Science 3 - Computer Architecture at the University of Erlangen Nuremberg 
+who fund and support our work. 
+We would also like to thank the following 
+organizations for granting us allocations of their compute resources: 
+LSU HPC, LONI, XSEDE, and the Gauss Center for Supercomputing.
+
+HPX is currently funded by:
+
+The National Science Foundation through awards 1117470 (APX) 
+and 1240655 (STAR). Any opinions, findings, and conclusions or 
+recommendations expressed in this material are those of the author(s) 
+and do not necessarily reflect the views of the National Science Foundation.
+
+The Department of Energy (DoE) through the award DE-SC0008714 (XPRESS). 
+Neither the United States Government nor any agency thereof, nor any of 
+their employees, makes any warranty, express or implied, or assumes any 
+legal liability or responsibility for the accuracy, completeness, or 
+usefulness of any information, apparatus, product, or process disclosed, 
+or represents that its use would not infringe privately owned rights. 
+Reference herein to any specific commercial product, process, or service 
+by trade name, trademark, manufacturer, or otherwise does not necessarily 
+constitute or imply its endorsement, recommendation, or favoring by the 
+United States Government or any agency thereof. The views and opinions of 
+authors expressed herein do not necessarily state or reflect those of the 
+United States Government or any agency thereof.
+
+The Bavarian Research Foundation (Bayerische Forschungsstfitung) through the grant AZ-987-11. 

@@ -83,7 +83,8 @@ namespace hpx { namespace util
         {
             default_construct();
             reinit_register(
-                &reinitializable_static::default_construct, &destruct);
+                &reinitializable_static::default_construct,
+                &reinitializable_static::destruct);
         }
 
         template <typename U>
@@ -91,7 +92,8 @@ namespace hpx { namespace util
         {
             value_construct(*pv);
             reinit_register(boost::bind(
-                &reinitializable_static::value_construct<U>, *pv), &destruct);
+                &reinitializable_static::template value_construct<U>, *pv),
+                &reinitializable_static::destruct);
         }
 
     public:
@@ -110,7 +112,8 @@ namespace hpx { namespace util
         {
             // do not rely on ADL to find the proper call_once
             boost::call_once(constructed_,
-                boost::bind(&reinitializable_static::value_constructor<U>,
+                boost::bind(
+                    &reinitializable_static::template value_constructor<U>,
                     const_cast<U const *>(boost::addressof(val))));
         }
 
@@ -139,7 +142,7 @@ namespace hpx { namespace util
 
         static pointer get_address(std::size_t item)
         {
-            BOOST_ASSERT(item < N);
+            HPX_ASSERT(item < N);
             return static_cast<pointer>(data_[item].address());
         }
 

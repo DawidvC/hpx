@@ -8,58 +8,32 @@
 set(subdirs
     1d_hydro
     accumulator
-    adaptive1d
-    adaptive_dataflow
     allgather
     async_io
     balancing
-    bcast
-    bfs
     cancelable_action
-    dataflow
-    distributed_test
-    embarrassingly_parallel
-    fortran_threadsafe
-    gtcx
-    gravity
+    future_reduce
     heartbeat
-    hplpx
     interpolate1d
-    interpolate3d
     jacobi
-    nbody
+    jacobi_smp
     nqueen
-    object_semaphore
-    oclm_integration
     performance_counters
-    queue
     quickstart
     qt
     random_mem_access
-    sendrecv
     sheneos
     spell_check
     startup_shutdown
     thread_aware_timer
     throttle
-    tuplespace
    )
 
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  if(${GCC_VERSION} GREATER 040500)
-    set(subdirs ${subdirs}
-        hpxla
-       )
-  endif()
-  if(${GCC_VERSION} GREATER 040699 AND ${BOOST_MINOR_VERSION} GREATER 46)
-    set(subdirs ${subdirs}
-        geometry
-        )
-  endif()
-else()
+ if(HPX_WITH_CXX11_LAMBDAS)
   set(subdirs ${subdirs}
-      hpxla
-      geometry
+     1d_stencil
+     diskperf
+     tuplespace
       )
 endif()
 

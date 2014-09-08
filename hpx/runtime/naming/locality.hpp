@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2013 Hartmut Kaiser
 //  Copyright (c) 2007 Richard D. Guidry Jr.
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,8 +7,13 @@
 #if !defined(HPX_NAMING_LOCALITY_MAR_24_2008_0942AM)
 #define HPX_NAMING_LOCALITY_MAR_24_2008_0942AM
 
-#include <hpx/hpx_fwd.hpp>
+#if defined(HPX_PARCELPORT_MPI)
+#include <hpx/util/mpi_environment.hpp>
+#endif
+
 #include <hpx/config.hpp>
+
+#include <hpx/hpx_fwd.hpp>
 #include <hpx/exception.hpp>
 #include <hpx/util/safe_bool.hpp>
 
@@ -23,12 +28,22 @@
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/tracking.hpp>
+#include <boost/serialization/is_bitwise_serializable.hpp>
+#include <boost/serialization/array.hpp>
+#include <boost/mpl/bool.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Version of locality class.
-#define HPX_LOCALITY_VERSION   0x10
+#  define HPX_LOCALITY_VERSION_NO_MPI   0x10
+#  define HPX_LOCALITY_VERSION_MPI      0x20
+
+#if defined(HPX_PARCELPORT_MPI)
+#  define HPX_LOCALITY_VERSION          HPX_LOCALITY_VERSION_MPI
+#else
+#  define HPX_LOCALITY_VERSION          HPX_LOCALITY_VERSION_NO_MPI
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace naming
@@ -64,27 +79,34 @@ namespace hpx { namespace naming
     {
     public:
         locality()
-          : address_(), port_(boost::uint16_t(-1))
+          : port_(boost::uint16_t(-1))
+#if defined(HPX_PARCELPORT_MPI)
+          , rank_(-1)
+#endif
         {}
 
+#if defined(HPX_PARCELPORT_IBVERBS)
+        locality(std::string const& addr, std::string const & ibverbs_addr, boost::uint16_t port)
+          : address_(addr), ibverbs_address_(ibverbs_addr), port_(port)
+#else
         locality(std::string const& addr, boost::uint16_t port)
           : address_(addr), port_(port)
+#endif
+#if defined(HPX_PARCELPORT_MPI)
+          , rank_(util::mpi_environment::rank())
+#endif
         {}
 
-        locality(boost::asio::ip::address addr, boost::uint16_t port)
-          : address_(addr.to_string()), port_(port)
+#if defined(HPX_PARCELPORT_MPI)
+#if defined(HPX_PARCELPORT_IBVERBS)
+        locality(std::string const& addr, std::string const & ibverbs_addr, boost::uint16_t port, int rank)
+          : address_(addr), ibverbs_address_(ibverbs_addr), port_(port), rank_(rank)
+#else
+        locality(std::string const& addr, boost::uint16_t port, int rank)
+          : address_(addr), port_(port), rank_(rank)
+#endif
         {}
-
-        explicit locality(boost::asio::ip::tcp::endpoint ep)
-          : address_(ep.address().to_string()), port_(ep.port())
-        {}
-
-        locality& operator= (boost::asio::ip::tcp::endpoint ep)
-        {
-            address_ = ep.address().to_string();
-            port_ = ep.port();
-            return *this;
-        }
+#endif
 
         ///////////////////////////////////////////////////////////////////////
         typedef detail::tcp_locality_iterator_type iterator_type;
@@ -92,6 +114,10 @@ namespace hpx { namespace naming
         ///////////////////////////////////////////////////////////////////////
         friend bool operator==(locality const& lhs, locality const& rhs)
         {
+#if defined(HPX_PARCELPORT_MPI)
+            if(util::mpi_environment::enabled() && lhs.rank_ != -1 && rhs.rank_ != -1)
+                return lhs.rank_ == rhs.rank_;
+#endif
             return lhs.port_ == rhs.port_ && lhs.address_ == rhs.address_;
         }
 
@@ -102,6 +128,10 @@ namespace hpx { namespace naming
 
         friend bool operator< (locality const& lhs, locality const& rhs)
         {
+#if defined(HPX_PARCELPORT_MPI)
+            if(util::mpi_environment::enabled() && lhs.rank_ != -1 && rhs.rank_ != -1)
+                return lhs.rank_ < rhs.rank_;
+#endif
             return lhs.address_ < rhs.address_ ||
                    (lhs.address_ == rhs.address_ && lhs.port_ < rhs.port_);
         }
@@ -114,53 +144,78 @@ namespace hpx { namespace naming
         ///////////////////////////////////////////////////////////////////////
         operator util::safe_bool<locality>::result_type() const
         {
+#if defined(HPX_PARCELPORT_MPI)
+            if(util::mpi_environment::enabled())
+                return util::safe_bool<locality>()(rank_ != -1);
+#endif
             return util::safe_bool<locality>()(port_ != boost::uint16_t(-1));
         }
 
         std::string const& get_address() const { return address_; }
+        void set_address(char const* address) { address_ = address; }
+
+#if defined(HPX_PARCELPORT_IBVERBS)
+        std::string const& get_ibverbs_address() const { return ibverbs_address_; }
+        void set_ibverbs_address(char const* address) { ibverbs_address_ = address; }
+#endif
+
         boost::uint16_t get_port() const { return port_; }
+        void set_port(boost::uint16_t port) { port_ = port; }
+
+#if defined(HPX_PARCELPORT_MPI)
+        boost::int16_t get_rank() const { return rank_; }
+        void set_rank(boost::int16_t rank) { rank_ = rank; }
+#else
+        boost::int16_t get_rank() const { return -1; }
+        void set_rank(boost::int16_t /*rank*/) {}
+#endif
+
         parcelset::connection_type get_type() const
         {
-            return parcelset::connection_tcpip;
+#if defined(HPX_PARCELPORT_MPI)
+            if(rank_ != -1)
+                return parcelset::connection_mpi;
+#endif
+            return parcelset::connection_tcp;
         }
 
     private:
         friend std::ostream& operator<< (std::ostream& os, locality const& l);
+        friend struct address;
 
         // serialization support
         friend class boost::serialization::access;
 
-        template<class Archive>
-        void save(Archive & ar, const unsigned int version) const
-        {
-            ar << address_;
-            ar << port_;
-        }
+        template <typename Archive>
+        void save(Archive& ar, const unsigned int version) const;
 
-        template<class Archive>
-        void load(Archive & ar, const unsigned int version)
-        {
-            if (version > HPX_LOCALITY_VERSION)
-            {
-                HPX_THROW_EXCEPTION(version_too_new,
-                    "locality::load",
-                    "trying to load locality with unknown version");
-            }
+        template <typename Archive>
+        void load(Archive& ar, const unsigned int version);
 
-            ar >> address_;
-            ar >> port_;
-        }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
 
     private:
         std::string address_;
+#if defined(HPX_PARCELPORT_IBVERBS)
+        std::string ibverbs_address_;
+#endif
         boost::uint16_t port_;
+#if defined(HPX_PARCELPORT_MPI)
+        boost::int16_t rank_;
+#endif
     };
 
     inline std::ostream& operator<< (std::ostream& os, locality const& l)
     {
         boost::io::ios_flags_saver ifs(os);
         os << l.address_ << ":" << l.port_;
+#if defined(HPX_PARCELPORT_IBVERBS)
+        os << "ibverbs:" << l.ibverbs_address_;
+#endif
+#if defined(HPX_PARCELPORT_MPI)
+        if (l.rank_ != -1)
+            os << ":" << l.rank_;
+#endif
         return os;
     }
 
@@ -169,7 +224,7 @@ namespace hpx { namespace naming
     ///        endpoint suitable for a call to accept() related to this
     ///        locality
     locality::iterator_type accept_begin(locality const& loc,
-        boost::asio::io_service& io_service);
+        boost::asio::io_service& io_service, bool ibverbs = false);
 
     inline locality::iterator_type accept_end(locality const&)
     {
@@ -180,7 +235,7 @@ namespace hpx { namespace naming
     ///        endpoint suitable for a call to connect() related to this
     ///        locality
     locality::iterator_type connect_begin(locality const& loc,
-        boost::asio::io_service& io_service);
+        boost::asio::io_service& io_service, bool ibverbs = false);
 
     inline locality::iterator_type connect_end(locality const&) //-V524
     {
